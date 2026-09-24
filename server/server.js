@@ -4,22 +4,39 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dns from "dns";
+import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
 
-dotenv.config();
+dotenv.config({
+  path: fileURLToPath(new URL(".env", import.meta.url)),
+});
 
 dns.setServers(["8.8.8.8"]);
 
 const app = express();
+const allowedOrigins = new Set(
+  [
+    process.env.CLIENT_ORIGIN,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ].filter((origin) => origin)
+);
 
 app.use(helmet());
 
 app.use(
   cors({
-    origin: true,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error("Origin is not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })

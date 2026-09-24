@@ -37,6 +37,8 @@ import {
 import { Button } from "@/components/ui/button";
 import backgroundImage from "@/assets/upang.png";
 
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
+
 type Role = "student" | "staff" | "admin";
 
 type View =
@@ -265,7 +267,7 @@ function QueueLessApp() {
           }
 
           const response = await fetch(
-            "http://localhost:5000/api/requests",
+            `${API_URL}/api/requests`,
             {
               headers: {
                 Authorization:
@@ -384,7 +386,7 @@ function QueueLessApp() {
       }
 
       const response = await fetch(
-        "http://localhost:5000/api/requests",
+        `${API_URL}/api/requests`,
         {
           headers: {
             Authorization:
@@ -845,7 +847,7 @@ function AuthScreen({
       setLoading(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/login",
+        `${API_URL}/api/auth/login`,
         {
           method: "POST",
           headers: {
@@ -981,7 +983,7 @@ function AuthScreen({
       setLoading(true);
 
       const response = await fetch(
-        "http://localhost:5000/api/auth/register",
+        `${API_URL}/api/auth/register`,
         {
           method: "POST",
           headers: {
@@ -1580,7 +1582,7 @@ function NewRequest({
 
       const response =
         await fetch(
-          "http://localhost:5000/api/requests",
+          `${API_URL}/api/requests`,
           {
             method: "POST",
 
@@ -1993,7 +1995,7 @@ function ManageRequests({
         next
       );
 
-      const url = `http://localhost:5000/api/requests/${encodeURIComponent(
+      const url = `${API_URL}/api/requests/${encodeURIComponent(
         id
       )}/status`;
 

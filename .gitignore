@@ -12,6 +12,9 @@ dist-ssr/
 # Environment variables
 .env
 *.env
+.env.*
+!.env.example
+server/.env
 
 # Logs
 logs
