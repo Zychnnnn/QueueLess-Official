@@ -8,13 +8,19 @@ dotenv.config({
   path: fileURLToPath(new URL(".env", import.meta.url)),
 });
 
-const createAdmin = async () => {
-  const { ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
+export const ensureAdminAccount = async () => {
+  const {
+    ADMIN_NAME,
+    ADMIN_EMAIL,
+    ADMIN_PASSWORD,
+    ADMIN_STUDENT_ID,
+  } = process.env;
 
   if (!ADMIN_NAME || !ADMIN_EMAIL || !ADMIN_PASSWORD) {
-    throw new Error(
-      "ADMIN_NAME, ADMIN_EMAIL, and ADMIN_PASSWORD must be set."
+    console.warn(
+      "Admin setup skipped: ADMIN_NAME, ADMIN_EMAIL, and ADMIN_PASSWORD are not configured."
     );
+    return;
   }
 
   if (ADMIN_PASSWORD.length < 8) {
@@ -29,15 +35,20 @@ const createAdmin = async () => {
   );
 
   if (existingUser) {
+    if (existingUser.role !== "admin") {
+      throw new Error(
+        "Admin email already belongs to a non-admin account; no changes were made."
+      );
+    }
+
     console.log("Admin email already exists; no account was created.");
-    console.log(existingUser);
     return;
   }
 
   const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
   const user = await User.create({
     name: ADMIN_NAME.trim(),
-    studentId: process.env.ADMIN_STUDENT_ID || "ADMIN-001",
+    studentId: ADMIN_STUDENT_ID || "ADMIN-001",
     email,
     password: hashedPassword,
     role: "admin",
@@ -50,11 +61,17 @@ const createAdmin = async () => {
     email: user.email,
     role: user.role,
   });
-  await mongoose.disconnect();
 };
 
-createAdmin().catch(async (error) => {
-  console.error("Admin setup failed:", error);
-  await mongoose.disconnect();
-  process.exitCode = 1;
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  mongoose
+    .connect(process.env.MONGO_URI)
+    .then(() => ensureAdminAccount())
+    .catch((error) => {
+      console.error("Admin setup failed:", error);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await mongoose.disconnect();
+    });
+}

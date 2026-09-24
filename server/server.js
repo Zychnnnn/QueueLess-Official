@@ -9,6 +9,7 @@ import { fileURLToPath } from "url";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
+import { ensureAdminAccount } from "./createAdmin.js";
 
 dotenv.config({
   path: fileURLToPath(new URL(".env", import.meta.url)),
@@ -77,8 +78,16 @@ app.use((error, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-connectDB();
+const startServer = async () => {
+  await connectDB();
+  await ensureAdminAccount();
 
-app.listen(PORT, () => {
-  console.log(`QueueLess API running on port ${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`QueueLess API running on port ${PORT}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error("Server startup failed:", error);
+  process.exitCode = 1;
 });
