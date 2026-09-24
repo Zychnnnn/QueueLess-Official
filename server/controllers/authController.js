@@ -87,12 +87,27 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, loginType } = req.body;
 
     // Check required fields
     if (!email || !password) {
       return res.status(400).json({
         message: "Email and password are required.",
+      });
+    }
+
+    const allowedLoginTypes = [
+      "student",
+      "staff",
+      "admin",
+    ];
+
+    if (
+      loginType &&
+      !allowedLoginTypes.includes(loginType)
+    ) {
+      return res.status(400).json({
+        message: "Choose a valid login type.",
       });
     }
 
@@ -119,6 +134,12 @@ export const login = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({
         message: "Invalid email or password.",
+      });
+    }
+
+    if (loginType && user.role !== loginType) {
+      return res.status(403).json({
+        message: `This account is not registered as a ${loginType} account. Use the correct login option.`,
       });
     }
 
@@ -151,6 +172,71 @@ export const login = async (req, res) => {
 
     return res.status(500).json({
       message: "Server error during login.",
+    });
+  }
+};
+
+export const createStaff = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: "Name, email, and password are required.",
+      });
+    }
+
+    const cleanName = name.trim();
+    const cleanEmail = email.toLowerCase().trim();
+
+    if (!cleanName || !cleanEmail) {
+      return res.status(400).json({
+        message: "Name and email are required.",
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        message: "Password must contain at least 8 characters.",
+      });
+    }
+
+    const existingUser = await User.findOne({
+      email: cleanEmail,
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "Email is already registered.",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const staffId = `STAFF-${Date.now()}`;
+
+    const user = await User.create({
+      name: cleanName,
+      studentId: staffId,
+      email: cleanEmail,
+      password: hashedPassword,
+      role: "staff",
+    });
+
+    return res.status(201).json({
+      message: "Staff account created successfully.",
+      user: {
+        id: user._id,
+        name: user.name,
+        studentId: user.studentId,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Staff creation error:", error);
+
+    return res.status(500).json({
+      message: "Server error while creating staff account.",
     });
   }
 };

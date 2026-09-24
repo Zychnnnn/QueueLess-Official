@@ -22,6 +22,8 @@ const allowedOrigins = new Set(
     process.env.CLIENT_ORIGIN,
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
   ].filter((origin) => origin)
 );
 
@@ -57,6 +59,19 @@ app.use("/api/requests", requestRoutes);
 app.get("/", (req, res) => {
   res.json({
     message: "QueueLess API is running",
+  });
+});
+
+app.use((error, req, res, next) => {
+  console.error("Unhandled API error:", error);
+
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+
+  res.status(error.status || 500).json({
+    message: "The API request could not be completed.",
   });
 });
 

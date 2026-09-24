@@ -4,7 +4,7 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n FRONTEND,BACKEND \"vite dev\" \"node server/server.js\"",
+    "dev": "concurrently -n FRONTEND,BACKEND \"set PORT=5173&& vite dev --strictPort\" \"node server/server.js\"",
     "server": "node server/server.js",
     "server:dev": "nodemon server/server.js",
     "build": "vite build",

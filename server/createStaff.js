@@ -1,25 +1,47 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 import User from "./models/User.js";
 
-dotenv.config();
+dotenv.config({
+  path: fileURLToPath(new URL(".env", import.meta.url)),
+});
 
 const resetStaff = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
 
-    const hashedPassword = await bcrypt.hash("staff12345", 10);
+    if (
+      !process.env.STAFF_EMAIL ||
+      !process.env.STAFF_PASSWORD ||
+      !process.env.STAFF_NAME
+    ) {
+      throw new Error(
+        "STAFF_NAME, STAFF_EMAIL, and STAFF_PASSWORD must be set."
+      );
+    }
+
+    if (process.env.STAFF_PASSWORD.length < 8) {
+      throw new Error(
+        "STAFF_PASSWORD must contain at least 8 characters."
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(
+      process.env.STAFF_PASSWORD,
+      10
+    );
 
     const user = await User.findOneAndUpdate(
-      { email: "staff@queueless.com" },
+      { email: process.env.STAFF_EMAIL.toLowerCase().trim() },
       {
-        name: "QueueLess Staff",
-        studentId: "2022-20001",
+        name: process.env.STAFF_NAME.trim(),
+        studentId: process.env.STAFF_STUDENT_ID || "STAFF-001",
         password: hashedPassword,
         role: "staff",
       },
-      { returnDocument: "after" }
+      { returnDocument: "after", runValidators: true }
     ).select("name studentId email role");
 
     if (!user) {
@@ -27,10 +49,6 @@ const resetStaff = async () => {
     } else {
       console.log("Staff account updated successfully:");
       console.log(user);
-      console.log("");
-      console.log("Email: staff@queueless.com");
-      console.log("Password: staff12345");
-      console.log("Role: staff");
     }
 
     process.exit(0);

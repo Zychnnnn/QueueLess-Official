@@ -37,7 +37,44 @@ import {
 import { Button } from "@/components/ui/button";
 import backgroundImage from "@/assets/upang.png";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
+const API_URL = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:5000"
+).replace(/\/+$/, "");
+
+type StaffApiResponse = {
+  message?: string;
+  user?: {
+    name: string;
+    studentId: string;
+  };
+};
+
+async function readApiResponse(
+  response: Response
+): Promise<StaffApiResponse> {
+  const body = await response.text();
+
+  if (!body) {
+    return {};
+  }
+
+  const contentType =
+    response.headers.get("content-type") ?? "";
+
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      `The API returned a non-JSON response (HTTP ${response.status}).`
+    );
+  }
+
+  try {
+    return JSON.parse(body) as StaffApiResponse;
+  } catch {
+    throw new Error(
+      `The API returned invalid JSON (HTTP ${response.status}).`
+    );
+  }
+}
 
 type Role = "student" | "staff" | "admin";
 
@@ -498,8 +535,6 @@ function QueueLessApp() {
   if (!signedIn) {
     return (
       <AuthScreen
-        role={role}
-        setRole={setRole}
         onSignIn={handleSignIn}
       />
     );
@@ -799,12 +834,8 @@ function QueueLessApp() {
 }
 
 function AuthScreen({
-  role,
-  setRole,
   onSignIn,
 }: {
-  role: Role;
-  setRole: (r: Role) => void;
   onSignIn: (user: AuthUser) => void;
 }) {
   const [mode, setMode] =
@@ -930,12 +961,8 @@ function AuthScreen({
       e.currentTarget
     );
 
-    const firstName = String(
-      data.get("firstName") ?? ""
-    ).trim();
-
-    const lastName = String(
-      data.get("lastName") ?? ""
+    const fullName = String(
+      data.get("fullName") ?? ""
     ).trim();
 
     const studentId = String(
@@ -948,6 +975,10 @@ function AuthScreen({
 
     const password = String(
       data.get("password") ?? ""
+    );
+
+    const confirmPassword = String(
+      data.get("confirmPassword") ?? ""
     );
 
     if (
@@ -968,9 +999,15 @@ function AuthScreen({
       return;
     }
 
+    if (password !== confirmPassword) {
+      setError(
+        "Password and Confirm Password must match."
+      );
+      return;
+    }
+
     if (
-      !firstName ||
-      !lastName ||
+      !fullName ||
       !email
     ) {
       setError(
@@ -991,7 +1028,7 @@ function AuthScreen({
               "application/json",
           },
           body: JSON.stringify({
-            name: `${firstName} ${lastName}`,
+            name: fullName,
             studentId,
             email,
             password,
@@ -1092,39 +1129,6 @@ function AuthScreen({
                 Sign in to QueueLess
               </h2>
 
-              <div className="mt-7">
-                <p className="text-xs font-bold">
-                  Account type
-                </p>
-
-                <div className="mt-2 grid grid-cols-3 rounded-md bg-muted p-1">
-                  {(
-                    [
-                      "student",
-                      "staff",
-                      "admin",
-                    ] as Role[]
-                  ).map((r) => (
-                    <Button
-                      key={r}
-                      type="button"
-                      variant={
-                        role === r
-                          ? "default"
-                          : "ghost"
-                      }
-                      className="capitalize shadow-none"
-                      onClick={() => {
-                        setRole(r);
-                        setError("");
-                      }}
-                    >
-                      {r}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
               <form
                 className="mt-6 space-y-5"
                 onSubmit={submitLogin}
@@ -1165,7 +1169,7 @@ function AuthScreen({
                 >
                   {loading
                     ? "Signing in..."
-                    : `Sign in as ${role.toUpperCase()}`}
+                    : "Sign in"}
 
                   {!loading && (
                     <ArrowRight />
@@ -1186,7 +1190,6 @@ function AuthScreen({
                     setMode(
                       "register"
                     );
-                    setRole("student");
                     setError("");
                   }}
                 >
@@ -1252,23 +1255,16 @@ function Registration({
         className="mt-6 grid gap-4 sm:grid-cols-2"
         onSubmit={onSubmit}
       >
-        <Field label="First name">
+        <div className="sm:col-span-2">
+          <Field label="Full Name">
           <input
-            name="firstName"
+            name="fullName"
             required
             className="field"
-            placeholder="Juan"
+            placeholder="Juan Dela Cruz"
           />
-        </Field>
-
-        <Field label="Last name">
-          <input
-            name="lastName"
-            required
-            className="field"
-            placeholder="Dela Cruz"
-          />
-        </Field>
+          </Field>
+        </div>
 
         <Field label="Student ID">
           <input
@@ -1297,6 +1293,18 @@ function Registration({
               required
               className="field"
               placeholder="At least 8 characters"
+            />
+          </Field>
+        </div>
+
+        <div className="sm:col-span-2">
+          <Field label="Confirm Password">
+            <input
+              name="confirmPassword"
+              type="password"
+              required
+              className="field"
+              placeholder="Re-enter your password"
             />
           </Field>
         </div>
@@ -2358,6 +2366,12 @@ function UsersPanel({
 }: {
   setFlash: (f: Flash) => void;
 }) {
+  const [showStaffForm, setShowStaffForm] =
+    useState(false);
+
+  const [staffLoading, setStaffLoading] =
+    useState(false);
+
   const [users, setUsers] =
     useState([
       {
@@ -2395,16 +2409,182 @@ function UsersPanel({
           </p>
 
           <Button
-            onClick={() =>
-              setFlash({
-                tone: "success",
-                text: "Add-user form opened.",
-              })
-            }
+            onClick={() => setShowStaffForm(true)}
           >
             <Plus /> Add user
           </Button>
         </div>
+
+        {showStaffForm && (
+          <form
+            className="grid gap-4 border-b border-border bg-muted/30 p-4 sm:grid-cols-2"
+            onSubmit={async (event) => {
+              event.preventDefault();
+
+              const form = new FormData(
+                event.currentTarget
+              );
+
+              const name = String(
+                form.get("staffName") ?? ""
+              ).trim();
+
+              const email = String(
+                form.get("staffEmail") ?? ""
+              ).trim();
+
+              const password = String(
+                form.get("staffPassword") ?? ""
+              );
+
+              if (!name || !email || password.length < 8) {
+                setFlash({
+                  tone: "error",
+                  text: "Enter a name, email, and password with at least 8 characters.",
+                });
+                return;
+              }
+
+              const token = localStorage.getItem(
+                "queueless_token"
+              );
+
+              if (!token) {
+                setFlash({
+                  tone: "error",
+                  text: "Your admin session has expired. Please sign in again.",
+                });
+                return;
+              }
+
+              try {
+                setStaffLoading(true);
+
+                const response = await fetch(
+                  `${API_URL}/api/auth/staff`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      name,
+                      email,
+                      password,
+                    }),
+                  }
+                );
+
+                const result =
+                  await readApiResponse(response);
+
+                if (!response.ok) {
+                  throw new Error(
+                    result.message ||
+                      "Failed to create staff account."
+                  );
+                }
+
+                if (!result.user) {
+                  throw new Error(
+                    "The API did not return the created staff account."
+                  );
+                }
+
+                setUsers((currentUsers) => [
+                  ...currentUsers,
+                  {
+                    name: result.user.name,
+                    id: result.user.studentId,
+                    role: "Staff",
+                    active: true,
+                  },
+                ]);
+
+                event.currentTarget.reset();
+                setShowStaffForm(false);
+                setFlash({
+                  tone: "success",
+                  text: `Staff account created for ${result.user.name}.`,
+                });
+              } catch (error) {
+                console.error(
+                  "Create staff account error:",
+                  error
+                );
+
+                setFlash({
+                  tone: "error",
+                  text:
+                    error instanceof Error
+                      ? error.message
+                      : "Failed to create staff account.",
+                });
+              } finally {
+                setStaffLoading(false);
+              }
+            }}
+          >
+            <div className="sm:col-span-2">
+              <p className="text-sm font-bold">
+                Create Staff account
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Staff accounts can manage student document requests but cannot manage users.
+              </p>
+            </div>
+
+            <Field label="Full name">
+              <input
+                name="staffName"
+                required
+                className="field"
+                placeholder="Registrar Staff"
+              />
+            </Field>
+
+            <Field label="Email">
+              <input
+                name="staffEmail"
+                type="email"
+                required
+                className="field"
+                placeholder="staff@example.com"
+              />
+            </Field>
+
+            <Field label="Password">
+              <input
+                name="staffPassword"
+                type="password"
+                minLength={8}
+                required
+                className="field"
+                placeholder="At least 8 characters"
+              />
+            </Field>
+
+            <div className="flex items-end gap-2">
+              <Button
+                type="submit"
+                disabled={staffLoading}
+              >
+                {staffLoading
+                  ? "Creating..."
+                  : "Create Staff"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowStaffForm(false)}
+                disabled={staffLoading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
 
         {users.map((u) => (
           <div
