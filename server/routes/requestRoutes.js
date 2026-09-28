@@ -4,6 +4,7 @@ import {
   createRequest,
   getRequests,
   updateRequestStatus,
+  updateRequest,
 } from "../controllers/requestController.js";
 
 import authMiddleware from "../middleware/authMiddleware.js";
@@ -26,12 +27,20 @@ router.get(
   getRequests
 );
 
-// Update request status
+// Update request status (quick update)
 router.patch(
   "/:requestNumber/status",
   authMiddleware,
   roleMiddleware("staff", "admin"),
   updateRequestStatus
+);
+
+// Update complete request receipt details (staff and admin)
+router.patch(
+  "/:requestNumber",
+  authMiddleware,
+  roleMiddleware("staff", "admin"),
+  updateRequest
 );
 
 export default router;

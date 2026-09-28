@@ -45,9 +45,23 @@ export const createRequest = async (req, res) => {
       });
     }
 
+    // Auto-generate sequential line-by-line number
+    let lineNumber = req.body.lineNumber;
+    if (!lineNumber) {
+      const highestLineRequest = await Request.findOne().sort({ lineNumber: -1 });
+      lineNumber =
+        highestLineRequest && highestLineRequest.lineNumber
+          ? highestLineRequest.lineNumber + 1
+          : (await Request.countDocuments()) + 1;
+    }
+
     // Create request using authenticated user's information
     const request = await Request.create({
       requestNumber,
+      lineNumber,
+      priority: req.body.priority || "Regular",
+      copies: Number(req.body.copies) || 1,
+      pickupDate: req.body.pickupDate || "",
       student: user.name,
       studentId: user.studentId,
       document,
@@ -86,11 +100,12 @@ export const getRequests = async (req, res) => {
 
       requests = await Request.find({
         studentId: user.studentId,
-      }).sort({ createdAt: -1 });
+      }).sort({ lineNumber: 1, createdAt: 1 });
     } else {
-      // Staff and admin can see all requests
+      // Staff and admin can see all requests ordered by line number
       requests = await Request.find().sort({
-        createdAt: -1,
+        lineNumber: 1,
+        createdAt: 1,
       });
     }
 
@@ -155,6 +170,69 @@ export const updateRequestStatus = async (req, res) => {
 
     return res.status(500).json({
       message: "Server error while updating request status.",
+    });
+  }
+};
+
+export const updateRequest = async (req, res) => {
+  try {
+    const { requestNumber } = req.params;
+    const {
+      status,
+      remarks,
+      lineNumber,
+      priority,
+      pickupDate,
+      document,
+      purpose,
+      copies,
+    } = req.body;
+
+    // Only staff and admin can edit receipt details
+    if (
+      req.user.role !== "staff" &&
+      req.user.role !== "admin"
+    ) {
+      return res.status(403).json({
+        message: "Only staff and admin can edit request receipt details.",
+      });
+    }
+
+    const updateFields = {};
+    if (status !== undefined) updateFields.status = status;
+    if (remarks !== undefined) updateFields.remarks = remarks;
+    if (lineNumber !== undefined && lineNumber !== null) {
+      updateFields.lineNumber = Number(lineNumber);
+    }
+    if (priority !== undefined) updateFields.priority = priority;
+    if (pickupDate !== undefined) updateFields.pickupDate = pickupDate;
+    if (document !== undefined) updateFields.document = document;
+    if (purpose !== undefined) updateFields.purpose = purpose;
+    if (copies !== undefined && copies !== null) {
+      updateFields.copies = Number(copies);
+    }
+
+    const request = await Request.findOneAndUpdate(
+      { requestNumber },
+      updateFields,
+      { new: true }
+    );
+
+    if (!request) {
+      return res.status(404).json({
+        message: "Request not found.",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Request receipt updated successfully.",
+      request,
+    });
+  } catch (error) {
+    console.error("Update request error:", error);
+
+    return res.status(500).json({
+      message: "Server error while updating request receipt.",
     });
   }
 };

@@ -3,6 +3,8 @@ import {
   createStaff,
   register,
   login,
+  getUsers,
+  deleteUser,
 } from "../controllers/authController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 import roleMiddleware from "../middleware/roleMiddleware.js";
@@ -16,6 +18,18 @@ router.post(
   authMiddleware,
   roleMiddleware("admin"),
   createStaff
+);
+router.get(
+  "/users",
+  authMiddleware,
+  roleMiddleware("admin"),
+  getUsers
+);
+router.delete(
+  "/users/:id",
+  authMiddleware,
+  roleMiddleware("admin"),
+  deleteUser
 );
 
 export default router;

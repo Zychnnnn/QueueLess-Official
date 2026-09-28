@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdminForgotPasswordRouteImport } from './routes/admin-forgot-password'
 import { Route as AdminLoginRouteImport } from './routes/admin-login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as StaffLoginRouteImport } from './routes/staff-login'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminForgotPasswordRoute = AdminForgotPasswordRouteImport.update({
+  id: '/admin-forgot-password',
+  path: '/admin-forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLoginRoute = AdminLoginRouteImport.update({
@@ -44,6 +50,7 @@ const StaffLoginRoute = StaffLoginRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-forgot-password': typeof AdminForgotPasswordRoute
   '/admin-login': typeof AdminLoginRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/staff-login': typeof StaffLoginRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-forgot-password': typeof AdminForgotPasswordRoute
   '/admin-login': typeof AdminLoginRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/staff-login': typeof StaffLoginRoute
@@ -59,6 +67,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-forgot-password': typeof AdminForgotPasswordRoute
   '/admin-login': typeof AdminLoginRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/staff-login': typeof StaffLoginRoute
@@ -66,13 +75,25 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/admin' | '/admin-login' | '/forgot-password' | '/staff-login'
+    | '/'
+    | '/admin'
+    | '/admin-forgot-password'
+    | '/admin-login'
+    | '/forgot-password'
+    | '/staff-login'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/admin-login' | '/forgot-password' | '/staff-login'
+  to:
+    | '/'
+    | '/admin'
+    | '/admin-forgot-password'
+    | '/admin-login'
+    | '/forgot-password'
+    | '/staff-login'
   id:
     | '__root__'
     | '/'
     | '/admin'
+    | '/admin-forgot-password'
     | '/admin-login'
     | '/forgot-password'
     | '/staff-login'
@@ -81,6 +102,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AdminForgotPasswordRoute: typeof AdminForgotPasswordRoute
   AdminLoginRoute: typeof AdminLoginRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   StaffLoginRoute: typeof StaffLoginRoute
@@ -100,6 +122,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-forgot-password': {
+      id: '/admin-forgot-password'
+      path: '/admin-forgot-password'
+      fullPath: '/admin-forgot-password'
+      preLoaderRoute: typeof AdminForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-login': {
@@ -129,6 +158,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AdminForgotPasswordRoute: AdminForgotPasswordRoute,
   AdminLoginRoute: AdminLoginRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   StaffLoginRoute: StaffLoginRoute,

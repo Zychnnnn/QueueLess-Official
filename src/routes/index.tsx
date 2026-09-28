@@ -9,24 +9,33 @@ import {
 } from "react";
 
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Bell,
+  Calendar,
   Check,
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
   Clock3,
+  Edit3,
+  Eye,
   FileCheck2,
   FilePlus2,
   FileText,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Menu,
   Plus,
+  Printer,
+  QrCode,
+  RefreshCw,
   Search,
   Settings2,
+  Shield,
   ShieldCheck,
   Trash2,
   UserRound,
@@ -92,6 +101,8 @@ type Status =
   | "Claimed"
   | "Needs Correction";
 
+type Priority = "Regular" | "Priority" | "Urgent";
+
 type RequestItem = {
   id: string;
   student: string;
@@ -101,6 +112,10 @@ type RequestItem = {
   date: string;
   status: Status;
   remarks?: string;
+  lineNumber?: number;
+  priority?: Priority;
+  copies?: number;
+  pickupDate?: string;
 };
 
 type Flash = {
@@ -324,7 +339,7 @@ function QueueLessApp() {
           }
 
           const loadedRequests: RequestItem[] =
-            result.map((request: any) => ({
+            result.map((request: any, idx: number) => ({
               id: request.requestNumber,
               student: request.student,
               studentId: request.studentId,
@@ -332,8 +347,11 @@ function QueueLessApp() {
               purpose: request.purpose,
               date: request.date,
               status: request.status,
-              remarks:
-                request.remarks || "",
+              remarks: request.remarks || "",
+              lineNumber: request.lineNumber ?? idx + 1,
+              priority: (request.priority as Priority) || "Regular",
+              copies: request.copies || 1,
+              pickupDate: request.pickupDate || "",
             }));
 
           setRequests(
@@ -443,7 +461,7 @@ function QueueLessApp() {
       }
 
       const loadedRequests: RequestItem[] =
-        result.map((request: any) => ({
+        result.map((request: any, idx: number) => ({
           id: request.requestNumber,
           student: request.student,
           studentId: request.studentId,
@@ -451,8 +469,11 @@ function QueueLessApp() {
           purpose: request.purpose,
           date: request.date,
           status: request.status,
-          remarks:
-            request.remarks || "",
+          remarks: request.remarks || "",
+          lineNumber: request.lineNumber ?? idx + 1,
+          priority: (request.priority as Priority) || "Regular",
+          copies: request.copies || 1,
+          pickupDate: request.pickupDate || "",
         }));
 
       setRequests(
@@ -1641,34 +1662,20 @@ function NewRequest({
         return;
       }
 
-      const savedRequest: RequestItem =
-        {
-          id:
-            result.request
-              .requestNumber,
-
-          student:
-            result.request.student,
-
-          studentId:
-            result.request.studentId,
-
-          document:
-            result.request.document,
-
-          purpose:
-            result.request.purpose,
-
-          remarks:
-            result.request.remarks ||
-            "",
-
-          date:
-            result.request.date,
-
-          status:
-            result.request.status,
-        };
+      const savedRequest: RequestItem = {
+        id: result.request.requestNumber,
+        student: result.request.student,
+        studentId: result.request.studentId,
+        document: result.request.document,
+        purpose: result.request.purpose,
+        remarks: result.request.remarks || "",
+        date: result.request.date,
+        status: result.request.status,
+        lineNumber: result.request.lineNumber,
+        priority: result.request.priority || "Regular",
+        copies: result.request.copies || 1,
+        pickupDate: result.request.pickupDate || "",
+      };
 
       onSubmit(savedRequest);
     } catch (error) {
@@ -1959,107 +1966,470 @@ function StaffView({
   );
 }
 
+function DigitalReceiptModal({
+  request,
+  onClose,
+  isStaff = false,
+  onEdit,
+}: {
+  request: RequestItem;
+  onClose: () => void;
+  isStaff?: boolean;
+  onEdit?: () => void;
+}) {
+  const lineNum = request.lineNumber ?? 1;
+
+  const getPriorityBadge = (p?: Priority) => {
+    if (p === "Urgent") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-0.5 text-xs font-bold text-destructive">
+          ⚡ Urgent Priority
+        </span>
+      );
+    }
+    if (p === "Priority") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+          ★ Priority Lane
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+        Regular Queue
+      </span>
+    );
+  };
+
+  const getQueueDescription = () => {
+    if (request.status === "Ready for Claiming") {
+      return "Ready for claiming! Please proceed to the registrar counter.";
+    }
+    if (request.status === "Processing") {
+      return "Being processed right now by registrar staff (Active Priority).";
+    }
+    if (request.status === "Claimed") {
+      return "This document request has been claimed and completed.";
+    }
+    if (request.status === "Needs Correction") {
+      return "Correction required: please review registrar notes below.";
+    }
+    return `You are in line at position #${lineNum}. Track priority and status here.`;
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Digital Request Receipt"
+        className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-border pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <FileCheck2 className="size-6" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                PHINMA University of Pangasinan • Registrar
+              </p>
+              <h2 className="mt-0.5 font-display text-xl font-bold text-foreground">
+                Digital Request Receipt
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Official tracking document for student registrar requests
+              </p>
+            </div>
+          </div>
+
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onClose}
+            aria-label="Close receipt"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        {/* Priority Line Number Banner */}
+        <div className="mt-5 overflow-hidden rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-primary-foreground shadow-sm min-w-[72px]">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">
+                  Line No.
+                </span>
+                <span className="text-2xl font-black">#{lineNum}</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-foreground">
+                    Queue Sequence & Priority
+                  </span>
+                  {getPriorityBadge(request.priority)}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {getQueueDescription()}
+                </p>
+              </div>
+            </div>
+
+            <div className="shrink-0 self-start sm:self-auto">
+              <StatusBadge status={request.status} />
+            </div>
+          </div>
+
+          {/* Step Progress Tracker */}
+          <div className="mt-4 border-t border-primary/10 pt-3">
+            <div className="grid grid-cols-4 gap-1 text-center text-[10px]">
+              <div className="rounded py-1 font-semibold bg-primary text-primary-foreground">
+                1. Submitted
+              </div>
+              <div
+                className={`rounded py-1 font-semibold ${
+                  request.status !== "Needs Correction"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                2. Line #{lineNum}
+              </div>
+              <div
+                className={`rounded py-1 font-semibold ${
+                  request.status === "Processing" ||
+                  request.status === "Ready for Claiming" ||
+                  request.status === "Claimed"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                3. Processing
+              </div>
+              <div
+                className={`rounded py-1 font-semibold ${
+                  request.status === "Ready for Claiming" ||
+                  request.status === "Claimed"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                4. Claiming
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Receipt Details Grid */}
+        <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-xs">
+          <ReceiptField label="Request Reference" value={request.id} />
+          <ReceiptField label="Submission Date" value={request.date} />
+          <ReceiptField label="Student Name" value={request.student} />
+          <ReceiptField label="Student ID Number" value={request.studentId} />
+          <ReceiptField label="Document Requested" value={request.document} />
+          <ReceiptField
+            label="Number of Copies"
+            value={`${request.copies || 1} copy`}
+          />
+          <ReceiptField label="Purpose" value={request.purpose} />
+          <ReceiptField
+            label="Pickup Window / Schedule"
+            value={request.pickupDate || "Standard registrar schedule"}
+          />
+        </div>
+
+        {/* Registrar Instructions / Notes */}
+        {request.remarks && (
+          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
+            <p className="font-bold flex items-center gap-1.5">
+              <span>📋 Registrar Notes & Counter Instructions:</span>
+            </p>
+            <p className="mt-1 font-medium">{request.remarks}</p>
+          </div>
+        )}
+
+        {/* Digital Verification & Stamp */}
+        <div className="mt-4 flex flex-col items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 p-3 text-center sm:flex-row sm:text-left">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-9 items-center justify-center rounded bg-foreground/5 text-foreground">
+              <QrCode className="size-5" />
+            </div>
+            <div>
+              <p className="font-mono text-[11px] font-bold text-foreground">
+                VERIFIED-REC-{request.id}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Digital QueueLess Verification Stamp • PHINMA UPANG
+              </p>
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Present school ID when claiming.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
+          {isStaff && onEdit && (
+            <Button variant="outline" size="sm" onClick={onEdit}>
+              <Edit3 className="size-3.5" /> Edit Receipt & Line
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+          >
+            <Printer className="size-3.5" /> Print Receipt
+          </Button>
+          <Button size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function EditReceiptModal({
+  request,
+  onClose,
+  onSave,
+  loading = false,
+}: {
+  request: RequestItem;
+  onClose: () => void;
+  onSave: (updated: {
+    lineNumber: number;
+    priority: Priority;
+    status: Status;
+    remarks: string;
+    pickupDate: string;
+    copies: number;
+    document: string;
+    purpose: string;
+  }) => void;
+  loading?: boolean;
+}) {
+  const [lineNumber, setLineNumber] = useState<number>(request.lineNumber ?? 1);
+  const [priority, setPriority] = useState<Priority>(
+    request.priority || "Regular"
+  );
+  const [status, setStatus] = useState<Status>(request.status);
+  const [remarks, setRemarks] = useState<string>(request.remarks || "");
+  const [pickupDate, setPickupDate] = useState<string>(request.pickupDate || "");
+  const [copies, setCopies] = useState<number>(request.copies || 1);
+  const [document, setDocument] = useState<string>(request.document);
+  const [purpose, setPurpose] = useState<string>(request.purpose);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    onSave({
+      lineNumber: Number(lineNumber),
+      priority,
+      status,
+      remarks: remarks.trim(),
+      pickupDate: pickupDate.trim(),
+      copies: Number(copies),
+      document,
+      purpose,
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      onClick={() => !loading && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-foreground">
+              Edit Request Receipt & Queue Line
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Updating receipt for {request.id} ({request.student})
+            </p>
+          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onClose}
+            disabled={loading}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Line Number (Queue Position)">
+              <input
+                type="number"
+                min={1}
+                value={lineNumber}
+                onChange={(e) => setLineNumber(Number(e.target.value))}
+                required
+                className="field"
+              />
+            </Field>
+
+            <Field label="Priority Level">
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as Priority)}
+                className="field"
+              >
+                <option value="Regular">Regular Queue</option>
+                <option value="Priority">Priority Lane</option>
+                <option value="Urgent">Urgent Priority</option>
+              </select>
+            </Field>
+          </div>
+
+          <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5 text-[11px] text-muted-foreground">
+            ℹ <strong>Line-by-line priority:</strong> This line number appears directly on the student&apos;s digital receipt so they can track who is next in line.
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Request Status">
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as Status)}
+                className="field"
+              >
+                <option value="Pending">Pending</option>
+                <option value="Processing">Processing</option>
+                <option value="Ready for Claiming">Ready for Claiming</option>
+                <option value="Claimed">Claimed</option>
+                <option value="Needs Correction">Needs Correction</option>
+              </select>
+            </Field>
+
+            <Field label="Copies">
+              <input
+                type="number"
+                min={1}
+                value={copies}
+                onChange={(e) => setCopies(Number(e.target.value))}
+                className="field"
+              />
+            </Field>
+          </div>
+
+          <Field label="Scheduled Pickup Date / Counter Window">
+            <input
+              type="text"
+              value={pickupDate}
+              onChange={(e) => setPickupDate(e.target.value)}
+              placeholder="e.g. Window 2 • Sep 29, 2026 (2:00 PM)"
+              className="field"
+            />
+          </Field>
+
+          <Field label="Registrar Remarks / Notes to Student">
+            <textarea
+              rows={3}
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="e.g. Ready for pickup at Window 1. Please present your student ID."
+              className="field resize-none"
+            />
+          </Field>
+
+          <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Saving Changes...
+                </>
+              ) : (
+                "Save Receipt Changes"
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function ManageRequests({
   requests,
   setRequests,
   setFlash,
 }: {
   requests: RequestItem[];
-  setRequests: (
-    r: RequestItem[]
-  ) => void;
+  setRequests: (r: RequestItem[]) => void;
   setFlash: (f: Flash) => void;
 }) {
-  const [query, setQuery] =
-    useState("");
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("All");
 
-  const [status, setStatus] =
-    useState("All");
+  // Receipt view and edit modals
+  const [viewingReceipt, setViewingReceipt] = useState<RequestItem | null>(null);
+  const [editingReceipt, setEditingReceipt] = useState<RequestItem | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const shown = useMemo(
     () =>
-      requests.filter(
-        (r) =>
-          (status === "All" ||
-            r.status === status) &&
-          `${r.id} ${r.student} ${r.document}`
-            .toLowerCase()
-            .includes(
-              query.toLowerCase()
-            )
-      ),
+      requests
+        .filter(
+          (r) =>
+            (status === "All" || r.status === status) &&
+            `${r.id} ${r.student} ${r.document} line #${r.lineNumber ?? 1}`
+              .toLowerCase()
+              .includes(query.toLowerCase())
+        )
+        .sort((a, b) => (a.lineNumber ?? 0) - (b.lineNumber ?? 0)),
     [requests, query, status]
   );
 
-  const update = async (
-    id: string,
-    next: Status
-  ) => {
+  const update = async (id: string, next: Status) => {
     try {
-      console.log(
-        "Updating request:",
-        id,
-        "to",
-        next
-      );
+      const url = `${API_URL}/api/requests/${encodeURIComponent(id)}/status`;
+      const token = localStorage.getItem("queueless_token");
 
-      const url = `${API_URL}/api/requests/${encodeURIComponent(
-        id
-      )}/status`;
-
-      console.log(
-        "PATCH URL:",
-        url
-      );
-
-      const token =
-        localStorage.getItem(
-          "queueless_token"
-        );
-
-      /*
-       * PATCH is protected by JWT + staff/admin RBAC.
-       */
       if (!token) {
-        throw new Error(
-          "Authentication token not found."
-        );
+        throw new Error("Authentication token not found.");
       }
 
-      const response =
-        await fetch(url, {
-          method: "PATCH",
+      const response = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: next,
+        }),
+      });
 
-          headers: {
-            "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${token}`,
-          },
-
-          body: JSON.stringify({
-            status: next,
-          }),
-        });
-
-      console.log(
-        "PATCH response status:",
-        response.status
-      );
-
-      const result =
-        await response.json();
-
-      console.log(
-        "PATCH response:",
-        result
-      );
+      const result = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          result.message ||
-            "Failed to update request status."
+          result.message || "Failed to update request status."
         );
       }
 
@@ -2068,9 +2438,7 @@ function ManageRequests({
           r.id === id
             ? {
                 ...r,
-                status:
-                  result.request
-                    .status,
+                status: result.request.status,
               }
             : r
         )
@@ -2081,11 +2449,7 @@ function ManageRequests({
         text: `${id} updated to ${result.request.status}.`,
       });
     } catch (error) {
-      console.error(
-        "Update request status error:",
-        error
-      );
-
+      console.error("Update request status error:", error);
       setFlash({
         tone: "error",
         text:
@@ -2096,46 +2460,107 @@ function ManageRequests({
     }
   };
 
+  const handleSaveReceiptEdit = async (updated: {
+    lineNumber: number;
+    priority: Priority;
+    status: Status;
+    remarks: string;
+    pickupDate: string;
+    copies: number;
+    document: string;
+    purpose: string;
+  }) => {
+    if (!editingReceipt) return;
+
+    const token = localStorage.getItem("queueless_token");
+    if (!token) {
+      setFlash({
+        tone: "error",
+        text: "Your session has expired. Please sign in again.",
+      });
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      const response = await fetch(
+        `${API_URL}/api/requests/${encodeURIComponent(editingReceipt.id)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(updated),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to save receipt changes.");
+      }
+
+      const updatedItem: RequestItem = {
+        ...editingReceipt,
+        ...updated,
+      };
+
+      setRequests(
+        requests.map((r) => (r.id === editingReceipt.id ? updatedItem : r))
+      );
+
+      if (viewingReceipt && viewingReceipt.id === editingReceipt.id) {
+        setViewingReceipt(updatedItem);
+      }
+
+      setEditingReceipt(null);
+      setFlash({
+        tone: "success",
+        text: `Receipt for ${editingReceipt.id} successfully updated (Line #${updated.lineNumber}).`,
+      });
+    } catch (err) {
+      console.error("Save receipt error:", err);
+      setFlash({
+        tone: "error",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Failed to update request receipt.",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <div className="animate-rise">
       <PageHeading
         eyebrow="Registrar workspace"
         title="Manage requests"
-        text="Search, filter, and update the status of student requests."
+        text="Manage line-by-line queue priority, review details, and update student digital receipts."
       />
 
+      {/* Filter and search */}
       <div className="mt-7 flex flex-col gap-3 rounded-md border border-border bg-card p-3 sm:flex-row">
         <label className="relative flex-1">
           <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
-
-          <span className="sr-only">
-            Search requests
-          </span>
-
+          <span className="sr-only">Search requests</span>
           <input
             value={query}
-            onChange={(e) =>
-              setQuery(
-                e.target.value
-              )
-            }
+            onChange={(e) => setQuery(e.target.value)}
             className="field pl-9"
-            placeholder="Search ID, student, or document"
+            placeholder="Search line number, ID, student, or document..."
           />
         </label>
 
         <select
           aria-label="Filter by status"
           value={status}
-          onChange={(e) =>
-            setStatus(
-              e.target.value
-            )
-          }
+          onChange={(e) => setStatus(e.target.value)}
           className="field sm:w-52"
         >
           <option>All</option>
-
           {[
             "Pending",
             "Processing",
@@ -2143,29 +2568,26 @@ function ManageRequests({
             "Claimed",
             "Needs Correction",
           ].map((s) => (
-            <option key={s}>
-              {s}
-            </option>
+            <option key={s}>{s}</option>
           ))}
         </select>
       </div>
 
+      {/* Requests table */}
       <div className="mt-4 overflow-x-auto rounded-md border border-border bg-card">
-        <table className="w-full min-w-[900px] text-left text-sm">
+        <table className="w-full min-w-[950px] text-left text-sm">
           <thead className="bg-muted text-xs uppercase text-muted-foreground">
             <tr>
               {[
-                "Request",
+                "Line #",
+                "Request ID",
                 "Student",
                 "Document",
                 "Submitted",
                 "Status",
-                "Update",
+                "Actions",
               ].map((h) => (
-                <th
-                  key={h}
-                  className="px-5 py-4"
-                >
+                <th key={h} className="px-5 py-4">
                   {h}
                 </th>
               ))}
@@ -2176,61 +2598,87 @@ function ManageRequests({
             {shown.map((r) => (
               <tr
                 key={r.id}
-                className="border-t border-border"
+                className="border-t border-border transition-colors hover:bg-muted/20"
               >
-                <td className="px-5 py-4 font-bold text-primary">
-                  {r.id}
+                {/* Line number and priority badge */}
+                <td className="px-5 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center justify-center rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary border border-primary/20">
+                      Line #{r.lineNumber ?? 1}
+                    </span>
+                    {r.priority === "Urgent" && (
+                      <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-bold text-destructive">
+                        Urgent
+                      </span>
+                    )}
+                    {r.priority === "Priority" && (
+                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                        Priority
+                      </span>
+                    )}
+                  </div>
                 </td>
 
-                <td className="px-5 py-4">
-                  <p className="font-semibold">
-                    {r.student}
-                  </p>
+                <td className="px-5 py-4 font-bold text-primary">{r.id}</td>
 
+                <td className="px-5 py-4">
+                  <p className="font-semibold text-foreground">{r.student}</p>
+                  <p className="text-xs text-muted-foreground">{r.studentId}</p>
+                </td>
+
+                <td className="max-w-64 px-5 py-4">
+                  <p className="font-medium text-foreground">{r.document}</p>
                   <p className="text-xs text-muted-foreground">
-                    {r.studentId}
+                    {r.copies || 1} {(r.copies || 1) === 1 ? "copy" : "copies"} · {r.purpose}
                   </p>
                 </td>
 
-                <td className="max-w-64 px-5 py-4 font-medium">
-                  {r.document}
-                </td>
+                <td className="px-5 py-4 text-muted-foreground">{r.date}</td>
 
-                <td className="px-5 py-4 text-muted-foreground">
-                  {r.date}
+                <td className="px-5 py-4">
+                  <StatusBadge status={r.status} />
                 </td>
 
                 <td className="px-5 py-4">
-                  <StatusBadge
-                    status={r.status}
-                  />
-                </td>
+                  <div className="flex items-center gap-1.5">
+                    {/* View Digital Receipt */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViewingReceipt(r)}
+                      title="View Digital Receipt"
+                    >
+                      <Eye className="size-3.5" /> Receipt
+                    </Button>
 
-                <td className="px-5 py-4">
-                  <select
-                    aria-label={`Update ${r.id} status`}
-                    value={r.status}
-                    onChange={(e) =>
-                      update(
-                        r.id,
-                        e.target
-                          .value as Status
-                      )
-                    }
-                    className="h-9 rounded-md border border-input bg-background px-2 text-xs"
-                  >
-                    {[
-                      "Pending",
-                      "Processing",
-                      "Ready for Claiming",
-                      "Claimed",
-                      "Needs Correction",
-                    ].map((s) => (
-                      <option key={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                    {/* Edit Receipt */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingReceipt(r)}
+                      title="Edit Receipt & Line Number"
+                    >
+                      <Edit3 className="size-3.5" /> Edit
+                    </Button>
+
+                    {/* Quick status dropdown */}
+                    <select
+                      aria-label={`Update ${r.id} status`}
+                      value={r.status}
+                      onChange={(e) => update(r.id, e.target.value as Status)}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                    >
+                      {[
+                        "Pending",
+                        "Processing",
+                        "Ready for Claiming",
+                        "Claimed",
+                        "Needs Correction",
+                      ].map((s) => (
+                        <option key={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -2238,9 +2686,33 @@ function ManageRequests({
         </table>
 
         {shown.length === 0 && (
-          <EmptyState text="No requests match your search." />
+          <EmptyState text="No requests match your search or filter." />
         )}
       </div>
+
+      {/* Staff View Digital Receipt Modal */}
+      {viewingReceipt && (
+        <DigitalReceiptModal
+          request={viewingReceipt}
+          onClose={() => setViewingReceipt(null)}
+          isStaff={true}
+          onEdit={() => {
+            const target = viewingReceipt;
+            setViewingReceipt(null);
+            setEditingReceipt(target);
+          }}
+        />
+      )}
+
+      {/* Staff Edit Receipt & Line Priority Modal */}
+      {editingReceipt && (
+        <EditReceiptModal
+          request={editingReceipt}
+          onClose={() => setEditingReceipt(null)}
+          onSave={handleSaveReceiptEdit}
+          loading={savingEdit}
+        />
+      )}
     </div>
   );
 }
@@ -2361,224 +2833,471 @@ function AdminView({
   );
 }
 
+type AccountUser = {
+  id: string;
+  name: string;
+  studentId?: string;
+  email: string;
+  role: string;
+  createdAt?: string;
+};
+
 function UsersPanel({
   setFlash,
 }: {
   setFlash: (f: Flash) => void;
 }) {
-  const [showStaffForm, setShowStaffForm] =
-    useState(false);
+  const [users, setUsers] = useState<AccountUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [staffLoading, setStaffLoading] =
-    useState(false);
+  // Search & Role Filter
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState<
+    "all" | "student" | "staff" | "admin"
+  >("all");
 
-  const [users, setUsers] =
-    useState([
-      {
-        name: "Juan Dela Cruz",
-        id: "2022-10045",
-        role: "Student",
-        active: true,
-      },
-      {
-        name: "Maria Santos",
-        id: "2022-10412",
-        role: "Student",
-        active: true,
-      },
-      {
-        name: "Registrar Staff",
-        id: "REG-001",
-        role: "Staff",
-        active: true,
-      },
-    ]);
+  // Add Staff Form state
+  const [showStaffForm, setShowStaffForm] = useState(false);
+  const [staffName, setStaffName] = useState("");
+  const [staffEmail, setStaffEmail] = useState("");
+  const [customStaffId, setCustomStaffId] = useState("");
+  const [staffPassword, setStaffPassword] = useState("");
+  const [staffConfirmPassword, setStaffConfirmPassword] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [staffLoading, setStaffLoading] = useState(false);
+
+  // Add Confirmation Modal
+  const [showAddConfirmModal, setShowAddConfirmModal] = useState(false);
+  const [pendingStaffPayload, setPendingStaffPayload] = useState<{
+    name: string;
+    email: string;
+    staffId: string;
+    password: string;
+  } | null>(null);
+
+  // Delete Confirmation Modal
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<AccountUser | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Current logged in user to prevent self-deletion
+  const currentAdmin = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("queueless_user");
+      return raw ? (JSON.parse(raw) as AuthUser) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const fetchUsers = async () => {
+    const token = localStorage.getItem("queueless_token");
+    if (!token) {
+      setError("Admin session not found. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch(`${API_URL}/api/auth/users`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to load user accounts.");
+      }
+
+      setUsers(data.users || []);
+    } catch (err) {
+      console.error("Fetch users error:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load accounts."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Step 1: Form Validation before showing Confirmation Modal
+  const handleReviewStaff = (e: FormEvent) => {
+    e.preventDefault();
+    setValidationError(null);
+
+    const trimmedName = staffName.trim();
+    const trimmedEmail = staffEmail.trim().toLowerCase();
+    const trimmedId = customStaffId.trim();
+
+    if (!trimmedName || trimmedName.length < 2) {
+      setValidationError("Full name must contain at least 2 characters.");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setValidationError(
+        "Please enter a valid institutional or personal email address."
+      );
+      return;
+    }
+
+    if (staffPassword.length < 8) {
+      setValidationError("Password must contain at least 8 characters.");
+      return;
+    }
+
+    if (staffPassword !== staffConfirmPassword) {
+      setValidationError("Passwords do not match. Please re-enter.");
+      return;
+    }
+
+    // Set pending staff data and trigger Confirmation Modal
+    setPendingStaffPayload({
+      name: trimmedName,
+      email: trimmedEmail,
+      staffId: trimmedId,
+      password: staffPassword,
+    });
+    setShowAddConfirmModal(true);
+  };
+
+  // Step 2: Confirm Creation -> Call API
+  const handleConfirmCreateStaff = async () => {
+    if (!pendingStaffPayload) return;
+
+    const token = localStorage.getItem("queueless_token");
+    if (!token) {
+      setFlash({
+        tone: "error",
+        text: "Your admin session has expired. Please sign in again.",
+      });
+      setShowAddConfirmModal(false);
+      return;
+    }
+
+    try {
+      setStaffLoading(true);
+      const response = await fetch(`${API_URL}/api/auth/staff`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: pendingStaffPayload.name,
+          email: pendingStaffPayload.email,
+          password: pendingStaffPayload.password,
+          staffId: pendingStaffPayload.staffId || undefined,
+        }),
+      });
+
+      const result = await readApiResponse(response);
+
+      if (!response.ok) {
+        throw new Error(
+          result.message || "Failed to create staff account."
+        );
+      }
+
+      if (!result.user) {
+        throw new Error(
+          "The server did not return the created staff account."
+        );
+      }
+
+      // Prepend to local users list
+      setUsers((prev) => [
+        {
+          id:
+            (result.user as any).id ||
+            (result.user as any)._id ||
+            `staff-${Date.now()}`,
+          name: result.user.name,
+          studentId: result.user.studentId,
+          email: pendingStaffPayload.email,
+          role: "staff",
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+
+      // Close modal and reset form
+      setShowAddConfirmModal(false);
+      setShowStaffForm(false);
+      setStaffName("");
+      setStaffEmail("");
+      setCustomStaffId("");
+      setStaffPassword("");
+      setStaffConfirmPassword("");
+      setPendingStaffPayload(null);
+      setValidationError(null);
+
+      setFlash({
+        tone: "success",
+        text: `Staff account successfully created for ${result.user.name} (${result.user.studentId}).`,
+      });
+    } catch (err) {
+      console.error("Create staff account error:", err);
+      setFlash({
+        tone: "error",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Failed to create staff account.",
+      });
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  // Step 3: Trigger Delete Confirmation Modal
+  const handlePromptDelete = (user: AccountUser) => {
+    setUserToDelete(user);
+    setShowDeleteConfirmModal(true);
+  };
+
+  // Step 4: Confirm Delete -> Call API
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+
+    const token = localStorage.getItem("queueless_token");
+    if (!token) {
+      setFlash({
+        tone: "error",
+        text: "Your admin session has expired. Please sign in again.",
+      });
+      setShowDeleteConfirmModal(false);
+      return;
+    }
+
+    try {
+      setDeleteLoading(true);
+      const response = await fetch(
+        `${API_URL}/api/auth/users/${userToDelete.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to delete user account.");
+      }
+
+      // Remove from list
+      setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+      setShowDeleteConfirmModal(false);
+      setFlash({
+        tone: "success",
+        text: `${userToDelete.name} (${userToDelete.role}) was successfully deleted.`,
+      });
+      setUserToDelete(null);
+    } catch (err) {
+      console.error("Delete user error:", err);
+      setFlash({
+        tone: "error",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Failed to delete user account.",
+      });
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Filtered accounts
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const roleMatch =
+        roleFilter === "all"
+          ? true
+          : u.role.toLowerCase() === roleFilter.toLowerCase();
+      const q = searchTerm.toLowerCase().trim();
+      const searchMatch =
+        !q ||
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.studentId && u.studentId.toLowerCase().includes(q));
+      return roleMatch && searchMatch;
+    });
+  }, [users, roleFilter, searchTerm]);
+
+  const counts = useMemo(() => {
+    return {
+      all: users.length,
+      student: users.filter((u) => u.role.toLowerCase() === "student").length,
+      staff: users.filter((u) => u.role.toLowerCase() === "staff").length,
+      admin: users.filter((u) => u.role.toLowerCase() === "admin").length,
+    };
+  }, [users]);
+
+  const getRoleBadge = (role: string) => {
+    const r = role.toLowerCase();
+    if (r === "admin") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+          <Shield className="size-3" /> Admin
+        </span>
+      );
+    }
+    if (r === "staff") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+          <ShieldCheck className="size-3" /> Staff
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+        <UserRound className="size-3" /> Student
+      </span>
+    );
+  };
 
   return (
     <div className="animate-rise">
       <PageHeading
         eyebrow="Administration"
         title="User accounts"
-        text="Review user roles and account access."
+        text="Manage user roles, create staff access, and control account permissions."
       />
 
+      {/* Main card */}
       <div className="mt-7 overflow-hidden rounded-md border border-border bg-card">
-        <div className="flex items-center justify-between gap-3 border-b border-border p-4">
-          <p className="text-sm font-bold">
-            {users.length} accounts
-          </p>
+        {/* Header bar */}
+        <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold">
+              {users.length} {users.length === 1 ? "account" : "accounts"}
+            </p>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              onClick={fetchUsers}
+              title="Refresh account list"
+              disabled={loading}
+            >
+              <RefreshCw
+                className={`size-3.5 ${loading ? "animate-spin" : ""}`}
+              />
+            </Button>
+          </div>
 
-          <Button
-            onClick={() => setShowStaffForm(true)}
-          >
-            <Plus /> Add user
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => {
+                setShowStaffForm((prev) => !prev);
+                setValidationError(null);
+              }}
+            >
+              <Plus /> {showStaffForm ? "Close form" : "Add staff"}
+            </Button>
+          </div>
         </div>
 
+        {/* Create Staff Form */}
         {showStaffForm && (
           <form
-            className="grid gap-4 border-b border-border bg-muted/30 p-4 sm:grid-cols-2"
-            onSubmit={async (event) => {
-              event.preventDefault();
-
-              const form = new FormData(
-                event.currentTarget
-              );
-
-              const name = String(
-                form.get("staffName") ?? ""
-              ).trim();
-
-              const email = String(
-                form.get("staffEmail") ?? ""
-              ).trim();
-
-              const password = String(
-                form.get("staffPassword") ?? ""
-              );
-
-              if (!name || !email || password.length < 8) {
-                setFlash({
-                  tone: "error",
-                  text: "Enter a name, email, and password with at least 8 characters.",
-                });
-                return;
-              }
-
-              const token = localStorage.getItem(
-                "queueless_token"
-              );
-
-              if (!token) {
-                setFlash({
-                  tone: "error",
-                  text: "Your admin session has expired. Please sign in again.",
-                });
-                return;
-              }
-
-              try {
-                setStaffLoading(true);
-
-                const response = await fetch(
-                  `${API_URL}/api/auth/staff`,
-                  {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                      name,
-                      email,
-                      password,
-                    }),
-                  }
-                );
-
-                const result =
-                  await readApiResponse(response);
-
-                if (!response.ok) {
-                  throw new Error(
-                    result.message ||
-                      "Failed to create staff account."
-                  );
-                }
-
-                if (!result.user) {
-                  throw new Error(
-                    "The API did not return the created staff account."
-                  );
-                }
-
-                setUsers((currentUsers) => [
-                  ...currentUsers,
-                  {
-                    name: result.user.name,
-                    id: result.user.studentId,
-                    role: "Staff",
-                    active: true,
-                  },
-                ]);
-
-                event.currentTarget.reset();
-                setShowStaffForm(false);
-                setFlash({
-                  tone: "success",
-                  text: `Staff account created for ${result.user.name}.`,
-                });
-              } catch (error) {
-                console.error(
-                  "Create staff account error:",
-                  error
-                );
-
-                setFlash({
-                  tone: "error",
-                  text:
-                    error instanceof Error
-                      ? error.message
-                      : "Failed to create staff account.",
-                });
-              } finally {
-                setStaffLoading(false);
-              }
-            }}
+            className="grid gap-4 border-b border-border bg-muted/30 p-5 sm:grid-cols-2"
+            onSubmit={handleReviewStaff}
           >
             <div className="sm:col-span-2">
-              <p className="text-sm font-bold">
-                Create Staff account
+              <p className="text-sm font-bold text-foreground">
+                Create new Staff account
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Staff accounts can manage student document requests but cannot manage users.
+                Staff members can process document queues, call ticket numbers, and update student request statuses.
               </p>
             </div>
 
+            {validationError && (
+              <div className="sm:col-span-2">
+                <InlineError text={validationError} />
+              </div>
+            )}
+
             <Field label="Full name">
               <input
-                name="staffName"
+                value={staffName}
+                onChange={(e) => setStaffName(e.target.value)}
                 required
                 className="field"
-                placeholder="Registrar Staff"
+                placeholder="e.g. Maria Santos"
               />
             </Field>
 
-            <Field label="Email">
+            <Field label="Institutional / Staff email">
               <input
-                name="staffEmail"
+                value={staffEmail}
+                onChange={(e) => setStaffEmail(e.target.value)}
                 type="email"
                 required
                 className="field"
-                placeholder="staff@example.com"
+                placeholder="staff@up.phinma.edu.ph"
               />
             </Field>
 
-            <Field label="Password">
+            <Field label="Staff ID (Optional)">
               <input
-                name="staffPassword"
+                value={customStaffId}
+                onChange={(e) => setCustomStaffId(e.target.value)}
+                className="field"
+                placeholder="e.g. STAFF-001 (auto-generated if empty)"
+              />
+            </Field>
+
+            <div className="hidden sm:block" />
+
+            <Field label="Password (Min. 8 characters)">
+              <input
+                value={staffPassword}
+                onChange={(e) => setStaffPassword(e.target.value)}
                 type="password"
                 minLength={8}
                 required
                 className="field"
-                placeholder="At least 8 characters"
+                placeholder="••••••••"
               />
             </Field>
 
-            <div className="flex items-end gap-2">
-              <Button
-                type="submit"
-                disabled={staffLoading}
-              >
-                {staffLoading
-                  ? "Creating..."
-                  : "Create Staff"}
+            <Field label="Confirm password">
+              <input
+                value={staffConfirmPassword}
+                onChange={(e) => setStaffConfirmPassword(e.target.value)}
+                type="password"
+                minLength={8}
+                required
+                className="field"
+                placeholder="••••••••"
+              />
+            </Field>
+
+            <div className="flex items-center gap-2 sm:col-span-2 pt-2">
+              <Button type="submit">
+                Continue & review
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowStaffForm(false)}
-                disabled={staffLoading}
+                onClick={() => {
+                  setShowStaffForm(false);
+                  setValidationError(null);
+                }}
               >
                 Cancel
               </Button>
@@ -2586,51 +3305,310 @@ function UsersPanel({
           </form>
         )}
 
-        {users.map((u) => (
-          <div
-            key={u.id}
-            className="flex flex-col gap-3 border-b border-border p-4 last:border-b-0 sm:flex-row sm:items-center"
-          >
-            <div className="flex size-10 items-center justify-center rounded-full bg-accent text-primary">
-              <UserRound className="size-4" />
-            </div>
+        {/* Filters and Search Bar */}
+        <div className="flex flex-col gap-3 border-b border-border bg-muted/10 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setRoleFilter("all")}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                roleFilter === "all"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              All ({counts.all})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoleFilter("staff")}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                roleFilter === "staff"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Staff ({counts.staff})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoleFilter("student")}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                roleFilter === "student"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Students ({counts.student})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoleFilter("admin")}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                roleFilter === "admin"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Admins ({counts.admin})
+            </button>
+          </div>
 
-            <div className="min-w-0 flex-1">
-              <p className="font-bold">
-                {u.name}
-              </p>
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by name, email, or ID..."
+              className="field h-8 pl-8 text-xs"
+            />
+          </div>
+        </div>
 
-              <p className="text-xs text-muted-foreground">
-                {u.id} · {u.role}
-              </p>
-            </div>
+        {/* Loading and Error states */}
+        {loading && users.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+            <Loader2 className="size-6 animate-spin text-primary" />
+            <p className="mt-2 text-xs">Loading user accounts...</p>
+          </div>
+        )}
 
-            <span className="text-xs font-bold text-success">
-              Active
-            </span>
-
+        {error && users.length === 0 && (
+          <div className="p-6 text-center">
+            <InlineError text={error} />
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                setUsers(
-                  users.filter(
-                    (x) =>
-                      x.id !== u.id
-                  )
-                );
-
-                setFlash({
-                  tone: "success",
-                  text: `${u.name} removed from the account list.`,
-                });
-              }}
+              className="mt-3"
+              onClick={fetchUsers}
             >
-              <Trash2 /> Remove
+              Retry
             </Button>
           </div>
-        ))}
+        )}
+
+        {/* Empty state */}
+        {!loading && filteredUsers.length === 0 && !error && (
+          <div className="py-12 text-center text-xs text-muted-foreground">
+            No accounts found matching your filter or query.
+          </div>
+        )}
+
+        {/* User list */}
+        {filteredUsers.map((u) => {
+          const isCurrentUser =
+            currentAdmin &&
+            (currentAdmin.id === u.id || currentAdmin.email === u.email);
+
+          return (
+            <div
+              key={u.id}
+              className="flex flex-col gap-3 border-b border-border p-4 transition-colors last:border-b-0 hover:bg-muted/20 sm:flex-row sm:items-center"
+            >
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
+                <UserRound className="size-4" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-bold text-foreground">{u.name}</p>
+                  {getRoleBadge(u.role)}
+                  {isCurrentUser && (
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                      You
+                    </span>
+                  )}
+                </div>
+
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {u.studentId || u.id} · {u.email}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={Boolean(isCurrentUser)}
+                  title={
+                    isCurrentUser
+                      ? "You cannot delete your own active admin account"
+                      : `Delete ${u.name}`
+                  }
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => handlePromptDelete(u)}
+                >
+                  <Trash2 className="size-3.5" /> Remove
+                </Button>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Confirmation Modal 1: Add New Staff */}
+      {showAddConfirmModal && pendingStaffPayload && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => !staffLoading && setShowAddConfirmModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <CheckCircle2 className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">
+                  Confirm Staff Account
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Review the details before creating this staff account.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2.5 rounded-lg border border-border bg-muted/40 p-4 text-xs">
+              <div className="flex justify-between border-b border-border/60 pb-2">
+                <span className="text-muted-foreground">Full Name:</span>
+                <span className="font-semibold text-foreground">
+                  {pendingStaffPayload.name}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-border/60 pb-2">
+                <span className="text-muted-foreground">Email:</span>
+                <span className="font-semibold text-foreground">
+                  {pendingStaffPayload.email}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-border/60 pb-2">
+                <span className="text-muted-foreground">Staff ID:</span>
+                <span className="font-semibold text-foreground">
+                  {pendingStaffPayload.staffId || "(Auto-generated)"}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-border/60 pb-2">
+                <span className="text-muted-foreground">Assigned Role:</span>
+                <span className="font-semibold text-primary">Staff Member</span>
+              </div>
+              <div className="pt-1 text-[11px] text-muted-foreground">
+                Permissions: Verify documents, manage registrar queues, and update request statuses.
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowAddConfirmModal(false)}
+                disabled={staffLoading}
+              >
+                Cancel / Edit
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirmCreateStaff}
+                disabled={staffLoading}
+              >
+                {staffLoading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Creating account...
+                  </>
+                ) : (
+                  "Yes, Create Staff"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal 2: Delete Account */}
+      {showDeleteConfirmModal && userToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => !deleteLoading && setShowDeleteConfirmModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">
+                  Delete User Account
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  This action is permanent and removes the account completely.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-xs">
+              <p className="font-semibold text-destructive">
+                Are you sure you want to permanently delete this user?
+              </p>
+              <div className="mt-3 space-y-1.5 border-t border-destructive/10 pt-2.5 text-muted-foreground">
+                <p>
+                  <strong className="text-foreground">Name:</strong>{" "}
+                  {userToDelete.name}
+                </p>
+                <p>
+                  <strong className="text-foreground">Role:</strong>{" "}
+                  <span className="capitalize">{userToDelete.role}</span>
+                </p>
+                <p>
+                  <strong className="text-foreground">Email:</strong>{" "}
+                  {userToDelete.email}
+                </p>
+                {userToDelete.studentId && (
+                  <p>
+                    <strong className="text-foreground">ID:</strong>{" "}
+                    {userToDelete.studentId}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDeleteConfirmModal(false)}
+                disabled={deleteLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Yes, Delete Account"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2746,10 +3724,7 @@ function RequestList({
   requests: RequestItem[];
   student?: boolean;
 }) {
-  const [selected, setSelected] =
-    useState<RequestItem | null>(
-      null
-    );
+  const [selected, setSelected] = useState<RequestItem | null>(null);
 
   return (
     <div className="animate-rise">
@@ -2767,123 +3742,11 @@ function RequestList({
       </div>
 
       {selected && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-overlay p-0 sm:items-center sm:p-4"
-          onClick={() =>
-            setSelected(null)
-          }
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="Request receipt"
-            className="w-full max-w-lg rounded-t-lg bg-card p-6 shadow-2xl sm:rounded-lg"
-            onClick={(e) =>
-              e.stopPropagation()
-            }
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase text-primary">
-                  Digital request receipt
-                </p>
-
-                <h2 className="mt-1 font-display text-2xl font-bold">
-                  {selected.id}
-                </h2>
-              </div>
-
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() =>
-                  setSelected(null)
-                }
-                aria-label="Close receipt"
-              >
-                <X />
-              </Button>
-            </div>
-
-            <div className="mt-6 grid grid-cols-2 gap-5 border-y border-border py-5 text-sm">
-              <ReceiptField
-                label="Student"
-                value={
-                  selected.student
-                }
-              />
-
-              <ReceiptField
-                label="Student ID"
-                value={
-                  selected.studentId
-                }
-              />
-
-              <ReceiptField
-                label="Document"
-                value={
-                  selected.document
-                }
-              />
-
-              <ReceiptField
-                label="Purpose"
-                value={
-                  selected.purpose
-                }
-              />
-
-              <ReceiptField
-                label="Submitted"
-                value={
-                  selected.date
-                }
-              />
-
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Status
-                </p>
-
-                <div className="mt-1">
-                  <StatusBadge
-                    status={
-                      selected.status
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-
-            {selected.remarks && (
-              <p className="mt-4 rounded-md bg-warning-soft p-3 text-sm text-warning-foreground">
-                <strong>
-                  Registrar note:
-                </strong>{" "}
-                {selected.remarks}
-              </p>
-            )}
-
-            <p className="mt-5 text-xs leading-5 text-muted-foreground">
-              Keep this request number
-              for tracking and present
-              your school ID when
-              claiming.
-            </p>
-
-            {student && (
-              <Button
-                className="mt-5 w-full"
-                onClick={() =>
-                  window.print()
-                }
-              >
-                <FileText /> Print receipt
-              </Button>
-            )}
-          </section>
-        </div>
+        <DigitalReceiptModal
+          request={selected}
+          onClose={() => setSelected(null)}
+          isStaff={false}
+        />
       )}
     </div>
   );
@@ -2894,9 +3757,7 @@ function RequestCards({
   onSelect,
 }: {
   requests: RequestItem[];
-  onSelect?: (
-    r: RequestItem
-  ) => void;
+  onSelect?: (r: RequestItem) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-md border border-border bg-card">
@@ -2905,37 +3766,45 @@ function RequestCards({
           <button
             key={r.id}
             type="button"
-            className="grid w-full gap-3 border-b border-border p-4 text-left transition last:border-b-0 hover:bg-muted/60 sm:grid-cols-[1fr_1.4fr_auto] sm:items-center"
-            onClick={() =>
-              onSelect?.(r)
-            }
+            className="grid w-full gap-3 border-b border-border p-4 text-left transition last:border-b-0 hover:bg-muted/60 sm:grid-cols-[auto_1fr_1.2fr_auto] sm:items-center"
+            onClick={() => onSelect?.(r)}
           >
-            <div>
-              <p className="text-sm font-bold text-primary">
-                {r.id}
-              </p>
-
-              <p className="mt-1 text-xs text-muted-foreground">
-                {r.date}
-              </p>
+            {/* Line number priority badge */}
+            <div className="flex sm:flex-col items-center justify-center rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 min-w-[70px] text-center">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1 sm:mr-0">
+                Line
+              </span>
+              <span className="text-base font-black text-primary">
+                #{r.lineNumber ?? 1}
+              </span>
             </div>
 
             <div>
-              <p className="text-sm font-semibold">
-                {r.document}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-primary">{r.id}</p>
+                {r.priority === "Urgent" && (
+                  <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-bold text-destructive">
+                    Urgent
+                  </span>
+                )}
+                {r.priority === "Priority" && (
+                  <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                    Priority
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{r.date}</p>
+            </div>
 
+            <div>
+              <p className="text-sm font-semibold">{r.document}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {r.student} ·{" "}
-                {r.purpose}
+                {r.student} · {r.purpose}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-              <StatusBadge
-                status={r.status}
-              />
-
+              <StatusBadge status={r.status} />
               {onSelect && (
                 <ChevronRight className="size-4 text-muted-foreground" />
               )}

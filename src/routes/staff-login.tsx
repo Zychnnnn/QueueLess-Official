@@ -1,13 +1,18 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { Eye, EyeOff, ArrowRight, Shield } from "lucide-react";
 import backgroundImage from "@/assets/upang.png";
+
+const API_URL = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:5000"
+).replace(/\/+$/, "");
 
 export const Route = createFileRoute("/staff-login")({
   component: StaffLoginPage,
 });
 
 function StaffLoginPage() {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [staffId, setStaffId] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +37,6 @@ function StaffLoginPage() {
 
   function handleTogglePassword(e: React.MouseEvent) {
     e.preventDefault();
-    // Always sync the live DOM value before toggling visibility to prevent any wipe
     if (passwordRef.current) {
       const currentVal = passwordRef.current.value;
       if (currentVal !== password) {
@@ -42,16 +46,43 @@ function StaffLoginPage() {
     setShowPassword((prev) => !prev);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      console.log("Staff sign-in attempt:", { staffId });
-      // TODO: wire up your staff auth mutation here
-    } catch {
-      setError("An error occurred during sign-in.");
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: staffId.trim(),
+          password,
+          loginType: "staff",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(
+          result.message || "Invalid credentials. Please verify your staff account."
+        );
+        return;
+      }
+
+      if (!result.token || !result.user) {
+        setError("Login succeeded, but no authentication data was returned.");
+        return;
+      }
+
+      localStorage.setItem("queueless_token", result.token);
+      localStorage.setItem("queueless_user", JSON.stringify(result.user));
+
+      navigate({ to: "/" });
+    } catch (err) {
+      console.error("Staff sign-in error:", err);
+      setError("Cannot connect to the server. Make sure the backend is running.");
     } finally {
       setLoading(false);
     }
@@ -191,7 +222,6 @@ function StaffLoginPage() {
           <div className="mt-5 flex items-center justify-between text-xs">
             <Link
               to="/forgot-password"
-              search={{ role: "staff" }}
               className="font-semibold text-[#c9a84c] hover:underline"
             >
               Forgot password?

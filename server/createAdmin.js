@@ -23,11 +23,9 @@ export const ensureAdminAccount = async () => {
     return;
   }
 
-  if (ADMIN_PASSWORD.length < 8) {
-    throw new Error("ADMIN_PASSWORD must contain at least 8 characters.");
+  if (mongoose.connection.readyState === 0) {
+    await mongoose.connect(process.env.MONGO_URI);
   }
-
-  await mongoose.connect(process.env.MONGO_URI);
 
   const email = ADMIN_EMAIL.toLowerCase().trim();
   const existingUser = await User.findOne({ email }).select(

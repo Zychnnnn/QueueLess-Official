@@ -3,24 +3,11 @@ import { useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, Mail, Shield } from "lucide-react";
 import backgroundImage from "@/assets/upang.png";
 
-type ForgotPasswordSearch = {
-  role?: "staff" | "admin";
-};
-
 export const Route = createFileRoute("/forgot-password")({
-  validateSearch: (search: Record<string, unknown>): ForgotPasswordSearch => {
-    return {
-      role: search.role === "admin" ? "admin" : "staff",
-    };
-  },
   component: ForgotPasswordPage,
 });
 
 function ForgotPasswordPage() {
-  const search = Route.useSearch();
-  const [role, setRole] = useState<"staff" | "admin">(
-    search.role === "admin" ? "admin" : "staff"
-  );
   const [identifier, setIdentifier] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -29,7 +16,7 @@ function ForgotPasswordPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!identifier.trim()) {
-      setError("Please enter your ID or institutional email.");
+      setError("Please enter your staff ID or institutional email.");
       return;
     }
 
@@ -42,8 +29,6 @@ function ForgotPasswordPage() {
       setSubmitted(true);
     }, 600);
   }
-
-  const returnUrl = role === "admin" ? "/admin-login" : "/staff-login";
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -85,59 +70,24 @@ function ForgotPasswordPage() {
         <div className="w-full max-w-[460px] rounded-2xl bg-white p-7 sm:p-9 shadow-2xl">
           {/* Back link */}
           <Link
-            to={returnUrl}
+            to="/staff-login"
             className="mb-5 inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition"
           >
             <ArrowLeft className="size-3.5" />
-            Back to {role === "admin" ? "Admin" : "Staff"} Login
+            Back to Staff Login
           </Link>
-
-          {/* Role selector tabs */}
-          <div className="mb-6 flex rounded-lg bg-gray-100 p-1">
-            <button
-              type="button"
-              onClick={() => {
-                setRole("staff");
-                setSubmitted(false);
-                setError("");
-              }}
-              className={`flex-1 rounded-md py-1.5 text-xs font-bold transition ${
-                role === "staff"
-                  ? "bg-white text-[#1a3a1a] shadow-sm"
-                  : "text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              Staff Portal
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setRole("admin");
-                setSubmitted(false);
-                setError("");
-              }}
-              className={`flex-1 rounded-md py-1.5 text-xs font-bold transition ${
-                role === "admin"
-                  ? "bg-white text-[#1a3a1a] shadow-sm"
-                  : "text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              Admin Portal
-            </button>
-          </div>
 
           {!submitted ? (
             <>
               {/* Header */}
               <p className="mb-1 text-[0.7rem] font-bold uppercase tracking-[0.18em] text-[#c9a84c]">
-                {role === "admin" ? "ADMIN ACCOUNT RECOVERY" : "STAFF ACCOUNT RECOVERY"}
+                STAFF ACCOUNT RECOVERY
               </p>
               <h2 className="text-[1.75rem] font-bold tracking-tight text-[#1a3a1a]">
                 Forgot password?
               </h2>
               <p className="mt-2 text-sm text-gray-600">
-                Enter your {role === "admin" ? "admin" : "staff"} ID or institutional email
-                address. We'll send you verification instructions to reset your password.
+                Enter your staff ID or institutional email address. We'll send you verification instructions to reset your password.
               </p>
 
               {/* Form */}
@@ -147,7 +97,7 @@ function ForgotPasswordPage() {
                     htmlFor="identifier"
                     className="text-sm font-semibold text-gray-700"
                   >
-                    {role === "admin" ? "Admin ID or Email" : "Staff ID or Email"}
+                    Staff ID or Email
                   </label>
                   <div className="relative flex items-center">
                     <input
@@ -155,11 +105,7 @@ function ForgotPasswordPage() {
                       type="text"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder={
-                        role === "admin"
-                          ? "admin@up.phinma.edu.ph"
-                          : "staff-id@up.phinma.edu.ph"
-                      }
+                      placeholder="staff-id@up.phinma.edu.ph"
                       autoComplete="username"
                       required
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 pl-10 text-sm text-gray-800 placeholder-gray-400 outline-none transition focus:border-[#1a3a1a] focus:ring-2 focus:ring-[#1a3a1a]/10"
@@ -206,7 +152,7 @@ function ForgotPasswordPage() {
 
               <div className="mt-6 flex flex-col gap-2.5">
                 <Link
-                  to={returnUrl}
+                  to="/staff-login"
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#183d22] py-3 text-sm font-bold text-white shadow transition hover:bg-[#122e1a]"
                 >
                   Return to Sign In
@@ -227,9 +173,9 @@ function ForgotPasswordPage() {
           <div className="mt-7 flex items-center justify-center gap-1.5 border-t border-gray-100 pt-4 text-xs text-gray-400">
             <Shield className="size-3.5 shrink-0" />
             <span>
-              Authorized for registrar{" "}
+              For Registrar{" "}
               <strong className="font-semibold text-gray-600">
-                {role === "admin" ? "administrators" : "staff"}
+                staff only.
               </strong>
             </span>
           </div>

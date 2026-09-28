@@ -27,6 +27,23 @@ const requestSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    lineNumber: {
+      type: Number,
+      default: 1,
+    },
+    priority: {
+      type: String,
+      enum: ["Regular", "Priority", "Urgent"],
+      default: "Regular",
+    },
+    copies: {
+      type: Number,
+      default: 1,
+    },
+    pickupDate: {
+      type: String,
+      default: "",
+    },
     date: {
       type: String,
       required: true,

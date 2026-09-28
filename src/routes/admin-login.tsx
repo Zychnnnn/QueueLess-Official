@@ -1,13 +1,18 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { Eye, EyeOff, ArrowRight, Shield } from "lucide-react";
 import backgroundImage from "@/assets/upang.png";
+
+const API_URL = (
+  import.meta.env.VITE_API_URL ?? "http://localhost:5000"
+).replace(/\/+$/, "");
 
 export const Route = createFileRoute("/admin-login")({
   component: AdminLoginPage,
 });
 
 function AdminLoginPage() {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [adminId, setAdminId] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +37,6 @@ function AdminLoginPage() {
 
   function handleTogglePassword(e: React.MouseEvent) {
     e.preventDefault();
-    // Always sync the live DOM value before toggling visibility to prevent any wipe
     if (passwordRef.current) {
       const currentVal = passwordRef.current.value;
       if (currentVal !== password) {
@@ -42,16 +46,43 @@ function AdminLoginPage() {
     setShowPassword((prev) => !prev);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
-      console.log("Admin sign-in attempt:", { adminId });
-      // TODO: wire up your admin auth mutation here
-    } catch {
-      setError("An error occurred during sign-in.");
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: adminId.trim(),
+          password,
+          loginType: "admin",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(
+          result.message || "Invalid credentials. Please verify your admin account."
+        );
+        return;
+      }
+
+      if (!result.token || !result.user) {
+        setError("Login succeeded, but no authentication data was returned.");
+        return;
+      }
+
+      localStorage.setItem("queueless_token", result.token);
+      localStorage.setItem("queueless_user", JSON.stringify(result.user));
+
+      navigate({ to: "/" });
+    } catch (err) {
+      console.error("Admin sign-in error:", err);
+      setError("Cannot connect to the server. Make sure the backend is running.");
     } finally {
       setLoading(false);
     }
@@ -190,8 +221,7 @@ function AdminLoginPage() {
           {/* Footer row */}
           <div className="mt-5 flex items-center justify-between text-xs">
             <Link
-              to="/forgot-password"
-              search={{ role: "admin" }}
+              to="/admin-forgot-password"
               className="font-semibold text-[#c9a84c] hover:underline"
             >
               Forgot password?

@@ -178,7 +178,7 @@ export const login = async (req, res) => {
 
 export const createStaff = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, staffId: customStaffId } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -212,7 +212,7 @@ export const createStaff = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const staffId = `STAFF-${Date.now()}`;
+    const staffId = customStaffId ? customStaffId.trim() : `STAFF-${Date.now().toString().slice(-5)}`;
 
     const user = await User.create({
       name: cleanName,
@@ -240,3 +240,61 @@ export const createStaff = async (req, res) => {
     });
   }
 };
+
+export const getUsers = async (req, res) => {
+  try {
+    const users = await User.find({}, "-password").sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      message: "Users fetched successfully.",
+      users: users.map((u) => ({
+        id: u._id,
+        name: u.name,
+        studentId: u.studentId,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Fetch users error:", error);
+
+    return res.status(500).json({
+      message: "Server error while fetching users.",
+    });
+  }
+};
+
+export const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user && req.user.id === id) {
+      return res.status(400).json({
+        message: "You cannot delete your own admin account while logged in.",
+      });
+    }
+
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User account not found.",
+      });
+    }
+
+    await User.findByIdAndDelete(id);
+
+    return res.status(200).json({
+      message: `${user.name} (${user.role}) has been deleted.`,
+      deletedUserId: id,
+    });
+  } catch (error) {
+    console.error("Delete user error:", error);
+
+    return res.status(500).json({
+      message: "Server error while deleting user.",
+    });
+  }
+};
+
