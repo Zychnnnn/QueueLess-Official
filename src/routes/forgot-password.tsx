@@ -15,6 +15,7 @@ function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<"request" | "verify" | "reset" | "success">("request");
   const [email, setEmail] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -34,7 +35,7 @@ function ForgotPasswordPage() {
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) {
-      setError("Please enter your registered email address.");
+      setError("Please enter your registered email address or account ID.");
       return;
     }
 
@@ -45,13 +46,20 @@ function ForgotPasswordPage() {
       const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ identifier: email.trim() }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setError(data.message || "Failed to send verification code.");
         return;
+      }
+
+      if (data.email) {
+        setEmail(data.email);
+      }
+      if (data.maskedEmail) {
+        setMaskedEmail(data.maskedEmail);
       }
 
       setStep("verify");
@@ -192,21 +200,21 @@ function ForgotPasswordPage() {
                 Forgot password?
               </h2>
               <p className="mt-2 text-sm text-gray-600">
-                Enter your registered email address (.edu.ph or personal Gmail). We'll send a 6-digit OTP code to verify your account.
+                Enter your registered email address or student / staff ID. We'll send a 6-digit OTP code to your registered email to verify your account.
               </p>
 
               <form onSubmit={handleRequestOtp} className="mt-6 space-y-4">
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="email" className="text-sm font-semibold text-gray-700">
-                    Email Address
+                    Email or Student / Staff ID
                   </label>
                   <div className="relative flex items-center">
                     <input
                       id="email"
-                      type="email"
+                      type="text"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name.edu.ph@gmail.com or personal email"
+                      placeholder="e.g. STAFF-001, 2026-12345, or email"
                       autoComplete="username"
                       required
                       autoFocus
@@ -243,7 +251,7 @@ function ForgotPasswordPage() {
                 Enter 6-digit OTP
               </h2>
               <p className="mt-2 text-sm text-gray-600">
-                We sent a 6-digit verification code to <strong className="text-gray-900 font-semibold">{email}</strong>.
+                We sent a 6-digit verification code to <strong className="text-gray-900 font-semibold">{maskedEmail || email}</strong>.
                 Please check your Gmail inbox and enter the code below.
               </p>
 
@@ -382,13 +390,21 @@ function ForgotPasswordPage() {
                 Your password has been securely updated. You can now sign in with your new credentials.
               </p>
 
-              <button
-                type="button"
-                onClick={() => navigate({ to: "/" })}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[#183d22] py-3 text-sm font-bold text-white shadow transition hover:bg-[#122e1a] cursor-pointer"
-              >
-                Sign in to QueueLess <ArrowRight className="size-4 shrink-0" />
-              </button>
+              <div className="mt-6 flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => navigate({ to: "/" })}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#183d22] py-3 text-sm font-bold text-white shadow transition hover:bg-[#122e1a] cursor-pointer"
+                >
+                  Sign in as Student <ArrowRight className="size-4 shrink-0" />
+                </button>
+                <Link
+                  to="/staff-login"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition cursor-pointer"
+                >
+                  Sign in as Registrar Staff
+                </Link>
+              </div>
             </div>
           )}
         </div>

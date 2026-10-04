@@ -650,31 +650,58 @@ export const googleLogin = async (req, res) => {
 
 export const requestPasswordResetOtp = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, identifier, role } = req.body;
+    const input = (identifier || email || "").trim();
 
-    if (!email) {
+    if (!input) {
       return res.status(400).json({
-        message: "Email address is required.",
+        message: "Email address or account ID is required.",
       });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    const cleanInput = input.toLowerCase();
 
-    // Verify user exists (works for both .edu.ph and personal @gmail.com)
-    const user = await User.findOne({ email: cleanEmail });
+    // Query user in MongoDB by email or studentId/staffId/adminId
+    const query = {
+      $or: [
+        { email: cleanInput },
+        { studentId: input },
+        { studentId: input.toUpperCase() },
+      ],
+    };
+
+    if (role && ["admin", "staff", "student"].includes(role)) {
+      query.role = role;
+    }
+
+    const user = await User.findOne(query);
+
     if (!user) {
+      if (role === "admin") {
+        return res.status(404).json({
+          message: `No administrator account found for "${input}". Please verify your Admin ID or email.`,
+        });
+      }
+      if (role === "staff") {
+        return res.status(404).json({
+          message: `No registrar staff account found for "${input}". Please verify your Staff ID or email.`,
+        });
+      }
       return res.status(404).json({
-        message: "No account found with this email address.",
+        message: `No account found for "${input}". Please check your registered email or ID.`,
       });
     }
+
+    // Always use the official email stored in the DB
+    const userEmail = user.email.toLowerCase().trim();
 
     // Generate 6-digit OTP code
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    // Save or update OTP in DB
+    // Save or update OTP in DB for this exact user's email
     await PasswordResetOtp.findOneAndUpdate(
-      { email: cleanEmail },
+      { email: userEmail },
       {
         otp,
         expiresAt,
@@ -683,14 +710,25 @@ export const requestPasswordResetOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    console.log(`[QueueLess Auth] Password Reset OTP for ${cleanEmail}: ${otp}`);
+    console.log(
+      `[QueueLess Auth] Password Reset OTP for ${userEmail} (${user.role} - ${user.studentId}): ${otp}`
+    );
 
-    // Send OTP directly to user's email inbox
-    await sendOtpEmail(cleanEmail, otp);
+    // Send OTP directly to user's registered email inbox
+    const sendResult = await sendOtpEmail(userEmail, otp);
+
+    // Mask email for privacy (e.g., ad***@up.phinma.edu.ph)
+    const atIndex = userEmail.indexOf("@");
+    const maskedEmail =
+      atIndex > 2
+        ? `${userEmail.slice(0, 2)}***${userEmail.slice(atIndex)}`
+        : userEmail;
 
     return res.status(200).json({
-      message: `A 6-digit verification code has been sent to ${cleanEmail}. Please check your inbox.`,
-      email: cleanEmail,
+      message: `A 6-digit verification code has been sent to your registered email (${maskedEmail}). Please check your inbox.`,
+      email: userEmail,
+      maskedEmail,
+      emailSent: sendResult?.sent ?? false,
     });
   } catch (error) {
     console.error("requestPasswordResetOtp error:", error);
@@ -702,15 +740,31 @@ export const requestPasswordResetOtp = async (req, res) => {
 
 export const verifyPasswordResetOtp = async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const { email, identifier, otp } = req.body;
+    const input = (email || identifier || "").trim();
 
-    if (!email || !otp) {
+    if (!input || !otp) {
       return res.status(400).json({
-        message: "Email and verification code are required.",
+        message: "Email or account ID and verification code are required.",
       });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    let cleanEmail = input.toLowerCase();
+
+    // If an ID was supplied instead of an email, resolve to registered email in DB
+    if (!cleanEmail.includes("@")) {
+      const user = await User.findOne({
+        $or: [
+          { studentId: input },
+          { studentId: input.toUpperCase() },
+          { email: cleanInput },
+        ],
+      });
+      if (user && user.email) {
+        cleanEmail = user.email.toLowerCase().trim();
+      }
+    }
+
     const cleanOtp = String(otp).trim();
 
     const record = await PasswordResetOtp.findOne({
@@ -720,7 +774,7 @@ export const verifyPasswordResetOtp = async (req, res) => {
 
     if (!record) {
       return res.status(400).json({
-        message: "Invalid verification code. Please check and try again.",
+        message: "Invalid verification code. Please check your inbox and try again.",
       });
     }
 
@@ -748,11 +802,12 @@ export const verifyPasswordResetOtp = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    const { email, identifier, otp, newPassword } = req.body;
+    const input = (email || identifier || "").trim();
 
-    if (!email || !otp || !newPassword) {
+    if (!input || !otp || !newPassword) {
       return res.status(400).json({
-        message: "Email, code, and new password are required.",
+        message: "Account identifier, verification code, and new password are required.",
       });
     }
 
@@ -762,7 +817,22 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    let cleanEmail = input.toLowerCase();
+
+    // If an ID was supplied instead of an email, resolve to registered email in DB
+    if (!cleanEmail.includes("@")) {
+      const existingUser = await User.findOne({
+        $or: [
+          { studentId: input },
+          { studentId: input.toUpperCase() },
+          { email: cleanInput },
+        ],
+      });
+      if (existingUser && existingUser.email) {
+        cleanEmail = existingUser.email.toLowerCase().trim();
+      }
+    }
+
     const cleanOtp = String(otp).trim();
 
     const record = await PasswordResetOtp.findOne({
@@ -786,7 +856,7 @@ export const resetPassword = async (req, res) => {
     const user = await User.findOne({ email: cleanEmail });
     if (!user) {
       return res.status(404).json({
-        message: "Account not found.",
+        message: "Account not found in the database.",
       });
     }
 
@@ -797,10 +867,13 @@ export const resetPassword = async (req, res) => {
     // Clean up OTP record
     await PasswordResetOtp.deleteOne({ _id: record._id });
 
-    console.log(`[QueueLess Auth] Password successfully reset for: ${cleanEmail}`);
+    console.log(
+      `[QueueLess Auth] Password successfully reset for: ${cleanEmail} (${user.role})`
+    );
 
     return res.status(200).json({
       message: "Password reset successfully. You can now sign in with your new password.",
+      role: user.role,
     });
   } catch (error) {
     console.error("resetPassword error:", error);
