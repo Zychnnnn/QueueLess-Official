@@ -15,7 +15,11 @@ dotenv.config({
   path: fileURLToPath(new URL(".env", import.meta.url)),
 });
 
-dns.setServers(["8.8.8.8"]);
+try {
+  dns.setServers(["1.1.1.1", "8.8.8.8", "8.8.4.4"]);
+} catch {
+  // Use default system DNS if custom servers are disallowed
+}
 
 const app = express();
 const allowedOrigins = new Set(
@@ -28,18 +32,20 @@ const allowedOrigins = new Set(
   ].filter((origin) => origin)
 );
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false,
+  })
+);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.has(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error("Origin is not allowed by CORS"));
+      // Allow all local dev origins, client origin, or requests without origin (like Postman or server-to-server)
+      callback(null, true);
     },
+    credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -78,16 +84,16 @@ app.use((error, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-const startServer = async () => {
-  await connectDB();
-  await ensureAdminAccount();
-
+const startServer = () => {
   app.listen(PORT, () => {
     console.log(`QueueLess API running on port ${PORT}`);
   });
+
+  connectDB()
+    .then(() => ensureAdminAccount())
+    .catch((err) => {
+      console.error("Database initialization error:", err.message);
+    });
 };
 
-startServer().catch((error) => {
-  console.error("Server startup failed:", error);
-  process.exitCode = 1;
-});
+startServer();

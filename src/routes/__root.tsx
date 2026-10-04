@@ -149,6 +149,13 @@ export const Route =
           type: "image/png",
         },
       ],
+      scripts: [
+        {
+          src: "https://accounts.google.com/gsi/client",
+          async: true,
+          defer: true,
+        },
+      ],
     }),
 
     shellComponent: RootShell,

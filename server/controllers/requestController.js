@@ -55,11 +55,15 @@ export const createRequest = async (req, res) => {
           : (await Request.countDocuments()) + 1;
     }
 
+    // Default priority based on user status (phinmaed/official student = Priority, personal = Regular)
+    const defaultPriority =
+      user.isPriority || user.userType === "priority" ? "Priority" : "Regular";
+
     // Create request using authenticated user's information
     const request = await Request.create({
       requestNumber,
       lineNumber,
-      priority: req.body.priority || "Regular",
+      priority: req.body.priority || defaultPriority,
       copies: Number(req.body.copies) || 1,
       pickupDate: req.body.pickupDate || "",
       student: user.name,

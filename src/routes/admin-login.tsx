@@ -11,7 +11,7 @@ export const Route = createFileRoute("/admin-login")({
   component: AdminLoginPage,
 });
 
-function AdminLoginPage() {
+export function AdminLoginPage() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [adminId, setAdminId] = useState("");
@@ -22,7 +22,7 @@ function AdminLoginPage() {
   const adminIdRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  // Sync any credentials autofilled by the browser on page load / refresh
+// Sync any credentials autofilled by the browser on page load / refresh
   useEffect(() => {
     const timer = setTimeout(() => {
       if (adminIdRef.current?.value && !adminId) {
@@ -33,6 +33,7 @@ function AdminLoginPage() {
       }
     }, 150);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleTogglePassword(e: React.MouseEvent) {
@@ -65,6 +66,10 @@ function AdminLoginPage() {
       const result = await response.json();
 
       if (!response.ok) {
+        if (response.status === 403) {
+          setError("Cannot sign in.");
+          return;
+        }
         setError(
           result.message || "Invalid credentials. Please verify your admin account."
         );
@@ -73,6 +78,11 @@ function AdminLoginPage() {
 
       if (!result.token || !result.user) {
         setError("Login succeeded, but no authentication data was returned.");
+        return;
+      }
+
+      if (result.user.role !== "admin") {
+        setError("Cannot sign in.");
         return;
       }
 

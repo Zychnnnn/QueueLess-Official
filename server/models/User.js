@@ -10,8 +10,8 @@ const userSchema = new mongoose.Schema(
 
     studentId: {
       type: String,
-      required: true,
-      unique: true,
+      required: false,
+      sparse: true,
       trim: true,
     },
 
@@ -25,14 +25,39 @@ const userSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: true,
-      minlength: 6,
+      required: false,
+    },
+
+    googleId: {
+      type: String,
+      sparse: true,
+    },
+
+    picture: {
+      type: String,
     },
 
     role: {
       type: String,
       enum: ["student", "staff", "admin"],
       default: "student",
+    },
+
+    isPriority: {
+      type: Boolean,
+      default: false,
+    },
+
+    userType: {
+      type: String,
+      enum: ["priority", "normal"],
+      default: "normal",
+    },
+
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "approved",
     },
   },
   {

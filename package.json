@@ -4,7 +4,7 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n FRONTEND,BACKEND \"set PORT=5173&& vite dev --strictPort\" \"node server/server.js\"",
+    "dev": "concurrently -n FRONTEND,BACKEND \"set PORT=5173&& vite dev --strictPort\" \"nodemon server/server.js\"",
     "server": "node server/server.js",
     "server:dev": "nodemon server/server.js",
     "build": "vite build",
@@ -63,6 +63,7 @@
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.575.0",
     "mongoose": "^9.10.2",
+    "nodemailer": "^10.0.13",
     "react": "^19.2.0",
     "react-day-picker": "^9.14.0",
     "react-dom": "^19.2.0",

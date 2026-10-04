@@ -33,6 +33,7 @@ function StaffLoginPage() {
       }
     }, 150);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleTogglePassword(e: React.MouseEvent) {
@@ -65,6 +66,10 @@ function StaffLoginPage() {
       const result = await response.json();
 
       if (!response.ok) {
+        if (response.status === 403) {
+          setError("Cannot sign in.");
+          return;
+        }
         setError(
           result.message || "Invalid credentials. Please verify your staff account."
         );
@@ -73,6 +78,11 @@ function StaffLoginPage() {
 
       if (!result.token || !result.user) {
         setError("Login succeeded, but no authentication data was returned.");
+        return;
+      }
+
+      if (result.user.role !== "staff") {
+        setError("Cannot sign in.");
         return;
       }
 

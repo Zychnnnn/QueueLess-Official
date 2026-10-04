@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -16,6 +17,7 @@ import {
   Calendar,
   Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
@@ -129,6 +131,31 @@ type AuthUser = {
   studentId: string;
   email: string;
   role: Role;
+  picture?: string;
+  isPriority?: boolean;
+  userType?: "priority" | "normal";
+};
+
+type AccountUser = {
+  id: string;
+  name: string;
+  studentId?: string;
+  email: string;
+  role: string;
+  isPriority?: boolean;
+  userType?: "priority" | "normal";
+  approvalStatus?: "pending" | "approved" | "rejected";
+  createdAt?: string;
+};
+
+type NotificationItem = {
+  id: string;
+  title: string;
+  text: string;
+  tone: "success" | "warning" | "info" | "urgent";
+  time?: string;
+  actionView?: View;
+  requestId?: string;
 };
 
 const initialRequests: RequestItem[] = [
@@ -140,6 +167,10 @@ const initialRequests: RequestItem[] = [
     purpose: "Scholarship",
     date: "Sep 18, 2026",
     status: "Ready for Claiming",
+    priority: "Urgent",
+    lineNumber: 1,
+    copies: 2,
+    pickupDate: "Oct 05, 2026",
   },
   {
     id: "QLR-2026-002",
@@ -149,6 +180,10 @@ const initialRequests: RequestItem[] = [
     purpose: "Employment",
     date: "Sep 19, 2026",
     status: "Processing",
+    priority: "Priority",
+    lineNumber: 2,
+    copies: 1,
+    pickupDate: "Oct 07, 2026",
   },
   {
     id: "QLR-2026-003",
@@ -158,6 +193,10 @@ const initialRequests: RequestItem[] = [
     purpose: "Transfer",
     date: "Sep 16, 2026",
     status: "Claimed",
+    priority: "Regular",
+    lineNumber: 3,
+    copies: 1,
+    pickupDate: "Sep 22, 2026",
   },
   {
     id: "QLR-2026-004",
@@ -167,6 +206,10 @@ const initialRequests: RequestItem[] = [
     purpose: "Scholarship",
     date: "Sep 20, 2026",
     status: "Pending",
+    priority: "Regular",
+    lineNumber: 4,
+    copies: 1,
+    pickupDate: "Oct 12, 2026",
   },
   {
     id: "QLR-2026-005",
@@ -177,6 +220,10 @@ const initialRequests: RequestItem[] = [
     date: "Sep 20, 2026",
     status: "Needs Correction",
     remarks: "Please confirm your graduation year.",
+    priority: "Regular",
+    lineNumber: 5,
+    copies: 1,
+    pickupDate: "Oct 15, 2026",
   },
 ];
 
@@ -275,6 +322,56 @@ function QueueLessApp() {
   const [notificationsOpen, setNotificationsOpen] =
     useState(false);
 
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [activeReceiptModal, setActiveReceiptModal] =
+    useState<RequestItem | null>(null);
+
+  const [adminUsers, setAdminUsers] = useState<AccountUser[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("queueless_read_notifications");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const markNotificationAsRead = (id: string) => {
+    setReadNotificationIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      try {
+        localStorage.setItem(
+          "queueless_read_notifications",
+          JSON.stringify(next)
+        );
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const fetchAdminUsers = async () => {
+    const token = localStorage.getItem("queueless_token");
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/users`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+      if (response.ok && result.users) {
+        setAdminUsers(result.users);
+      }
+    } catch (err) {
+      console.error("Fetch admin users error:", err);
+    }
+  };
+
   /*
    * Restore saved login session.
    */
@@ -302,6 +399,10 @@ function QueueLessApp() {
       setCurrentUser(user);
       setRole(user.role);
       setSignedIn(true);
+
+      if (user.role === "admin") {
+        fetchAdminUsers();
+      }
 
       const loadSavedRequests = async () => {
         try {
@@ -339,16 +440,16 @@ function QueueLessApp() {
           }
 
           const loadedRequests: RequestItem[] =
-            result.map((request: any, idx: number) => ({
-              id: request.requestNumber,
-              student: request.student,
-              studentId: request.studentId,
-              document: request.document,
-              purpose: request.purpose,
-              date: request.date,
-              status: request.status,
-              remarks: request.remarks || "",
-              lineNumber: request.lineNumber ?? idx + 1,
+            result.map((request: Record<string, unknown>, idx: number) => ({
+              id: String(request.requestNumber ?? ""),
+              student: String(request.student ?? ""),
+              studentId: String(request.studentId ?? ""),
+              document: String(request.document ?? ""),
+              purpose: String(request.purpose ?? ""),
+              date: String(request.date ?? ""),
+              status: (request.status as Status) || "Pending",
+              remarks: String(request.remarks || ""),
+              lineNumber: typeof request.lineNumber === "number" ? request.lineNumber : idx + 1,
               priority: (request.priority as Priority) || "Regular",
               copies: request.copies || 1,
               pickupDate: request.pickupDate || "",
@@ -416,6 +517,10 @@ function QueueLessApp() {
     setRole(user.role);
     setSignedIn(true);
 
+    if (user.role === "admin") {
+      fetchAdminUsers();
+    }
+
     localStorage.setItem(
       "queueless_user",
       JSON.stringify(user)
@@ -461,19 +566,19 @@ function QueueLessApp() {
       }
 
       const loadedRequests: RequestItem[] =
-        result.map((request: any, idx: number) => ({
-          id: request.requestNumber,
-          student: request.student,
-          studentId: request.studentId,
-          document: request.document,
-          purpose: request.purpose,
-          date: request.date,
-          status: request.status,
-          remarks: request.remarks || "",
-          lineNumber: request.lineNumber ?? idx + 1,
+        result.map((request: Record<string, unknown>, idx: number) => ({
+          id: String(request.requestNumber ?? ""),
+          student: String(request.student ?? ""),
+          studentId: String(request.studentId ?? ""),
+          document: String(request.document ?? ""),
+          purpose: String(request.purpose ?? ""),
+          date: String(request.date ?? ""),
+          status: (request.status as Status) || "Pending",
+          remarks: String(request.remarks || ""),
+          lineNumber: typeof request.lineNumber === "number" ? request.lineNumber : idx + 1,
           priority: (request.priority as Priority) || "Regular",
-          copies: request.copies || 1,
-          pickupDate: request.pickupDate || "",
+          copies: typeof request.copies === "number" ? request.copies : 1,
+          pickupDate: typeof request.pickupDate === "string" ? request.pickupDate : "",
         }));
 
       setRequests(
@@ -490,68 +595,266 @@ function QueueLessApp() {
   };
 
   /*
-   * Notifications.
+   * Notifications for Student, Staff, and Admin.
    */
-  const notifications = useMemo(() => {
+  const notifications: NotificationItem[] = useMemo(() => {
     if (!currentUser) {
       return [];
     }
 
-    return requests
-      .filter(
-        (request) =>
-          request.studentId ===
-          currentUser.studentId
-      )
-      .slice(0, 5)
-      .map((request) => {
-        if (
-          request.status ===
-          "Ready for Claiming"
-        ) {
-          return {
-            title:
-              "Request ready for claiming",
-            text: `${request.id} can now be claimed at the Registrar's Office.`,
-          };
-        }
+    const currentRole = currentUser.role;
 
-        if (
-          request.status ===
-          "Processing"
-        ) {
-          return {
-            title:
-              "Request is being processed",
-            text: `${request.id} is currently being processed by the Registrar's Office.`,
-          };
-        }
+    // --- STUDENT NOTIFICATIONS ---
+    if (currentRole === "student") {
+      const list: NotificationItem[] = [];
+      const studentIdClean = (currentUser.studentId || "").trim().toLowerCase();
+      const studentIdDigits = studentIdClean.replace(/[^a-z0-9]/g, "");
+      const studentNameClean = (currentUser.name || "").trim().toLowerCase();
 
-        if (
-          request.status === "Claimed"
-        ) {
-          return {
-            title: "Request claimed",
-            text: `${request.id} has been marked as claimed.`,
-          };
-        }
+      const mine = requests.filter((request) => {
+        const reqIdClean = (request.studentId || "").trim().toLowerCase();
+        const reqIdDigits = reqIdClean.replace(/[^a-z0-9]/g, "");
+        const reqNameClean = (request.student || "").trim().toLowerCase();
 
-        if (
-          request.status ===
-          "Needs Correction"
-        ) {
-          return {
-            title: "Correction needed",
-            text: `${request.id} needs correction. Please check your request details.`,
-          };
-        }
-
-        return {
-          title: "Request submitted",
-          text: `${request.id} was received and is waiting for review.`,
-        };
+        return (
+          (reqIdClean && reqIdClean === studentIdClean) ||
+          (reqIdDigits && studentIdDigits && reqIdDigits === studentIdDigits) ||
+          (reqNameClean && reqNameClean === studentNameClean)
+        );
       });
-  }, [requests, currentUser]);
+
+      mine.forEach((request) => {
+        if (request.status === "Ready for Claiming") {
+          list.push({
+            id: `ready-${request.id}`,
+            title: `Ready for Pickup! (${request.document})`,
+            text: `Your ${request.document} (${request.id}) is verified and ready for collection! Scheduled: ${request.pickupDate || "Today"}. Present your school ID at Counter #${request.lineNumber ?? 1}.`,
+            tone: "success",
+            time: request.pickupDate || request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Needs Correction") {
+          list.push({
+            id: `correction-${request.id}`,
+            title: `Action Required: Correction Needed (${request.id})`,
+            text: `${request.document}: ${request.remarks || "Please review registrar notes and provide necessary corrections."}`,
+            tone: "warning",
+            time: request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Processing") {
+          list.push({
+            id: `processing-${request.id}`,
+            title: `Now Processing: Line #${request.lineNumber ?? 1}`,
+            text: `Registrar staff is actively preparing ${request.document} (${request.id}). Target release date: ${request.pickupDate || "Scheduled soon"}.`,
+            tone: "info",
+            time: request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Claimed") {
+          list.push({
+            id: `claimed-${request.id}`,
+            title: `Document Claimed & Released (${request.id})`,
+            text: `Your ${request.document} was successfully released on ${request.pickupDate || request.date}. Thank you for using QueueLess!`,
+            tone: "success",
+            time: request.pickupDate || request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Pending") {
+          list.push({
+            id: `pending-${request.id}`,
+            title: `In Queue: Line #${request.lineNumber ?? 1}`,
+            text: `Your request for ${request.document} (${request.id}) was received and is in line. Estimated pickup: ${request.pickupDate || "3-5 business days"}.`,
+            tone: "info",
+            time: request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        }
+
+        // Calendar pickup reminder for scheduled requests
+        if (request.pickupDate && request.status !== "Claimed") {
+          list.push({
+            id: `calendar-${request.id}`,
+            title: `📅 Scheduled Pickup: ${request.pickupDate}`,
+            text: `Calendar Reminder: ${request.document} (${request.id}) is scheduled for release on ${request.pickupDate}. Counter hours: 8:00 AM - 5:00 PM.`,
+            tone: "info",
+            time: request.pickupDate,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        }
+      });
+
+      if (currentUser.userType === "priority" || currentUser.isPriority) {
+        list.unshift({
+          id: "student-priority-banner",
+          title: "Priority Student Active ⭐",
+          text: "Your account is verified for Priority Line Processing at the Registrar.",
+          tone: "success",
+          time: "Official",
+          actionView: "dashboard",
+        });
+      }
+
+      return list;
+    }
+
+    // --- STAFF NOTIFICATIONS ---
+    if (currentRole === "staff") {
+      const list: NotificationItem[] = [];
+
+      // Urgent requests
+      const urgentRequests = requests.filter(
+        (r) => r.priority === "Urgent" && r.status !== "Claimed"
+      );
+      urgentRequests.forEach((r) => {
+        list.push({
+          id: `staff-urgent-${r.id}`,
+          title: `⚡ Urgent Request: ${r.id}`,
+          text: `${r.student} requested ${r.document} (Line #${r.lineNumber ?? 1}). Requires express processing.`,
+          tone: "urgent",
+          time: r.date,
+          actionView: "requests",
+          requestId: r.id,
+        });
+      });
+
+      // Pending requests in queue
+      const pendingRequests = requests.filter((r) => r.status === "Pending");
+      pendingRequests.slice(0, 5).forEach((r) => {
+        list.push({
+          id: `staff-pending-${r.id}`,
+          title: `New Request: ${r.id}`,
+          text: `${r.student} submitted ${r.document} (${r.purpose}).`,
+          tone: "info",
+          time: r.date,
+          actionView: "requests",
+          requestId: r.id,
+        });
+      });
+
+      // Requests needing correction
+      const correctionRequests = requests.filter(
+        (r) => r.status === "Needs Correction"
+      );
+      correctionRequests.slice(0, 3).forEach((r) => {
+        list.push({
+          id: `staff-correction-${r.id}`,
+          title: `Correction Flagged: ${r.id}`,
+          text: `${r.student} - ${r.document}: ${r.remarks || "Awaiting student response"}`,
+          tone: "warning",
+          time: r.date,
+          actionView: "requests",
+          requestId: r.id,
+        });
+      });
+
+      // Ready for claiming summary
+      const readyCount = requests.filter(
+        (r) => r.status === "Ready for Claiming"
+      ).length;
+      if (readyCount > 0) {
+        list.push({
+          id: "staff-ready-summary",
+          title: `Ready for Claiming (${readyCount})`,
+          text: `${readyCount} document(s) are prepared and waiting for student pickup at the window.`,
+          tone: "success",
+          time: "Today",
+          actionView: "requests",
+        });
+      }
+
+      return list;
+    }
+
+    // --- ADMIN NOTIFICATIONS ---
+    if (currentRole === "admin") {
+      const list: NotificationItem[] = [];
+
+      // Pending student registrations
+      const pendingUsers = adminUsers.filter(
+        (u) => u.approvalStatus === "pending"
+      );
+      if (pendingUsers.length > 0) {
+        list.push({
+          id: `admin-pending-${pendingUsers.length}`,
+          title: `⚠️ ${pendingUsers.length} Student Registration(s) Pending`,
+          text: `New student account applications require admission review. Click to admit or reject.`,
+          tone: "warning",
+          time: "Action required",
+          actionView: "users",
+        });
+      }
+
+      // Urgent requests alert
+      const urgentRequests = requests.filter(
+        (r) => r.priority === "Urgent" && r.status !== "Claimed"
+      );
+      urgentRequests.slice(0, 3).forEach((r) => {
+        list.push({
+          id: `admin-urgent-${r.id}`,
+          title: `⚡ Urgent Priority: ${r.id}`,
+          text: `${r.student} - ${r.document} (${r.status}). Express processing flagged.`,
+          tone: "urgent",
+          time: r.date,
+          actionView: "dashboard",
+          requestId: r.id,
+        });
+      });
+
+      // Active queue overview
+      const pendingRequestsCount = requests.filter(
+        (r) => r.status === "Pending"
+      ).length;
+      if (pendingRequestsCount > 0) {
+        list.push({
+          id: "admin-queue-overview",
+          title: `Registrar Queue: ${pendingRequestsCount} Pending`,
+          text: `${pendingRequestsCount} document requests currently queued for registrar action.`,
+          tone: "info",
+          time: "Live Queue",
+          actionView: "dashboard",
+        });
+      }
+
+      // System operational status
+      list.push({
+        id: "admin-system-active",
+        title: "System Operational",
+        text: `Connected as Administrator (${currentUser.email}). MongoDB Atlas cluster active.`,
+        tone: "success",
+        time: "Online",
+        actionView: "dashboard",
+      });
+
+      return list;
+    }
+
+    return [];
+  }, [requests, currentUser, adminUsers]);
+
+  const unreadCount = useMemo(() => {
+    return notifications.filter((n) => !readNotificationIds.includes(n.id))
+      .length;
+  }, [notifications, readNotificationIds]);
+
+  const markAllNotificationsAsRead = () => {
+    const allIds = notifications.map((n) => n.id);
+    setReadNotificationIds(allIds);
+    try {
+      localStorage.setItem(
+        "queueless_read_notifications",
+        JSON.stringify(allIds)
+      );
+    } catch {
+      // ignore
+    }
+  };
 
   if (!signedIn) {
     return (
@@ -598,6 +901,17 @@ function QueueLessApp() {
           <Brand />
 
           <div className="relative flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Pickup Calendar & Schedule"
+              title="Registrar Pickup Calendar & Schedule"
+              onClick={() => setCalendarOpen(true)}
+              className="relative cursor-pointer text-muted-foreground hover:text-foreground"
+            >
+              <Calendar className="size-5" />
+            </Button>
+
             <div className="relative">
               <Button
                 variant="ghost"
@@ -608,61 +922,103 @@ function QueueLessApp() {
                     !notificationsOpen
                   )
                 }
-                className="relative"
+                className="relative cursor-pointer"
               >
-                <Bell />
+                <Bell className="size-5" />
 
-                {notifications.length > 0 && (
-                  <span className="absolute right-1 top-1 size-2 rounded-full bg-destructive" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white shadow ring-2 ring-card animate-pulse">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
                 )}
               </Button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 top-13 z-40 w-[min(22rem,calc(100vw-2rem))] rounded-md border border-border bg-card p-4 shadow-xl">
-                  <div className="flex items-center justify-between">
-                    <p className="font-display text-lg font-bold">
-                      Notifications
-                    </p>
+                <>
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setNotificationsOpen(false)}
+                  />
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Close notifications"
-                      onClick={() =>
-                        setNotificationsOpen(
-                          false
-                        )
-                      }
-                    >
-                      <X />
-                    </Button>
-                  </div>
+                  <div className="absolute right-0 top-12 z-40 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                    <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                      <div className="flex items-center gap-2">
+                        <p className="font-display text-base font-bold text-foreground">
+                          Notifications
+                        </p>
+                        {unreadCount > 0 && (
+                          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-extrabold text-primary">
+                            {unreadCount} new
+                          </span>
+                        )}
+                      </div>
 
-                  <div className="mt-3 space-y-3">
-                    {notifications.length > 0 ? (
-                      notifications.map(
-                        (
-                          notification,
-                          index
-                        ) => (
+                      <div className="flex items-center gap-2">
+                        {unreadCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={markAllNotificationsAsRead}
+                            className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                          >
+                            Mark all read
+                          </button>
+                        )}
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Close notifications"
+                          className="size-7 rounded-md cursor-pointer"
+                          onClick={() => setNotificationsOpen(false)}
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 max-h-[380px] overflow-y-auto space-y-2.5 pr-0.5">
+                      {notifications.length > 0 ? (
+                        notifications.map((notification) => (
                           <Notice
-                            key={`${notification.title}-${index}`}
-                            title={
-                              notification.title
+                            key={notification.id}
+                            title={notification.title}
+                            text={notification.text}
+                            tone={notification.tone}
+                            time={notification.time}
+                            isUnread={
+                              !readNotificationIds.includes(notification.id)
                             }
-                            text={
-                              notification.text
-                            }
+                            onClick={() => {
+                              markNotificationAsRead(notification.id);
+                              if (notification.requestId) {
+                                const found = requests.find(
+                                  (r) => r.id === notification.requestId
+                                );
+                                if (found) {
+                                  setActiveReceiptModal(found);
+                                }
+                              }
+                              if (notification.actionView) {
+                                navigate(notification.actionView);
+                              }
+                              setNotificationsOpen(false);
+                            }}
                           />
-                        )
-                      )
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        No notifications yet.
-                      </p>
-                    )}
+                        ))
+                      ) : (
+                        <div className="py-8 text-center">
+                          <Bell className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                          <p className="text-sm font-medium text-foreground">
+                            No notifications yet
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            You're all caught up with your updates!
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
 
@@ -683,14 +1039,35 @@ function QueueLessApp() {
             </Button>
 
             <div className="ml-2 hidden items-center gap-3 border-l border-border pl-4 md:flex">
-              <div className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <UserRound className="size-4" />
+              <div className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground">
+                {currentUser?.picture ? (
+                  <img
+                    src={currentUser.picture}
+                    alt={name}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <UserRound className="size-4" />
+                )}
               </div>
 
               <div>
-                <p className="text-sm font-bold">
-                  {name}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold">
+                    {name}
+                  </p>
+                  {role === "student" && (
+                    currentUser?.isPriority || currentUser?.userType === "priority" ? (
+                      <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-extrabold text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                        ★ Priority
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground border border-border">
+                        Normal User
+                      </span>
+                    )
+                  )}
+                </div>
 
                 <p className="text-xs capitalize text-muted-foreground">
                   {role === "staff"
@@ -789,6 +1166,16 @@ function QueueLessApp() {
                 />
               </>
             )}
+
+            <NavButton
+              active={false}
+              icon={<Calendar />}
+              label="Pickup Calendar"
+              onClick={() => {
+                setCalendarOpen(true);
+                setMenuOpen(false);
+              }}
+            />
           </nav>
 
           <div className="mt-auto border-t border-border pt-4">
@@ -831,6 +1218,7 @@ function QueueLessApp() {
               setRequests={setRequests}
               setFlash={setFlash}
               currentUser={currentUser}
+              onOpenCalendar={() => setCalendarOpen(true)}
             />
           ) : role === "staff" ? (
             <StaffView
@@ -839,6 +1227,7 @@ function QueueLessApp() {
               requests={requests}
               setRequests={setRequests}
               setFlash={setFlash}
+              onOpenCalendar={() => setCalendarOpen(true)}
             />
           ) : (
             <AdminView
@@ -846,11 +1235,63 @@ function QueueLessApp() {
               navigate={navigate}
               requests={requests}
               setFlash={setFlash}
+              users={adminUsers}
+              onUsersUpdated={fetchAdminUsers}
+              onOpenCalendar={() => setCalendarOpen(true)}
             />
           )}
         </main>
       </div>
+
+      {calendarOpen && (
+        <PickupCalendarModal
+          requests={requests}
+          currentUser={currentUser}
+          onClose={() => setCalendarOpen(false)}
+          onSelectRequest={(req) => setActiveReceiptModal(req)}
+          onUpdateRequest={(updated) =>
+            setRequests(
+              requests.map((r) => (r.id === updated.id ? updated : r))
+            )
+          }
+        />
+      )}
+
+      {activeReceiptModal && (
+        <DigitalReceiptModal
+          request={activeReceiptModal}
+          onClose={() => setActiveReceiptModal(null)}
+          isStaff={currentUser?.role === "staff" || currentUser?.role === "admin"}
+          onOpenCalendar={() => {
+            setActiveReceiptModal(null);
+            setCalendarOpen(true);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function GoogleIcon({ className = "size-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.98 0 12s.45 3.84 1.25 5.42l4.03-3.15z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+      />
+    </svg>
   );
 }
 
@@ -860,15 +1301,219 @@ function AuthScreen({
   onSignIn: (user: AuthUser) => void;
 }) {
   const [mode, setMode] =
-    useState<"login" | "register">(
+    useState<"login" | "register" | "forgot-password">(
       "login"
     );
+
+  const [registrationNotice, setRegistrationNotice] =
+    useState<string | null>(null);
 
   const [error, setError] =
     useState("");
 
   const [loading, setLoading] =
     useState(false);
+
+  const [googleLoading, setGoogleLoading] =
+    useState(false);
+
+  const [showGoogleModal, setShowGoogleModal] =
+    useState(false);
+
+  const [hasGoogleBtn, setHasGoogleBtn] =
+    useState(false);
+
+  const [customClientId, setCustomClientId] =
+    useState(() => {
+      return (
+        (typeof window !== "undefined"
+          ? localStorage.getItem("queueless_google_client_id")
+          : "") ||
+        (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
+        ""
+      );
+    });
+
+  const handleGoogleSuccess = async (authPayload: {
+    credential?: string;
+    access_token?: string;
+  }) => {
+    try {
+      setGoogleLoading(true);
+      setError("");
+
+      const response = await fetch(`${API_URL}/api/auth/google`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...authPayload,
+          loginType: "student",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        if (
+          response.status === 403 ||
+          (result.message &&
+            (result.message.includes("registered as") ||
+              result.message.includes("cannot sign in") ||
+              result.message.includes("Cannot sign in") ||
+              result.message.includes("Admin and Staff") ||
+              result.message.includes("correct login option")))
+        ) {
+          setError("Cannot sign in.");
+          return;
+        }
+
+        setError(result.message || "Google sign-in failed.");
+        return;
+      }
+
+      if (!result.user || !result.token) {
+        setError("Google sign-in succeeded, but session data is missing.");
+        return;
+      }
+
+      if (result.user.role !== "student") {
+        setError("Cannot sign in.");
+        return;
+      }
+
+      localStorage.setItem("queueless_token", result.token);
+
+      onSignIn({
+        id: result.user.id,
+        name: result.user.name,
+        studentId: result.user.studentId,
+        email: result.user.email,
+        role: result.user.role,
+        picture: result.user.picture,
+        isPriority: result.user.isPriority,
+        userType: result.user.userType,
+      });
+    } catch (err) {
+      console.error("Google sign-in error:", err);
+      setError("Cannot connect to server. Ensure the backend is running.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const activeClientId =
+      customClientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || "";
+    if (!activeClientId) return;
+
+    let isMounted = true;
+
+    const setupGoogle = () => {
+      // @ts-expect-error Google Identity Services loaded via script
+      const google = window.google;
+      if (!google?.accounts) return;
+
+      if (google.accounts.id) {
+        google.accounts.id.initialize({
+          client_id: activeClientId,
+          callback: (res: { credential?: string }) => {
+            if (res.credential) {
+              handleGoogleSuccess({ credential: res.credential });
+            }
+          },
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        const container = document.getElementById("google-signin-btn-container");
+        if (container && isMounted) {
+          container.innerHTML = "";
+          google.accounts.id.renderButton(container, {
+            theme: "outline",
+            size: "large",
+            shape: "rectangular",
+            text: "continue_with",
+            logo_alignment: "left",
+            width: 320,
+          });
+          setHasGoogleBtn(true);
+        }
+      }
+    };
+
+    setupGoogle();
+    const timer = setInterval(() => {
+      // @ts-expect-error Google Identity Services
+      if (window.google?.accounts) {
+        setupGoogle();
+        clearInterval(timer);
+      }
+    }, 350);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customClientId, mode]);
+
+  const handleCustomGoogleClick = () => {
+    const activeClientId =
+      customClientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || "";
+    if (!activeClientId) {
+      setShowGoogleModal(true);
+      return;
+    }
+
+    // @ts-expect-error Google Identity Services
+    const google = window.google;
+
+    // Use Google Identity Services OAuth 2.0 Token Client (opens the exact Account Chooser popup)
+    if (google?.accounts?.oauth2) {
+      try {
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: activeClientId,
+          scope: "openid email profile",
+          prompt: "select_account",
+          callback: (tokenResponse: { error?: string; access_token?: string }) => {
+            if (tokenResponse.error) {
+              if (tokenResponse.error !== "access_denied") {
+                setError(`Google sign-in error: ${tokenResponse.error}`);
+              }
+              return;
+            }
+            if (tokenResponse.access_token) {
+              handleGoogleSuccess({ access_token: tokenResponse.access_token });
+            }
+          },
+        });
+        tokenClient.requestAccessToken({ prompt: "select_account" });
+        return;
+      } catch (err) {
+        console.error("Google OAuth2 token client error:", err);
+      }
+    }
+
+    // Fallback direct OAuth 2.0 popup with prompt=select_account
+    const width = 500;
+    const height = 650;
+    const left = window.screenLeft + (window.outerWidth - width) / 2;
+    const top = window.screenTop + (window.outerHeight - height) / 2;
+
+    const popupUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
+      activeClientId
+    )}&redirect_uri=${encodeURIComponent(
+      window.location.origin
+    )}&response_type=token%20id_token&scope=openid%20email%20profile&prompt=select_account&nonce=${Date.now()}`;
+
+    window.open(
+      popupUrl,
+      "GoogleSignInPopup",
+      `width=${width},height=${height},left=${left},top=${top},status=no,toolbar=no,menubar=no`
+    );
+  };
 
   const submitLogin = async (
     e: FormEvent<HTMLFormElement>
@@ -880,7 +1525,7 @@ function AuthScreen({
       e.currentTarget
     );
 
-    const email = String(
+    const identity = String(
       data.get("identity") ?? ""
     ).trim();
 
@@ -888,9 +1533,9 @@ function AuthScreen({
       data.get("password") ?? ""
     );
 
-    if (!email || password.length < 6) {
+    if (!identity || password.length < 6) {
       setError(
-        "Enter your email and a password with at least 6 characters."
+        "Enter your Student ID or email, and a password with at least 6 characters."
       );
       return;
     }
@@ -907,8 +1552,11 @@ function AuthScreen({
               "application/json",
           },
           body: JSON.stringify({
-            email,
+            identifier: identity,
+            email: identity,
+            studentId: identity,
             password,
+            loginType: "student",
           }),
         }
       );
@@ -917,6 +1565,16 @@ function AuthScreen({
         await response.json();
 
       if (!response.ok) {
+        if (
+          result.message &&
+          (result.message.includes("registered as") ||
+            result.message === "Cannot sign in." ||
+            result.message.includes("Admin and Staff"))
+        ) {
+          setError("Cannot sign in.");
+          return;
+        }
+
         setError(
           result.message ||
             "Login failed."
@@ -928,6 +1586,11 @@ function AuthScreen({
         setError(
           "Login succeeded, but no user information was returned."
         );
+        return;
+      }
+
+      if (result.user.role !== "student") {
+        setError("Cannot sign in.");
         return;
       }
 
@@ -957,6 +1620,9 @@ function AuthScreen({
           result.user.studentId,
         email: result.user.email,
         role: result.user.role,
+        picture: result.user.picture,
+        isPriority: result.user.isPriority,
+        userType: result.user.userType,
       });
     } catch (error) {
       console.error(
@@ -986,12 +1652,12 @@ function AuthScreen({
       data.get("fullName") ?? ""
     ).trim();
 
-    const studentId = String(
-      data.get("studentId") ?? ""
-    ).trim();
-
     const email = String(
       data.get("email") ?? ""
+    ).trim();
+
+    const studentId = String(
+      data.get("studentId") ?? ""
     ).trim();
 
     const password = String(
@@ -1003,12 +1669,34 @@ function AuthScreen({
     );
 
     if (
-      !studentId.match(
-        /^\d{4}-\d{5}$/
-      )
+      !fullName ||
+      !email
     ) {
       setError(
-        "Use the Student ID format 2022-10045."
+        "Please complete all required fields."
+      );
+      return;
+    }
+
+    const cleanEmail = email.toLowerCase();
+    const isEduPh = cleanEmail.includes(".edu.ph") || cleanEmail.includes("phinmaed.com");
+
+    if (!isEduPh) {
+      setError(
+        "Account creation is strictly for students with an official school email (.edu.ph or @phinmaed.com)."
+      );
+      return;
+    }
+
+    if (!studentId) {
+      setError("Student ID is required (format: 00-0000-000000).");
+      return;
+    }
+
+    const studentIdPattern = /^\d{2}-\d{4}-\d{5,6}$/;
+    if (!studentIdPattern.test(studentId)) {
+      setError(
+        "Invalid Student ID format. Please use 00-0000-000000 (e.g. 02-2324-001234)."
       );
       return;
     }
@@ -1027,16 +1715,6 @@ function AuthScreen({
       return;
     }
 
-    if (
-      !fullName ||
-      !email
-    ) {
-      setError(
-        "Please complete all required fields."
-      );
-      return;
-    }
-
     try {
       setLoading(true);
 
@@ -1050,8 +1728,8 @@ function AuthScreen({
           },
           body: JSON.stringify({
             name: fullName,
-            studentId,
             email,
+            studentId,
             password,
           }),
         }
@@ -1069,7 +1747,10 @@ function AuthScreen({
       }
 
       setError("");
-      setMode("login");
+      setRegistrationNotice(
+        result.message ||
+          "Thank you for joining us! Please just wait for 24hrs to be reviewed."
+      );
     } catch (error) {
       console.error(
         "Registration error:",
@@ -1140,7 +1821,39 @@ function AuthScreen({
             <Brand />
           </div>
 
-          {mode === "login" ? (
+          {registrationNotice ? (
+            <div className="py-4 text-center">
+              <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="size-8" />
+              </div>
+              <h2 className="font-display text-2xl font-bold text-foreground">
+                Registration Submitted
+              </h2>
+              <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40 p-4 text-left">
+                <p className="text-xs font-semibold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                  Account Status: Pending Review
+                </p>
+                <p className="mt-1 text-sm font-bold text-emerald-950 dark:text-emerald-100">
+                  {registrationNotice}
+                </p>
+                <p className="mt-2 text-xs text-emerald-800/80 dark:text-emerald-300/80 leading-relaxed">
+                  The administrator has been notified. You will receive an email confirmation once your account has been reviewed.
+                </p>
+              </div>
+
+              <Button
+                className="mt-6 w-full"
+                size="lg"
+                onClick={() => {
+                  setRegistrationNotice(null);
+                  setMode("login");
+                  setError("");
+                }}
+              >
+                Back to Sign in
+              </Button>
+            </div>
+          ) : mode === "login" ? (
             <>
               <p className="text-xs font-bold uppercase text-primary">
                 Welcome back
@@ -1154,13 +1867,13 @@ function AuthScreen({
                 className="mt-6 space-y-5"
                 onSubmit={submitLogin}
               >
-                <Field label="Email">
+                <Field label="Student ID or Email">
                   <input
                     name="identity"
-                    type="email"
+                    type="text"
                     autoComplete="username"
                     className="field"
-                    placeholder="name@up.phinma.edu.ph"
+                    placeholder="00-0000-000000 or your email"
                     required
                   />
                 </Field>
@@ -1175,6 +1888,19 @@ function AuthScreen({
                     required
                   />
                 </Field>
+
+                <div className="flex justify-end -mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("forgot-password");
+                      setError("");
+                    }}
+                    className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
 
                 {error && (
                   <InlineError
@@ -1198,6 +1924,40 @@ function AuthScreen({
                 </Button>
               </form>
 
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 font-bold tracking-wider text-muted-foreground">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full gap-3 border-border font-semibold shadow-sm transition hover:bg-muted"
+                  disabled={loading || googleLoading}
+                  onClick={handleCustomGoogleClick}
+                >
+                  {googleLoading ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Connecting with Google...</span>
+                    </>
+                  ) : (
+                    <>
+                      <GoogleIcon className="size-5 shrink-0" />
+                      <span>Sign in with Google</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+
               <div className="mt-5 flex items-center justify-between gap-4 text-xs">
                 <span className="text-muted-foreground">
                   New student?
@@ -1218,7 +1978,7 @@ function AuthScreen({
                 </Button>
               </div>
             </>
-          ) : (
+          ) : mode === "register" ? (
             <Registration
               onBack={() => {
                 setMode("login");
@@ -1228,9 +1988,113 @@ function AuthScreen({
               error={error}
               loading={loading}
             />
+          ) : (
+            <ForgotPasswordWithOtp
+              onBack={() => {
+                setMode("login");
+                setError("");
+              }}
+              onSuccess={() => {
+                setMode("login");
+                setError("");
+              }}
+            />
           )}
         </section>
       </div>
+
+      {showGoogleModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setShowGoogleModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
+                <GoogleIcon className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">
+                  Google Sign-In Configuration
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Connect your Google OAuth Client ID to activate Sign in with Google
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-3 text-xs leading-relaxed text-muted-foreground">
+              <p>
+                To enable live Google Sign-In for PHINMA UPang, you need a Google OAuth Client ID:
+              </p>
+              <ol className="list-decimal space-y-1.5 pl-4 text-foreground/90">
+                <li>
+                  Go to{" "}
+                  <a
+                    href="https://console.cloud.google.com/apis/credentials"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-primary underline"
+                  >
+                    Google Cloud Console &rarr; Credentials
+                  </a>
+                </li>
+                <li>
+                  Create an <strong>OAuth 2.0 Client ID</strong> (Application type: <strong>Web application</strong>).
+                </li>
+                <li>
+                  Add Authorized JavaScript origin:{" "}
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-primary font-mono text-[11px]">
+                    http://localhost:5173
+                  </code>
+                </li>
+                <li>
+                  Paste your Client ID below (or save in your <code className="rounded bg-muted px-1 py-0.5 font-mono">.env</code> file):
+                </li>
+              </ol>
+
+              <div className="pt-2">
+                <label className="block text-xs font-bold text-foreground">
+                  Google Client ID:
+                  <input
+                    type="text"
+                    value={customClientId}
+                    onChange={(e) => setCustomClientId(e.target.value)}
+                    placeholder="xxxxxxxxxxxx-xxxxxxxxxxxxxxxx.apps.googleusercontent.com"
+                    className="field mt-1.5 w-full font-mono text-xs"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowGoogleModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (customClientId.trim()) {
+                    localStorage.setItem("queueless_google_client_id", customClientId.trim());
+                  }
+                  setShowGoogleModal(false);
+                }}
+              >
+                Save & Initialize
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -1242,9 +2106,7 @@ function Registration({
   loading,
 }: {
   onBack: () => void;
-  onSubmit: (
-    e: FormEvent<HTMLFormElement>
-  ) => void;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   error: string;
   loading: boolean;
 }) {
@@ -1268,8 +2130,7 @@ function Registration({
       </h2>
 
       <p className="mt-2 text-sm text-muted-foreground">
-        Use your official student
-        information.
+        Account creation is strictly for students with an official school email (.edu.ph / phinmaed.com) and Student ID (00-0000-000000).
       </p>
 
       <form
@@ -1278,33 +2139,39 @@ function Registration({
       >
         <div className="sm:col-span-2">
           <Field label="Full Name">
-          <input
-            name="fullName"
-            required
-            className="field"
-            placeholder="Juan Dela Cruz"
-          />
+            <input
+              name="fullName"
+              required
+              className="field"
+              placeholder="Juan Dela Cruz"
+            />
           </Field>
         </div>
 
-        <Field label="Student ID">
-          <input
-            name="studentId"
-            required
-            className="field"
-            placeholder="2022-10045"
-          />
-        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Student ID (Format: 00-0000-000000)">
+            <input
+              name="studentId"
+              required
+              className="field"
+              placeholder="02-2324-001234"
+              pattern="^\d{2}-\d{4}-\d{5,6}$"
+              title="Please enter in 00-0000-000000 format (e.g. 02-2324-001234)"
+            />
+          </Field>
+        </div>
 
-        <Field label="School email">
-          <input
-            name="email"
-            type="email"
-            required
-            className="field"
-            placeholder="name@up.phinma.edu.ph"
-          />
-        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Institutional Email (.edu.ph / phinmaed.com)">
+            <input
+              name="email"
+              type="email"
+              required
+              className="field"
+              placeholder="yourname.edu.ph@gmail.com or student@up.phinma.edu.ph"
+            />
+          </Field>
+        </div>
 
         <div className="sm:col-span-2">
           <Field label="Password">
@@ -1343,14 +2210,348 @@ function Registration({
           disabled={loading}
         >
           {loading
-            ? "Creating account..."
-            : "Create student account"}
+            ? "Submitting registration..."
+            : "Create account"}
 
           {!loading && (
             <ArrowRight />
           )}
         </Button>
       </form>
+    </>
+  );
+}
+
+function ForgotPasswordWithOtp({
+  onBack,
+  onSuccess,
+}: {
+  onBack: () => void;
+  onSuccess: () => void;
+}) {
+  const [step, setStep] = useState<"request" | "verify" | "reset" | "success">("request");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const handleRequestOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data.message || (res.status === 404 ? "No account found with this email address." : "Failed to send verification code."));
+        return;
+      }
+
+      setStep("verify");
+      setResendCooldown(60);
+    } catch (err) {
+      console.error(err);
+      setError("Cannot connect to server. Ensure backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!otp.trim() || otp.trim().length !== 6) {
+      setError("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), otp: otp.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data.message || "Invalid or expired verification code.");
+        return;
+      }
+
+      setStep("reset");
+    } catch (err) {
+      console.error(err);
+      setError("Cannot connect to server. Ensure backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          otp: otp.trim(),
+          newPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data.message || "Failed to reset password.");
+        return;
+      }
+
+      setStep("success");
+    } catch (err) {
+      console.error(err);
+      setError("Cannot connect to server. Ensure backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="ghost"
+        className="-ml-3"
+        type="button"
+        onClick={onBack}
+      >
+        <ArrowLeft /> Back to sign in
+      </Button>
+
+      {step === "request" && (
+        <>
+          <p className="mt-5 text-xs font-bold uppercase text-primary">
+            Account recovery
+          </p>
+
+          <h2 className="mt-2 font-display text-3xl font-bold">
+            Forgot password?
+          </h2>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Enter your registered email address (.edu.ph official school email or personal Gmail). We'll send you a 6-digit OTP code to verify your identity.
+          </p>
+
+          <form onSubmit={handleRequestOtp} className="mt-6 space-y-4">
+            <Field label="Registered Email">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name.edu.ph@gmail.com or personal email"
+                required
+                className="field"
+                autoFocus
+              />
+            </Field>
+
+            {error && <InlineError text={error} />}
+
+            <Button
+              size="lg"
+              className="w-full"
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? "Sending code..." : "Send Verification Code"}
+              {!loading && <ArrowRight />}
+            </Button>
+          </form>
+        </>
+      )}
+
+      {step === "verify" && (
+        <>
+          <p className="mt-5 text-xs font-bold uppercase text-primary">
+            Step 2 of 3: Email Verification
+          </p>
+
+          <h2 className="mt-2 font-display text-3xl font-bold">
+            Enter 6-digit OTP
+          </h2>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            We sent a 6-digit verification code to{" "}
+            <strong className="text-foreground font-semibold">{email}</strong>.
+            Please check your Gmail inbox and enter the code below.
+          </p>
+
+          <form onSubmit={handleVerifyOtp} className="mt-6 space-y-4">
+            <Field label="6-Digit Verification Code">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                required
+                className="field text-center font-mono text-2xl font-bold tracking-[0.4em]"
+                autoFocus
+              />
+            </Field>
+
+            {error && <InlineError text={error} />}
+
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Didn't receive code?</span>
+              <button
+                type="button"
+                disabled={resendCooldown > 0 || loading}
+                onClick={handleRequestOtp}
+                className="font-semibold text-primary hover:underline disabled:opacity-50 cursor-pointer"
+              >
+                {resendCooldown > 0
+                  ? `Resend in ${resendCooldown}s`
+                  : "Resend Code"}
+              </button>
+            </div>
+
+            <Button
+              size="lg"
+              className="w-full"
+              type="submit"
+              disabled={loading || otp.length !== 6}
+            >
+              {loading ? "Verifying..." : "Verify Code"}
+              {!loading && <ArrowRight />}
+            </Button>
+          </form>
+        </>
+      )}
+
+      {step === "reset" && (
+        <>
+          <p className="mt-5 text-xs font-bold uppercase text-primary">
+            Step 3 of 3: New Password
+          </p>
+
+          <h2 className="mt-2 font-display text-3xl font-bold">
+            Create new password
+          </h2>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your email has been authenticated. Enter a new password for your account.
+          </p>
+
+          <form onSubmit={handleResetPassword} className="mt-6 space-y-4">
+            <Field label="New Password">
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  required
+                  className="field pr-10"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <Eye className="size-4" />
+                </button>
+              </div>
+            </Field>
+
+            <Field label="Confirm New Password">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter your new password"
+                required
+                className="field"
+              />
+            </Field>
+
+            {error && <InlineError text={error} />}
+
+            <Button
+              size="lg"
+              className="w-full"
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? "Resetting password..." : "Reset Password"}
+              {!loading && <ArrowRight />}
+            </Button>
+          </form>
+        </>
+      )}
+
+      {step === "success" && (
+        <div className="mt-4 text-center py-4">
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
+            <CheckCircle2 className="size-8" />
+          </div>
+
+          <h3 className="text-2xl font-bold text-foreground">
+            Password reset complete!
+          </h3>
+
+          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+            Your password has been securely updated. You can now sign in with your new credentials.
+          </p>
+
+          <Button
+            size="lg"
+            className="w-full mt-6"
+            type="button"
+            onClick={onSuccess}
+          >
+            Sign in to QueueLess <ArrowRight />
+          </Button>
+        </div>
+      )}
     </>
   );
 }
@@ -1362,6 +2563,7 @@ function StudentView({
   setRequests,
   setFlash,
   currentUser,
+  onOpenCalendar,
 }: {
   view: View;
   navigate: (v: View) => void;
@@ -1369,16 +2571,29 @@ function StudentView({
   setRequests: (r: RequestItem[]) => void;
   setFlash: (f: Flash) => void;
   currentUser: AuthUser | null;
+  onOpenCalendar?: () => void;
 }) {
+  const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
+
   if (!currentUser) {
     return null;
   }
 
-  const mine = requests.filter(
-    (r) =>
-      r.studentId ===
-      currentUser.studentId
-  );
+  const studentIdClean = (currentUser.studentId || "").trim().toLowerCase();
+  const studentIdDigits = studentIdClean.replace(/[^a-z0-9]/g, "");
+  const studentNameClean = (currentUser.name || "").trim().toLowerCase();
+
+  const mine = requests.filter((r) => {
+    const reqIdClean = (r.studentId || "").trim().toLowerCase();
+    const reqIdDigits = reqIdClean.replace(/[^a-z0-9]/g, "");
+    const reqNameClean = (r.student || "").trim().toLowerCase();
+
+    return (
+      (reqIdClean && reqIdClean === studentIdClean) ||
+      (reqIdDigits && studentIdDigits && reqIdDigits === studentIdDigits) ||
+      (reqNameClean && reqNameClean === studentNameClean)
+    );
+  });
 
   if (view === "new") {
     return (
@@ -1415,38 +2630,93 @@ function StudentView({
     );
   }
 
+  const isUserPriority = Boolean(
+    currentUser.isPriority || currentUser.userType === "priority"
+  );
+
   return (
     <div className="animate-rise">
-      <PageHeading
-        eyebrow="Student dashboard"
-        title={`Good day, ${currentUser.name}!`}
-        text={`Student ID ${currentUser.studentId} · Manage your registrar documents here.`}
-      />
-
-      <div className="mt-8 grid gap-4 lg:grid-cols-2">
-        <ActionPanel
-          icon={<FilePlus2 />}
-          title="Request a document"
-          text="Submit a school document request from anywhere."
-          action="Start new request"
-          onClick={() =>
-            navigate("new")
-          }
-          primary
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <PageHeading
+          eyebrow="Student portal"
+          title={`Good day, ${currentUser.name}!`}
+          text={`Student ID: ${currentUser.studentId} • PHINMA University of Pangasinan`}
         />
 
-        <ActionPanel
-          icon={<Search />}
-          title="Track my request"
-          text="See progress, corrections, and claiming updates."
-          action="View my requests"
-          onClick={() =>
-            navigate("requests")
-          }
-        />
+        {isUserPriority && (
+          <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-amber-800 dark:text-amber-300">
+            <span className="text-xl">⭐</span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-black uppercase tracking-wider">Priority Student</p>
+                <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-bold">PHINMA Official</span>
+              </div>
+              <p className="text-[11px] opacity-80">Automatic Priority Queue in Registrar</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      <section className="mt-10">
+      {/* Clean Quick Actions Row */}
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <Button
+          size="default"
+          onClick={() => navigate("new")}
+          className="gap-2 cursor-pointer shadow-sm"
+        >
+          <FilePlus2 className="size-4" /> Request a Document
+        </Button>
+
+        {onOpenCalendar && (
+          <Button
+            variant="outline"
+            size="default"
+            onClick={onOpenCalendar}
+            className="gap-2 cursor-pointer"
+          >
+            <Calendar className="size-4" /> Pickup Calendar
+          </Button>
+        )}
+
+        <Button
+          variant="outline"
+          size="default"
+          onClick={() => navigate("requests")}
+          className="gap-2 cursor-pointer"
+        >
+          <ClipboardList className="size-4" /> View My Requests ({mine.length})
+        </Button>
+      </div>
+
+      {/* Ready for Claiming Highlight Banner */}
+      {mine.filter((r) => r.status === "Ready for Claiming").length > 0 && (
+        <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-800 dark:text-emerald-300">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+              <CheckCircle2 className="size-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold">Document Ready for Claiming!</p>
+              <p className="text-xs opacity-90">
+                You have {mine.filter((r) => r.status === "Ready for Claiming").length} document(s) prepared and waiting at the registrar counter today.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => {
+              const readyReq = mine.find((r) => r.status === "Ready for Claiming");
+              if (readyReq) setSelectedReceipt(readyReq);
+            }}
+            className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+          >
+            View Release Pass & Receipt
+          </Button>
+        </div>
+      )}
+
+      {/* 4 Clean Activity Metrics */}
+      <section className="mt-8">
         <SectionTitle
           eyebrow="Request overview"
           title="Your activity"
@@ -1454,25 +2724,13 @@ function StudentView({
 
         <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Metric
-            label="Total requests"
-            value={mine.length}
-            icon={<FileText />}
-          />
-
-          <Metric
-            label="Pending"
-            value={
-              mine.filter(
-                (r) =>
-                  r.status ===
-                  "Pending"
-              ).length
-            }
+            label="Active queue"
+            value={mine.filter((r) => r.status !== "Claimed").length}
             icon={<Clock3 />}
           />
 
           <Metric
-            label="In progress"
+            label="Processing"
             value={
               mine.filter(
                 (r) =>
@@ -1494,25 +2752,69 @@ function StudentView({
             }
             icon={<CheckCircle2 />}
           />
-        </div>
-      </section>
 
-      <section className="mt-10">
-        <SectionTitle
-          eyebrow="Recent activity"
-          title="Latest requests"
-          action="View all"
-          onAction={() =>
-            navigate("requests")
-          }
-        />
-
-        <div className="mt-4">
-          <RequestCards
-            requests={mine.slice(0, 2)}
+          <Metric
+            label="Claimed & Done"
+            value={
+              mine.filter(
+                (r) =>
+                  r.status ===
+                  "Claimed"
+              ).length
+            }
+            icon={<FileCheck2 />}
           />
         </div>
       </section>
+
+      {/* Recent Requests Section */}
+      <section className="mt-8">
+        <SectionTitle
+          eyebrow="Recent requests"
+          title="Latest documents"
+          action={mine.length > 0 ? "View all" : undefined}
+          onAction={mine.length > 0 ? () => navigate("requests") : undefined}
+        />
+
+        <div className="mt-4">
+          {mine.length > 0 ? (
+            <RequestCards
+              requests={[...mine]
+                .sort((a, b) => {
+                  if (a.status === "Claimed" && b.status !== "Claimed") return 1;
+                  if (a.status !== "Claimed" && b.status === "Claimed") return -1;
+                  return 0;
+                })
+                .slice(0, 3)}
+              onSelect={setSelectedReceipt}
+            />
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-8 text-center">
+              <FilePlus2 className="mx-auto size-8 text-muted-foreground/60 mb-2" />
+              <p className="text-sm font-semibold text-foreground">No document requests yet</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                You haven't requested any documents yet. Submit your first request online anytime.
+              </p>
+              <Button
+                size="sm"
+                onClick={() => navigate("new")}
+                className="mt-4 gap-2 cursor-pointer"
+              >
+                <FilePlus2 className="size-4" /> Start First Request
+              </Button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {selectedReceipt && (
+        <DigitalReceiptModal
+          request={selectedReceipt}
+          onClose={() => setSelectedReceipt(null)}
+          isStaff={false}
+          onOpenCalendar={onOpenCalendar}
+        />
+      )}
     </div>
   );
 }
@@ -1535,6 +2837,9 @@ function NewRequest({
   const [purpose, setPurpose] =
     useState("");
 
+  const [copies, setCopies] =
+    useState<number>(1);
+
   const [remarks, setRemarks] =
     useState("");
 
@@ -1544,7 +2849,10 @@ function NewRequest({
   const [loading, setLoading] =
     useState(false);
 
-  const submit = async (
+  const [showConfirmModal, setShowConfirmModal] =
+    useState(false);
+
+  const handlePreSubmit = (
     e: FormEvent
   ) => {
     e.preventDefault();
@@ -1556,6 +2864,12 @@ function NewRequest({
       );
       return;
     }
+
+    setShowConfirmModal(true);
+  };
+
+  const executeSubmit = async () => {
+    setError("");
 
     const requestNumber = `QLR-2026-${String(
       Date.now()
@@ -1603,6 +2917,7 @@ function NewRequest({
           document: doc,
           purpose:
             purpose.trim(),
+          copies,
           remarks:
             remarks.trim(),
           date,
@@ -1625,27 +2940,16 @@ function NewRequest({
 
             body: JSON.stringify({
               requestNumber,
-
-              /*
-               * These are sent for UI compatibility.
-               * The backend does NOT trust them.
-               * The backend gets the real student identity
-               * from req.user.id in the JWT.
-               */
               student:
                 currentUser.name,
-
               studentId:
                 currentUser.studentId,
-
               document: doc,
-
               purpose:
                 purpose.trim(),
-
+              copies,
               remarks:
                 remarks.trim(),
-
               date,
             }),
           }
@@ -1673,10 +2977,11 @@ function NewRequest({
         status: result.request.status,
         lineNumber: result.request.lineNumber,
         priority: result.request.priority || "Regular",
-        copies: result.request.copies || 1,
+        copies: result.request.copies || copies || 1,
         pickupDate: result.request.pickupDate || "",
       };
 
+      setShowConfirmModal(false);
       onSubmit(savedRequest);
     } catch (error) {
       console.error(
@@ -1708,8 +3013,30 @@ function NewRequest({
         text="Complete the details below. Required fields are marked with an asterisk."
       />
 
+      {currentUser.isPriority || currentUser.userType === "priority" ? (
+        <div className="mt-4 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300">
+          <span className="text-base">⭐</span>
+          <div>
+            <p className="font-bold">Priority Processing Active</p>
+            <p className="text-[11px] opacity-85">
+              Because you are signed in with an official PHINMA credential, your request receives Priority Queue ranking.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-muted/60 p-3.5 text-xs text-muted-foreground">
+          <UserRound className="size-4 shrink-0 text-blue-500" />
+          <div>
+            <p className="font-semibold text-foreground">Standard Queue Processing</p>
+            <p className="text-[11px]">
+              You are signed in with a personal account. This request will be processed in Regular Queue order.
+            </p>
+          </div>
+        </div>
+      )}
+
       <form
-        onSubmit={submit}
+        onSubmit={handlePreSubmit}
         className="mt-8 space-y-9"
       >
         <fieldset>
@@ -1791,16 +3118,20 @@ function NewRequest({
             </Field>
 
             <Field label="Number of copies">
-              <select className="field">
-                <option>
+              <select
+                className="field"
+                value={copies}
+                onChange={(e) => setCopies(Number(e.target.value))}
+              >
+                <option value={1}>
                   1 copy
                 </option>
 
-                <option>
+                <option value={2}>
                   2 copies
                 </option>
 
-                <option>
+                <option value={3}>
                   3 copies
                 </option>
               </select>
@@ -1848,7 +3179,7 @@ function NewRequest({
           >
             {loading
               ? "Submitting request..."
-              : "Submit request"}
+              : "Review & Submit Request"}
 
             {!loading && (
               <ArrowRight />
@@ -1856,9 +3187,256 @@ function NewRequest({
           </Button>
         </div>
       </form>
+
+      {/* Student Request Confirmation Modal */}
+      {showConfirmModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => !loading && setShowConfirmModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Confirm Request Submission"
+            className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 border-b border-border pb-4">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <FileCheck2 className="size-6" />
+              </div>
+              <div>
+                <h3 className="font-display text-lg font-bold text-foreground">
+                  Confirm Document Request
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Please review the details below before submitting to the Registrar's Office.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2.5 rounded-xl border border-border bg-muted/20 p-4 text-xs">
+              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+                <span className="text-muted-foreground font-medium">Document:</span>
+                <span className="font-bold text-foreground text-right">{doc}</span>
+              </div>
+              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+                <span className="text-muted-foreground font-medium">Number of Copies:</span>
+                <span className="font-bold text-foreground">{copies} {copies === 1 ? "copy" : "copies"}</span>
+              </div>
+              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+                <span className="text-muted-foreground font-medium">Purpose:</span>
+                <span className="font-bold text-foreground text-right">{purpose}</span>
+              </div>
+              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+                <span className="text-muted-foreground font-medium">Student Name:</span>
+                <span className="font-semibold text-foreground">{currentUser.name}</span>
+              </div>
+              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+                <span className="text-muted-foreground font-medium">Student ID Number:</span>
+                <span className="font-mono font-semibold text-foreground">{currentUser.studentId}</span>
+              </div>
+              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+                <span className="text-muted-foreground font-medium">Queue Ranking:</span>
+                <span className="font-bold text-foreground">
+                  {currentUser.isPriority || currentUser.userType === "priority" ? "⭐ Priority Lane (Official PHINMA)" : "Regular Queue"}
+                </span>
+              </div>
+              {remarks.trim() && (
+                <div className="flex flex-col py-1.5">
+                  <span className="text-muted-foreground font-medium mb-1">Additional Remarks:</span>
+                  <p className="rounded-md border border-border bg-background p-2.5 text-foreground font-medium italic">
+                    "{remarks.trim()}"
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 rounded-lg bg-primary/5 border border-primary/20 p-2.5 text-[11px] text-muted-foreground flex items-center gap-2">
+              <CheckCircle2 className="size-4 text-primary shrink-0" />
+              <span>An official Digital Request Receipt with your assigned queue line will be created immediately upon confirmation.</span>
+            </div>
+
+            {error && (
+              <div className="mt-3">
+                <InlineError text={error} />
+              </div>
+            )}
+
+            <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={loading}
+              >
+                Back to Edit
+              </Button>
+              <Button
+                type="button"
+                onClick={executeSubmit}
+                disabled={loading}
+                className="gap-2 cursor-pointer"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Submitting...
+                  </>
+                ) : (
+                  <>
+                    Confirm & Submit <CheckCircle2 className="size-4" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+interface ClaimedRecordBackup {
+  id: string;
+  student: string;
+  studentId: string;
+  document: string;
+  purpose: string;
+  remarks?: string;
+  date: string;
+  claimedAt: string;
+  releasedBy: string;
+  lineNumber?: number;
+  priority?: Priority;
+  copies?: number;
+  pickupDate?: string;
+}
+
+const getClaimedBackupRecords = (allRequests: RequestItem[]): ClaimedRecordBackup[] => {
+  try {
+    const raw = localStorage.getItem("queueless_claimed_backup");
+    const stored: ClaimedRecordBackup[] = raw ? JSON.parse(raw) : [];
+
+    // Sync any requests with status "Claimed" that might not be in the archive yet
+    const claimedInRequests = allRequests.filter((r) => r.status === "Claimed");
+    let changed = false;
+
+    claimedInRequests.forEach((req) => {
+      if (!stored.some((item) => item.id === req.id)) {
+        stored.unshift({
+          id: req.id,
+          student: req.student,
+          studentId: req.studentId,
+          document: req.document,
+          purpose: req.purpose,
+          remarks: req.remarks || "",
+          date: req.date,
+          claimedAt: req.pickupDate || req.date || "Completed",
+          releasedBy: "Registrar Counter Officer",
+          lineNumber: req.lineNumber,
+          priority: req.priority,
+          copies: req.copies || 1,
+          pickupDate: req.pickupDate,
+        });
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      localStorage.setItem("queueless_claimed_backup", JSON.stringify(stored));
+    }
+
+    return stored;
+  } catch {
+    return [];
+  }
+};
+
+const archiveClaimedRecord = (req: RequestItem, staffName?: string) => {
+  try {
+    const raw = localStorage.getItem("queueless_claimed_backup");
+    const stored: ClaimedRecordBackup[] = raw ? JSON.parse(raw) : [];
+    const nowStr = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const existingIndex = stored.findIndex((s) => s.id === req.id);
+    const newRecord: ClaimedRecordBackup = {
+      id: req.id,
+      student: req.student,
+      studentId: req.studentId,
+      document: req.document,
+      purpose: req.purpose,
+      remarks: req.remarks || "",
+      date: req.date,
+      claimedAt: nowStr,
+      releasedBy: staffName || "Registrar Counter Officer",
+      lineNumber: req.lineNumber,
+      priority: req.priority,
+      copies: req.copies || 1,
+      pickupDate: req.pickupDate,
+    };
+
+    if (existingIndex >= 0) {
+      stored[existingIndex] = newRecord;
+    } else {
+      stored.unshift(newRecord);
+    }
+
+    localStorage.setItem("queueless_claimed_backup", JSON.stringify(stored));
+  } catch (err) {
+    console.error("Archive claimed record error:", err);
+  }
+};
+
+const exportClaimedBackupCsv = (records: ClaimedRecordBackup[]) => {
+  const headers = [
+    "Reference ID",
+    "Student Name",
+    "Student ID",
+    "Document Type",
+    "Purpose",
+    "Copies",
+    "Date Requested",
+    "Date Claimed / Released",
+    "Released By Officer",
+    "Priority",
+    "Queue Line",
+  ];
+
+  const rows = records.map((r) => [
+    `"${r.id}"`,
+    `"${(r.student || "").replace(/"/g, '""')}"`,
+    `"${(r.studentId || "").replace(/"/g, '""')}"`,
+    `"${(r.document || "").replace(/"/g, '""')}"`,
+    `"${(r.purpose || "").replace(/"/g, '""')}"`,
+    r.copies || 1,
+    `"${r.date || ""}"`,
+    `"${r.claimedAt || ""}"`,
+    `"${(r.releasedBy || "Registrar Counter Officer").replace(/"/g, '""')}"`,
+    `"${r.priority || "Regular"}"`,
+    r.lineNumber || 1,
+  ]);
+
+  const csvContent =
+    "data:text/csv;charset=utf-8," +
+    [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute(
+    "download",
+    `QueueLess_Claimed_Documents_Backup_${new Date().toISOString().slice(0, 10)}.csv`
+  );
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
 function StaffView({
   view,
@@ -1866,6 +3444,7 @@ function StaffView({
   requests,
   setRequests,
   setFlash,
+  onOpenCalendar,
 }: {
   view: View;
   navigate: (v: View) => void;
@@ -1874,7 +3453,19 @@ function StaffView({
     r: RequestItem[]
   ) => void;
   setFlash: (f: Flash) => void;
+  onOpenCalendar?: () => void;
 }) {
+  const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
+  const [staffTab, setStaffTab] = useState<"operations" | "claimed_vault">("operations");
+  const [backupSearch, setBackupSearch] = useState("");
+  const [backupRecords, setBackupRecords] = useState<ClaimedRecordBackup[]>(() =>
+    getClaimedBackupRecords(requests)
+  );
+
+  useEffect(() => {
+    setBackupRecords(getClaimedBackupRecords(requests));
+  }, [requests]);
+
   if (view === "requests") {
     return (
       <ManageRequests
@@ -1885,83 +3476,1247 @@ function StaffView({
     );
   }
 
+  const filteredBackup = backupRecords.filter((b) => {
+    const q = backupSearch.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      b.id.toLowerCase().includes(q) ||
+      b.student.toLowerCase().includes(q) ||
+      b.studentId.toLowerCase().includes(q) ||
+      b.document.toLowerCase().includes(q) ||
+      b.purpose.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="animate-rise">
-      <PageHeading
-        eyebrow="Registrar workspace"
-        title="Request operations"
-        text="Review, process, and complete student document requests."
-      />
-
-      <div className="mt-8 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Metric
-          label="New requests"
-          value={
-            requests.filter(
-              (r) =>
-                r.status ===
-                "Pending"
-            ).length
-          }
-          icon={<Clock3 />}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <PageHeading
+          eyebrow="Registrar workspace"
+          title="Staff Operations & Archive"
+          text="Review, process, and permanently archive released student documents."
         />
 
-        <Metric
-          label="Processing"
-          value={
-            requests.filter(
-              (r) =>
-                r.status ===
-                "Processing"
-            ).length
-          }
-          icon={<ClipboardList />}
-        />
-
-        <Metric
-          label="Ready"
-          value={
-            requests.filter(
-              (r) =>
-                r.status ===
-                "Ready for Claiming"
-            ).length
-          }
-          icon={<FileCheck2 />}
-        />
-
-        <Metric
-          label="Claimed"
-          value={
-            requests.filter(
-              (r) =>
-                r.status ===
-                "Claimed"
-            ).length
-          }
-          icon={<CheckCircle2 />}
-        />
+        {/* Tab switchers */}
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 p-1">
+          <Button
+            size="sm"
+            variant={staffTab === "operations" ? "default" : "ghost"}
+            onClick={() => setStaffTab("operations")}
+            className="text-xs h-8 gap-1.5"
+          >
+            <ClipboardList className="size-3.5" /> Active Queue
+          </Button>
+          <Button
+            size="sm"
+            variant={staffTab === "claimed_vault" ? "default" : "ghost"}
+            onClick={() => setStaffTab("claimed_vault")}
+            className="text-xs h-8 gap-1.5"
+          >
+            <FileCheck2 className="size-3.5" /> Claimed Backup Vault
+            <span className="ml-1 rounded-full bg-primary/20 px-1.5 py-0.2 text-[10px] font-black">
+              {backupRecords.length}
+            </span>
+          </Button>
+          {onOpenCalendar && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onOpenCalendar}
+              className="text-xs h-8 gap-1.5 ml-1 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
+            >
+              <Calendar className="size-3.5" /> Pickup Calendar
+            </Button>
+          )}
+        </div>
       </div>
 
-      <section className="mt-10">
-        <SectionTitle
-          eyebrow="Registrar queue"
-          title="Recent document requests"
-          action="Manage all"
-          onAction={() =>
-            navigate("requests")
-          }
-        />
+      {staffTab === "operations" ? (
+        <>
+          <div className="mt-8 grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <Metric
+              label="New requests"
+              value={
+                requests.filter(
+                  (r) =>
+                    r.status ===
+                    "Pending"
+                ).length
+              }
+              icon={<Clock3 />}
+            />
 
-        <div className="mt-4">
-          <RequestCards
-            requests={requests.slice(
-              0,
-              4
+            <Metric
+              label="Processing"
+              value={
+                requests.filter(
+                  (r) =>
+                    r.status ===
+                    "Processing"
+                ).length
+              }
+              icon={<ClipboardList />}
+            />
+
+            <Metric
+              label="Ready for Pickup"
+              value={
+                requests.filter(
+                  (r) =>
+                    r.status ===
+                    "Ready for Claiming"
+                ).length
+              }
+              icon={<FileCheck2 />}
+            />
+
+            <Metric
+              label="Done / Claimed"
+              value={
+                requests.filter(
+                  (r) =>
+                    r.status ===
+                    "Claimed"
+                ).length
+              }
+              icon={<CheckCircle2 />}
+            />
+          </div>
+
+          <section className="mt-10">
+            <SectionTitle
+              eyebrow="Registrar queue"
+              title="Recent document requests"
+              action="Manage all"
+              onAction={() =>
+                navigate("requests")
+              }
+            />
+
+            <div className="mt-4">
+              <RequestCards
+                requests={[...requests]
+                  .sort((a, b) => {
+                    // Active requests first so new requests are immediately visible
+                    if (a.status === "Claimed" && b.status !== "Claimed") return 1;
+                    if (a.status !== "Claimed" && b.status === "Claimed") return -1;
+                    return 0;
+                  })
+                  .slice(0, 4)}
+                onSelect={setSelectedReceipt}
+              />
+            </div>
+          </section>
+        </>
+      ) : (
+        /* CLAIMED DOCUMENTS BACKUP VAULT TAB */
+        <div className="mt-6 space-y-6">
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md bg-primary/20 px-2 py-0.5 text-xs font-bold text-primary">
+                    Permanent Records Ledger
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    • 100% Backed Up & Verified
+                  </span>
+                </div>
+                <h3 className="mt-1 font-display text-lg font-bold text-foreground">
+                  Claimed Documents Backup Archive
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Safely stores completed and received student credentials. Used for accreditation audits, re-verifications, and records ledger.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => exportClaimedBackupCsv(filteredBackup)}
+                  disabled={filteredBackup.length === 0}
+                  className="gap-1.5 text-xs h-9 cursor-pointer"
+                >
+                  <Printer className="size-3.5" /> Export Backup (.CSV)
+                </Button>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => {
+                    setBackupRecords(getClaimedBackupRecords(requests));
+                    setFlash({
+                      tone: "success",
+                      text: "Claimed documents ledger synchronized successfully.",
+                    });
+                  }}
+                  className="gap-1.5 text-xs h-9 cursor-pointer"
+                >
+                  <CheckCircle2 className="size-3.5" /> Sync Ledger
+                </Button>
+              </div>
+            </div>
+
+            {/* Archive Metrics */}
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 border-t border-primary/10 pt-4">
+              <div>
+                <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">
+                  Total Archived Releases
+                </p>
+                <p className="text-xl font-black text-foreground mt-0.5">
+                  {backupRecords.length}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">
+                  Transcripts (TOR)
+                </p>
+                <p className="text-xl font-black text-foreground mt-0.5">
+                  {backupRecords.filter((b) => b.document.includes("Transcript")).length}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">
+                  Certificates / Diplomas
+                </p>
+                <p className="text-xl font-black text-foreground mt-0.5">
+                  {backupRecords.filter((b) => !b.document.includes("Transcript")).length}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">
+                  Vault Integrity
+                </p>
+                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="size-4" /> Active & Ledger Synced
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Search Filter */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search archive by student name, ID number, document type, or reference ID..."
+                value={backupSearch}
+                onChange={(e) => setSearchBackup(e.target.value)}
+                className="field pl-9 h-10 text-xs"
+              />
+            </div>
+            {backupSearch && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchBackup("")}
+                className="text-xs h-10"
+              >
+                Clear
+              </Button>
             )}
-          />
+          </div>
+
+          {/* Claimed Documents Table / Cards */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            <div className="border-b border-border bg-muted/40 px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Archived Release Slips ({filteredBackup.length})
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Click any record to inspect or print official release receipt
+              </span>
+            </div>
+
+            {filteredBackup.length > 0 ? (
+              <div className="divide-y divide-border">
+                {filteredBackup.map((rec) => {
+                  // Find full request object if available to render receipt
+                  const fullReq = requests.find((r) => r.id === rec.id) || {
+                    id: rec.id,
+                    student: rec.student,
+                    studentId: rec.studentId,
+                    document: rec.document,
+                    purpose: rec.purpose,
+                    remarks: rec.remarks || "",
+                    date: rec.date,
+                    status: "Claimed" as Status,
+                    lineNumber: rec.lineNumber || 1,
+                    priority: rec.priority || "Regular",
+                    copies: rec.copies || 1,
+                    pickupDate: rec.pickupDate || rec.claimedAt,
+                  };
+
+                  return (
+                    <div
+                      key={rec.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-muted/30 transition"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 font-mono font-bold text-xs">
+                          ✓
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-bold text-foreground">
+                              {rec.id}
+                            </span>
+                            <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                              Claimed & Released
+                            </span>
+                            {rec.priority === "Urgent" && (
+                              <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold text-destructive">
+                                ⚡ Urgent
+                              </span>
+                            )}
+                            {rec.priority === "Priority" && (
+                              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                                ★ Priority
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-1 text-xs font-bold text-foreground">
+                            {rec.document}{" "}
+                            <span className="font-normal text-muted-foreground">
+                              ({rec.copies || 1} {rec.copies === 1 ? "copy" : "copies"})
+                            </span>
+                          </p>
+
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                            <span>
+                              Student:{" "}
+                              <strong className="text-foreground">
+                                {rec.student}
+                              </strong>{" "}
+                              ({rec.studentId})
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Purpose: <em>{rec.purpose}</em>
+                            </span>
+                            <span>•</span>
+                            <span>
+                              Released:{" "}
+                              <span className="text-foreground font-medium">
+                                {rec.claimedAt}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedReceipt(fullReq)}
+                          className="h-8 text-xs gap-1.5 cursor-pointer"
+                        >
+                          <FileText className="size-3.5" /> View Release Slip
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">
+                <FileCheck2 className="mx-auto size-8 opacity-40 mb-2" />
+                <p className="text-xs font-semibold text-foreground">No claimed records found</p>
+                <p className="text-[11px] opacity-75 mt-0.5">
+                  {backupSearch
+                    ? "No archived documents match your search query."
+                    : "When students claim their requested documents, they will automatically be preserved in this backup vault."}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-      </section>
+      )}
+
+      {selectedReceipt && (
+        <DigitalReceiptModal
+          request={selectedReceipt}
+          onClose={() => setSelectedReceipt(null)}
+          isStaff={true}
+          onOpenCalendar={onOpenCalendar}
+        />
+      )}
+    </div>
+  );
+}
+
+function StaffCalendarEditModal({
+  request,
+  onClose,
+  onSave,
+  saving = false,
+}: {
+  request: RequestItem;
+  onClose: () => void;
+  onSave: (updated: {
+    pickupDate: string;
+    status: Status;
+    lineNumber: number;
+    priority: Priority;
+    remarks: string;
+  }) => void;
+  saving?: boolean;
+}) {
+  const [pickupDate, setPickupDate] = useState(request.pickupDate || "");
+  const [status, setStatus] = useState<Status>(request.status);
+  const [lineNumber, setLineNumber] = useState<number>(request.lineNumber ?? 1);
+  const [priority, setPriority] = useState<Priority>(request.priority || "Regular");
+  const [remarks, setRemarks] = useState(request.remarks || "");
+
+  const handleFormSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    onSave({
+      pickupDate: pickupDate.trim(),
+      status,
+      lineNumber: Number(lineNumber),
+      priority,
+      remarks: remarks.trim(),
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+      onClick={() => !saving && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Staff Reschedule Request"
+        className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between border-b border-border pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Calendar className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-foreground">
+                Staff Reschedule & Queue Editor
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {request.id} • {request.student}
+              </p>
+            </div>
+          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onClose}
+            disabled={saving}
+            className="size-8"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        <form onSubmit={handleFormSubmit} className="mt-4 space-y-3.5">
+          <Field label="Scheduled Counter Pickup Date">
+            <input
+              type="text"
+              value={pickupDate}
+              onChange={(e) => setPickupDate(e.target.value)}
+              placeholder="e.g. Oct 05, 2026 or 2026-10-05"
+              className="field"
+              required
+            />
+          </Field>
+
+          {/* Quick date shortcuts */}
+          <div className="flex flex-wrap gap-1.5 text-[10px]">
+            <span className="text-muted-foreground font-semibold self-center mr-1">Quick:</span>
+            <button
+              type="button"
+              onClick={() => setPickupDate("Oct 05, 2026")}
+              className="rounded-md border border-border bg-muted/60 px-2 py-0.5 font-medium hover:border-primary cursor-pointer"
+            >
+              Oct 05, 2026
+            </button>
+            <button
+              type="button"
+              onClick={() => setPickupDate("Oct 07, 2026")}
+              className="rounded-md border border-border bg-muted/60 px-2 py-0.5 font-medium hover:border-primary cursor-pointer"
+            >
+              Oct 07, 2026
+            </button>
+            <button
+              type="button"
+              onClick={() => setPickupDate("Oct 12, 2026")}
+              className="rounded-md border border-border bg-muted/60 px-2 py-0.5 font-medium hover:border-primary cursor-pointer"
+            >
+              Oct 12, 2026
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Queue Line #">
+              <input
+                type="number"
+                min={1}
+                value={lineNumber}
+                onChange={(e) => setLineNumber(Number(e.target.value))}
+                className="field"
+                required
+              />
+            </Field>
+
+            <Field label="Priority Level">
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as Priority)}
+                className="field"
+              >
+                <option value="Regular">Regular</option>
+                <option value="Priority">Priority</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </Field>
+          </div>
+
+          <Field label="Status">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as Status)}
+              className="field"
+            >
+              <option value="Pending">Pending</option>
+              <option value="Processing">Processing</option>
+              <option value="Ready for Claiming">Ready for Claiming</option>
+              <option value="Claimed">Claimed</option>
+              <option value="Needs Correction">Needs Correction</option>
+            </select>
+          </Field>
+
+          <Field label="Registrar Instructions / Remarks">
+            <textarea
+              rows={2}
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="e.g. Window 2 ready for pickup"
+              className="field resize-none py-2 text-xs"
+            />
+          </Field>
+
+          <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={saving}
+              className="gap-1.5 cursor-pointer"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Saving...
+                </>
+              ) : (
+                "Save Schedule & Update"
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function PickupCalendarModal({
+  requests,
+  currentUser,
+  onClose,
+  onSelectRequest,
+  onUpdateRequest,
+}: {
+  requests: RequestItem[];
+  currentUser: AuthenticatedUser | null;
+  onClose: () => void;
+  onSelectRequest?: (req: RequestItem) => void;
+  onUpdateRequest?: (req: RequestItem) => void;
+}) {
+  const [currentDate, setCurrentDate] = useState(() => new Date(2026, 9, 1)); // October 2026
+  const [selectedDay, setSelectedDay] = useState<number | null>(() => new Date().getDate());
+  const [filterType, setFilterType] = useState<
+    "active" | "all" | "ready" | "processing" | "done" | "mine"
+  >("active");
+  const [editingReq, setEditingReq] = useState<RequestItem | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [statusNotice, setStatusNotice] = useState("");
+
+  const isStaffUser =
+    currentUser?.role === "staff" || currentUser?.role === "admin";
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+
+  const prevMonth = () => {
+    setCurrentDate(new Date(year, month - 1, 1));
+    setSelectedDay(null);
+  };
+
+  const nextMonth = () => {
+    setCurrentDate(new Date(year, month + 1, 1));
+    setSelectedDay(null);
+  };
+
+  const jumpToToday = () => {
+    const today = new Date();
+    setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDay(today.getDate());
+  };
+
+  // Accurate local timezone-safe date parser
+  const parseRequestDate = (dateStr?: string): Date | null => {
+    if (!dateStr || typeof dateStr !== "string") return null;
+    const trimmed = dateStr.trim();
+    if (!trimmed) return null;
+
+    // Pattern 1: YYYY-MM-DD or YYYY/MM/DD
+    const isoMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (isoMatch) {
+      return new Date(
+        parseInt(isoMatch[1], 10),
+        parseInt(isoMatch[2], 10) - 1,
+        parseInt(isoMatch[3], 10)
+      );
+    }
+
+    // Pattern 2: Month DD, YYYY e.g. "Oct 05, 2026" or "October 5, 2026"
+    const textMatch = trimmed.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s*(\d{4})/);
+    if (textMatch) {
+      const monthPrefix = textMatch[1].slice(0, 3).toLowerCase();
+      const monthMap: Record<string, number> = {
+        jan: 0,
+        feb: 1,
+        mar: 2,
+        apr: 3,
+        may: 4,
+        jun: 5,
+        jul: 6,
+        aug: 7,
+        sep: 8,
+        oct: 9,
+        nov: 10,
+        dec: 11,
+      };
+      if (monthMap[monthPrefix] !== undefined) {
+        return new Date(
+          parseInt(textMatch[3], 10),
+          monthMap[monthPrefix],
+          parseInt(textMatch[2], 10)
+        );
+      }
+    }
+
+    // Pattern 3: MM/DD/YYYY
+    const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (slashMatch) {
+      return new Date(
+        parseInt(slashMatch[3], 10),
+        parseInt(slashMatch[1], 10) - 1,
+        parseInt(slashMatch[2], 10)
+      );
+    }
+
+    const fallback = new Date(trimmed);
+    return isNaN(fallback.getTime()) ? null : fallback;
+  };
+
+  // Group requests by day in current active month
+  const requestsByDay = useMemo(() => {
+    const map: Record<number, RequestItem[]> = {};
+
+    requests.forEach((req) => {
+      const d = parseRequestDate(req.pickupDate) || parseRequestDate(req.date);
+      if (d && d.getFullYear() === year && d.getMonth() === month) {
+        const day = d.getDate();
+        if (!map[day]) map[day] = [];
+        map[day].push(req);
+      }
+    });
+
+    return map;
+  }, [requests, year, month]);
+
+  // Appointment counts: active appointments (reduced when claimed) vs done/claimed
+  const { activeThisMonth, doneThisMonth, totalThisMonth } = useMemo(() => {
+    let active = 0;
+    let done = 0;
+    let total = 0;
+    Object.values(requestsByDay).forEach((items) => {
+      items.forEach((item) => {
+        total++;
+        if (item.status === "Claimed") {
+          done++;
+        } else {
+          active++;
+        }
+      });
+    });
+    return { activeThisMonth: active, doneThisMonth: done, totalThisMonth: total };
+  }, [requestsByDay]);
+
+  const displayedRequests = useMemo(() => {
+    let list: RequestItem[] = [];
+
+    if (selectedDay !== null) {
+      list = requestsByDay[selectedDay] || [];
+    } else {
+      Object.keys(requestsByDay).forEach((key) => {
+        list.push(...requestsByDay[Number(key)]);
+      });
+    }
+
+    if (filterType === "active") {
+      list = list.filter((r) => r.status !== "Claimed");
+    } else if (filterType === "ready") {
+      list = list.filter((r) => r.status === "Ready for Claiming");
+    } else if (filterType === "processing") {
+      list = list.filter((r) => r.status === "Processing");
+    } else if (filterType === "done") {
+      list = list.filter((r) => r.status === "Claimed");
+    } else if (filterType === "mine" && currentUser) {
+      const studentIdClean = (currentUser.studentId || "").trim().toLowerCase();
+      const studentNameClean = (currentUser.name || "").trim().toLowerCase();
+      list = list.filter(
+        (r) =>
+          (r.studentId &&
+            r.studentId.trim().toLowerCase() === studentIdClean) ||
+          (r.student && r.student.trim().toLowerCase() === studentNameClean)
+      );
+    }
+
+    return list;
+  }, [requestsByDay, selectedDay, filterType, currentUser]);
+
+  const today = new Date();
+  const isCurrentMonth =
+    today.getFullYear() === year && today.getMonth() === month;
+
+  // Handle staff saving calendar schedule changes
+  const handleSaveCalendarSchedule = async (updated: {
+    pickupDate: string;
+    status: Status;
+    lineNumber: number;
+    priority: Priority;
+    remarks: string;
+  }) => {
+    if (!editingReq) return;
+
+    const token = localStorage.getItem("queueless_token");
+    setSavingEdit(true);
+
+    try {
+      if (token) {
+        await fetch(
+          `${API_URL}/api/requests/${encodeURIComponent(editingReq.id)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(updated),
+          }
+        );
+      }
+
+      const updatedItem: RequestItem = {
+        ...editingReq,
+        ...updated,
+      };
+
+      if (onUpdateRequest) {
+        onUpdateRequest(updatedItem);
+      }
+
+      if (updated.status === "Claimed") {
+        archiveClaimedRecord(updatedItem, currentUser?.name || "Registrar Staff");
+      }
+
+      setStatusNotice(`Schedule for ${editingReq.id} updated successfully.`);
+      setTimeout(() => setStatusNotice(""), 4000);
+      setEditingReq(null);
+    } catch (err) {
+      console.error("Calendar schedule save error:", err);
+      // Fallback local update
+      const updatedItem: RequestItem = {
+        ...editingReq,
+        ...updated,
+      };
+      if (onUpdateRequest) {
+        onUpdateRequest(updatedItem);
+      }
+      setEditingReq(null);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Registrar Pickup Calendar & Schedule"
+        className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-border pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Calendar className="size-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-display text-lg font-bold text-foreground">
+                  Registrar Pickup Calendar & Schedule
+                </h3>
+                {isStaffUser ? (
+                  <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-primary">
+                    Staff Mode (Editable)
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                    Student View
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Track document releasing dates, counter schedules, and claim deadlines
+              </p>
+            </div>
+          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onClose}
+            aria-label="Close calendar"
+            className="size-8 cursor-pointer"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        {statusNotice && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="size-4 shrink-0" />
+            <span>{statusNotice}</span>
+          </div>
+        )}
+
+        {/* Month Navigation & Controls */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h4 className="font-display text-base font-bold text-foreground">
+              {monthNames[month]} {year}
+            </h4>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+              {activeThisMonth} scheduled
+            </span>
+            {doneThisMonth > 0 && (
+              <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                ✓ {doneThisMonth} Done
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={jumpToToday}
+              className="h-8 text-xs font-semibold cursor-pointer"
+            >
+              Today
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={prevMonth}
+              aria-label="Previous Month"
+              className="size-8 cursor-pointer"
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={nextMonth}
+              aria-label="Next Month"
+              className="size-8 cursor-pointer"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">
+          {/* Day of Week Headers */}
+          <div className="grid grid-cols-7 border-b border-border bg-muted/40 text-center text-[11px] font-bold text-muted-foreground py-2">
+            <div>Sun</div>
+            <div>Mon</div>
+            <div>Tue</div>
+            <div>Wed</div>
+            <div>Thu</div>
+            <div>Fri</div>
+            <div>Sat</div>
+          </div>
+
+          {/* Days Grid */}
+          <div className="grid grid-cols-7 auto-rows-fr gap-px bg-border/60">
+            {/* Blank cells */}
+            {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+              <div
+                key={`blank-${i}`}
+                className="bg-card/40 min-h-[58px] sm:min-h-[68px] p-1.5 opacity-30"
+              />
+            ))}
+
+            {/* Days of month */}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const dayNum = i + 1;
+              const isToday = isCurrentMonth && today.getDate() === dayNum;
+              const isSelected = selectedDay === dayNum;
+              const dayRequests = requestsByDay[dayNum] || [];
+              const activeRequests = dayRequests.filter(
+                (r) => r.status !== "Claimed"
+              );
+              const doneRequests = dayRequests.filter(
+                (r) => r.status === "Claimed"
+              );
+              const activeCount = activeRequests.length;
+              const doneCount = doneRequests.length;
+
+              const hasReady = activeRequests.some(
+                (r) => r.status === "Ready for Claiming"
+              );
+              const hasProcessing = activeRequests.some(
+                (r) => r.status === "Processing"
+              );
+
+              return (
+                <button
+                  type="button"
+                  key={`day-${dayNum}`}
+                  onClick={() =>
+                    setSelectedDay(dayNum === selectedDay ? null : dayNum)
+                  }
+                  className={`relative min-h-[58px] sm:min-h-[68px] p-1.5 text-left transition flex flex-col justify-between ${
+                    isSelected
+                      ? "bg-primary/10 ring-2 ring-primary ring-inset z-10"
+                      : "bg-card hover:bg-muted/50 cursor-pointer"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`flex size-6 items-center justify-center rounded-full text-xs font-bold ${
+                        isToday
+                          ? "bg-primary text-primary-foreground font-black shadow-sm"
+                          : isSelected
+                          ? "text-primary font-black"
+                          : "text-foreground"
+                      }`}
+                    >
+                      {dayNum}
+                    </span>
+
+                    {/* Counter reduces when items are claimed! */}
+                    {activeCount > 0 ? (
+                      <span className="rounded-full bg-primary/15 px-1.5 py-0.2 text-[9px] font-black text-primary">
+                        {activeCount}
+                      </span>
+                    ) : doneCount > 0 ? (
+                      <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
+                        ✓ Done
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {activeCount > 0 ? (
+                    <div className="mt-1 flex items-center gap-1 flex-wrap">
+                      {hasReady && (
+                        <span
+                          className="size-2 rounded-full bg-emerald-500"
+                          title="Ready for Claiming"
+                        />
+                      )}
+                      {hasProcessing && (
+                        <span
+                          className="size-2 rounded-full bg-blue-500"
+                          title="Processing"
+                        />
+                      )}
+                      {!hasReady && !hasProcessing && (
+                        <span
+                          className="size-2 rounded-full bg-amber-500"
+                          title="Pending / Scheduled"
+                        />
+                      )}
+                      <span className="text-[9px] font-semibold text-muted-foreground truncate hidden sm:inline">
+                        {activeRequests[0].document.split(" ")[0]}
+                      </span>
+                    </div>
+                  ) : doneCount > 0 ? (
+                    <div className="mt-1 flex items-center gap-1 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="size-2.5 shrink-0" />
+                      <span className="truncate hidden sm:inline">All Claimed</span>
+                    </div>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground px-1">
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-emerald-500" /> Ready for Claiming
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-blue-500" /> Processing
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-amber-500" /> Pending / Scheduled
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-emerald-500 ring-2 ring-emerald-500/30" /> Done / Claimed (Reduced)
+            </span>
+          </div>
+          <span className="text-[10px] italic">
+            Counter Releasing Hours: 8:00 AM - 5:00 PM (Mon-Fri)
+          </span>
+        </div>
+
+        {/* Schedule List Filter & Heading */}
+        <div className="mt-5 border-t border-border pt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                {selectedDay !== null
+                  ? `Appointments on ${monthNames[month]} ${selectedDay}, ${year}`
+                  : `All Scheduled Pickups in ${monthNames[month]} ${year}`}
+              </h4>
+              <p className="text-xs text-foreground font-semibold mt-0.5">
+                {displayedRequests.length} document request(s) found
+              </p>
+            </div>
+
+            {/* Filter buttons */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                size="sm"
+                variant={filterType === "active" ? "default" : "outline"}
+                onClick={() => setFilterType("active")}
+                className="h-7 text-xs px-2.5 cursor-pointer"
+              >
+                Active ({activeThisMonth})
+              </Button>
+              <Button
+                size="sm"
+                variant={filterType === "all" ? "default" : "outline"}
+                onClick={() => setFilterType("all")}
+                className="h-7 text-xs px-2.5 cursor-pointer"
+              >
+                All ({totalThisMonth})
+              </Button>
+              <Button
+                size="sm"
+                variant={filterType === "ready" ? "default" : "outline"}
+                onClick={() => setFilterType("ready")}
+                className="h-7 text-xs px-2.5 cursor-pointer"
+              >
+                Ready
+              </Button>
+              <Button
+                size="sm"
+                variant={filterType === "processing" ? "default" : "outline"}
+                onClick={() => setFilterType("processing")}
+                className="h-7 text-xs px-2.5 cursor-pointer"
+              >
+                Processing
+              </Button>
+              <Button
+                size="sm"
+                variant={filterType === "done" ? "default" : "outline"}
+                onClick={() => setFilterType("done")}
+                className="h-7 text-xs px-2.5 cursor-pointer text-emerald-600 dark:text-emerald-400"
+              >
+                ✓ Done ({doneThisMonth})
+              </Button>
+              {currentUser?.role === "student" && (
+                <Button
+                  size="sm"
+                  variant={filterType === "mine" ? "default" : "outline"}
+                  onClick={() => setFilterType("mine")}
+                  className="h-7 text-xs px-2.5 cursor-pointer"
+                >
+                  My Requests
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* List of Requests */}
+          <div className="mt-3 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+            {displayedRequests.length > 0 ? (
+              displayedRequests.map((req) => (
+                <div
+                  key={req.id}
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-xl border p-3 shadow-xs transition ${
+                    req.status === "Claimed"
+                      ? "border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50"
+                      : "border-border bg-card hover:border-primary/40"
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div
+                      className={`flex size-9 shrink-0 items-center justify-center rounded-lg font-bold text-xs ${
+                        req.status === "Claimed"
+                          ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                          : "bg-primary/10 text-primary"
+                      }`}
+                    >
+                      {req.status === "Claimed" ? (
+                        <CheckCircle2 className="size-4" />
+                      ) : (
+                        `#${req.lineNumber ?? 1}`
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-foreground">
+                          {req.id}
+                        </span>
+                        <StatusBadge status={req.status} />
+                        {req.status === "Claimed" && (
+                          <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            ✓ Done & Released
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-semibold text-foreground mt-0.5">
+                        {req.document}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Student: {req.student} • Pickup:{" "}
+                        <span
+                          className={`font-medium ${
+                            req.status === "Claimed"
+                              ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                              : "text-foreground"
+                          }`}
+                        >
+                          {req.pickupDate || req.date}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    {/* Staff Only: Reschedule / Edit Schedule */}
+                    {isStaffUser && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingReq(req)}
+                        className="h-7 text-xs gap-1 cursor-pointer"
+                      >
+                        <Edit3 className="size-3.5" /> Edit Schedule
+                      </Button>
+                    )}
+
+                    {onSelectRequest && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          onSelectRequest(req);
+                          onClose();
+                        }}
+                        className="h-7 text-xs gap-1 cursor-pointer"
+                      >
+                        <FileText className="size-3.5" /> View Receipt
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-border py-8 text-center text-muted-foreground">
+                <Calendar className="mx-auto size-7 mb-1.5 opacity-40" />
+                <p className="text-xs font-medium">No pickup appointments scheduled</p>
+                <p className="text-[11px] opacity-75 mt-0.5">
+                  {selectedDay !== null
+                    ? `No releases scheduled for ${monthNames[month]} ${selectedDay}, ${year}. Click another day or filter.`
+                    : "No requests found matching the current filter."}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-5 flex items-center justify-end border-t border-border pt-3">
+          <Button size="sm" onClick={onClose} className="cursor-pointer">
+            Close
+          </Button>
+        </div>
+      </div>
+
+      {/* Staff Calendar Reschedule Modal */}
+      {editingReq && isStaffUser && (
+        <StaffCalendarEditModal
+          request={editingReq}
+          onClose={() => setEditingReq(null)}
+          onSave={handleSaveCalendarSchedule}
+          saving={savingEdit}
+        />
+      )}
     </div>
   );
 }
@@ -1971,13 +4726,20 @@ function DigitalReceiptModal({
   onClose,
   isStaff = false,
   onEdit,
+  onOpenCalendar,
 }: {
   request: RequestItem;
   onClose: () => void;
   isStaff?: boolean;
   onEdit?: () => void;
+  onOpenCalendar?: () => void;
 }) {
-  const lineNum = request.lineNumber ?? 1;
+  const [currentReq, setCurrentReq] = useState<RequestItem>(request);
+  const [showInternalEdit, setShowInternalEdit] = useState(false);
+  const [internalSaving, setInternalSaving] = useState(false);
+  const [editFlash, setEditFlash] = useState("");
+
+  const lineNum = currentReq.lineNumber ?? 1;
 
   const getPriorityBadge = (p?: Priority) => {
     if (p === "Urgent") {
@@ -2002,37 +4764,105 @@ function DigitalReceiptModal({
   };
 
   const getQueueDescription = () => {
-    if (request.status === "Ready for Claiming") {
+    if (currentReq.status === "Ready for Claiming") {
       return "Ready for claiming! Please proceed to the registrar counter.";
     }
-    if (request.status === "Processing") {
+    if (currentReq.status === "Processing") {
       return "Being processed right now by registrar staff (Active Priority).";
     }
-    if (request.status === "Claimed") {
-      return "This document request has been claimed and completed.";
+    if (currentReq.status === "Claimed") {
+      return "This document request has been claimed and permanently archived.";
     }
-    if (request.status === "Needs Correction") {
+    if (currentReq.status === "Needs Correction") {
       return "Correction required: please review registrar notes below.";
     }
     return `You are in line at position #${lineNum}. Track priority and status here.`;
   };
 
+  const handleSaveReceiptEdit = async (updated: {
+    lineNumber: number;
+    priority: Priority;
+    status: Status;
+    remarks: string;
+    pickupDate: string;
+    copies: number;
+    document: string;
+    purpose: string;
+  }) => {
+    try {
+      setInternalSaving(true);
+      const token = localStorage.getItem("queueless_token");
+
+      if (token) {
+        await fetch(
+          `${API_URL}/api/requests/${encodeURIComponent(currentReq.id)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(updated),
+          }
+        );
+      }
+
+      const updatedItem: RequestItem = {
+        ...currentReq,
+        ...updated,
+      };
+
+      setCurrentReq(updatedItem);
+
+      if (updated.status === "Claimed") {
+        archiveClaimedRecord(updatedItem, "Registrar Staff");
+      }
+
+      if (onEdit) {
+        onEdit();
+      }
+
+      setEditFlash("Receipt & line details updated successfully.");
+      setTimeout(() => setEditFlash(""), 3500);
+      setShowInternalEdit(false);
+    } catch (err) {
+      console.error("Save receipt error:", err);
+      setCurrentReq((prev) => ({ ...prev, ...updated }));
+      setShowInternalEdit(false);
+    } finally {
+      setInternalSaving(false);
+    }
+  };
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150 print:relative print:inset-auto print:bg-white print:p-0 print:block print-receipt-container"
       onClick={onClose}
     >
       <section
         role="dialog"
         aria-modal="true"
         aria-label="Digital Request Receipt"
-        className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl"
+        className="relative w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl print:border-none print:shadow-none print:max-w-full print:p-0 print-receipt-card"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between border-b border-border pb-4">
+        {/* Official Print Letterhead (Print-only) */}
+        <div className="hidden print:block text-center border-b-2 border-black pb-4 mb-5">
+          <h1 className="text-xl font-bold uppercase tracking-wider text-black">
+            PHINMA UNIVERSITY OF PANGASINAN
+          </h1>
+          <p className="text-xs uppercase tracking-wide text-black font-semibold">
+            Office of the University Registrar • Arellano Street, Dagupan City, Pangasinan
+          </p>
+          <p className="text-xs font-black uppercase mt-1.5 text-black tracking-widest border border-black inline-block px-3 py-0.5">
+            Official Student Document Release & Claim Slip
+          </p>
+        </div>
+
+        {/* Modal Header */}
+        <div className="flex items-start justify-between border-b border-border pb-4 print:hidden">
           <div className="flex items-center gap-3">
-            <div className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <FileCheck2 className="size-6" />
             </div>
             <div>
@@ -2053,16 +4883,24 @@ function DigitalReceiptModal({
             variant="ghost"
             onClick={onClose}
             aria-label="Close receipt"
+            className="cursor-pointer"
           >
             <X className="size-4" />
           </Button>
         </div>
 
+        {editFlash && (
+          <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 print:hidden">
+            <CheckCircle2 className="size-4 shrink-0" />
+            <span>{editFlash}</span>
+          </div>
+        )}
+
         {/* Priority Line Number Banner */}
-        <div className="mt-5 overflow-hidden rounded-xl border border-primary/30 bg-primary/5 p-4">
+        <div className="mt-5 overflow-hidden rounded-xl border border-primary/30 bg-primary/5 p-4 print:border-black print:bg-white print:p-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex flex-col items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-primary-foreground shadow-sm min-w-[72px]">
+              <div className="flex flex-col items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-primary-foreground shadow-sm min-w-[72px] print:bg-black print:text-white">
                 <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">
                   Line No.
                 </span>
@@ -2070,31 +4908,31 @@ function DigitalReceiptModal({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-foreground">
+                  <span className="text-xs font-bold text-foreground print:text-black">
                     Queue Sequence & Priority
                   </span>
-                  {getPriorityBadge(request.priority)}
+                  {getPriorityBadge(currentReq.priority)}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground print:text-gray-700">
                   {getQueueDescription()}
                 </p>
               </div>
             </div>
 
             <div className="shrink-0 self-start sm:self-auto">
-              <StatusBadge status={request.status} />
+              <StatusBadge status={currentReq.status} />
             </div>
           </div>
 
-          {/* Step Progress Tracker */}
-          <div className="mt-4 border-t border-primary/10 pt-3">
+          {/* Step Progress Tracker (Screen only) */}
+          <div className="mt-4 border-t border-primary/10 pt-3 print:hidden">
             <div className="grid grid-cols-4 gap-1 text-center text-[10px]">
               <div className="rounded py-1 font-semibold bg-primary text-primary-foreground">
                 1. Submitted
               </div>
               <div
                 className={`rounded py-1 font-semibold ${
-                  request.status !== "Needs Correction"
+                  currentReq.status !== "Needs Correction"
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground"
                 }`}
@@ -2103,9 +4941,9 @@ function DigitalReceiptModal({
               </div>
               <div
                 className={`rounded py-1 font-semibold ${
-                  request.status === "Processing" ||
-                  request.status === "Ready for Claiming" ||
-                  request.status === "Claimed"
+                  currentReq.status === "Processing" ||
+                  currentReq.status === "Ready for Claiming" ||
+                  currentReq.status === "Claimed"
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground"
                 }`}
@@ -2114,8 +4952,8 @@ function DigitalReceiptModal({
               </div>
               <div
                 className={`rounded py-1 font-semibold ${
-                  request.status === "Ready for Claiming" ||
-                  request.status === "Claimed"
+                  currentReq.status === "Ready for Claiming" ||
+                  currentReq.status === "Claimed"
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted text-muted-foreground"
                 }`}
@@ -2127,57 +4965,111 @@ function DigitalReceiptModal({
         </div>
 
         {/* Receipt Details Grid */}
-        <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-xs">
-          <ReceiptField label="Request Reference" value={request.id} />
-          <ReceiptField label="Submission Date" value={request.date} />
-          <ReceiptField label="Student Name" value={request.student} />
-          <ReceiptField label="Student ID Number" value={request.studentId} />
-          <ReceiptField label="Document Requested" value={request.document} />
+        <div className="mt-5 grid grid-cols-2 gap-4 border-y border-border py-4 text-xs print:border-black print:py-3">
+          <ReceiptField label="Request Reference" value={currentReq.id} />
+          <ReceiptField label="Submission Date" value={currentReq.date} />
+          <ReceiptField label="Student Name" value={currentReq.student} />
+          <ReceiptField label="Student ID Number" value={currentReq.studentId} />
+          <ReceiptField label="Document Requested" value={currentReq.document} />
           <ReceiptField
             label="Number of Copies"
-            value={`${request.copies || 1} copy`}
+            value={`${currentReq.copies || 1} ${currentReq.copies === 1 ? "copy" : "copies"}`}
           />
-          <ReceiptField label="Purpose" value={request.purpose} />
+          <ReceiptField label="Purpose" value={currentReq.purpose} />
           <ReceiptField
             label="Pickup Window / Schedule"
-            value={request.pickupDate || "Standard registrar schedule"}
+            value={currentReq.pickupDate || "Standard registrar schedule"}
           />
         </div>
 
         {/* Registrar Instructions / Notes */}
-        {request.remarks && (
-          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200">
+        {currentReq.remarks && (
+          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-900 dark:text-amber-200 print:border-black print:bg-white print:text-black">
             <p className="font-bold flex items-center gap-1.5">
               <span>📋 Registrar Notes & Counter Instructions:</span>
             </p>
-            <p className="mt-1 font-medium">{request.remarks}</p>
+            <p className="mt-1 font-medium">{currentReq.remarks}</p>
           </div>
         )}
 
+        {/* Scheduled Pickup & Calendar Information Box */}
+        <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 print:border-black print:bg-white">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary print:hidden">
+              <Calendar className="size-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground print:text-black">
+                Scheduled Pickup: {currentReq.pickupDate || "Standard Schedule"}
+              </p>
+              <p className="text-[11px] text-muted-foreground print:text-gray-700">
+                {currentReq.status === "Ready for Claiming"
+                  ? "✓ Verified & ready for counter pickup. Please present your student ID."
+                  : currentReq.status === "Processing"
+                  ? "Currently in preparation for scheduled counter releasing."
+                  : "Target release window. You will be notified once ready."}
+              </p>
+            </div>
+          </div>
+
+          {onOpenCalendar && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onOpenCalendar}
+              className="h-7 text-xs gap-1.5 shrink-0 self-start sm:self-auto print:hidden cursor-pointer"
+            >
+              <Calendar className="size-3.5" /> View Calendar
+            </Button>
+          )}
+        </div>
+
         {/* Digital Verification & Stamp */}
-        <div className="mt-4 flex flex-col items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 p-3 text-center sm:flex-row sm:text-left">
+        <div className="mt-4 flex flex-col items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 p-3 text-center sm:flex-row sm:text-left print:border-black print:bg-white">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded bg-foreground/5 text-foreground">
+            <div className="flex size-9 items-center justify-center rounded bg-foreground/5 text-foreground print:hidden">
               <QrCode className="size-5" />
             </div>
             <div>
-              <p className="font-mono text-[11px] font-bold text-foreground">
-                VERIFIED-REC-{request.id}
+              <p className="font-mono text-[11px] font-bold text-foreground print:text-black">
+                VERIFIED-REC-{currentReq.id}
               </p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[10px] text-muted-foreground print:text-gray-700">
                 Digital QueueLess Verification Stamp • PHINMA UPANG
               </p>
             </div>
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[10px] text-muted-foreground print:text-gray-700">
             Present school ID when claiming.
           </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
-          {isStaff && onEdit && (
-            <Button variant="outline" size="sm" onClick={onEdit}>
+        {/* Official Print Signature Lines (Visible in Print Only) */}
+        <div className="hidden print:grid grid-cols-2 gap-8 border-t-2 border-black pt-6 mt-8 text-center text-xs text-black">
+          <div>
+            <div className="border-b border-black w-3/4 mx-auto mb-1 h-10"></div>
+            <p className="font-bold text-black">{currentReq.student}</p>
+            <p className="text-[10px] text-gray-700">Student / Authorized Receiver Signature</p>
+            <p className="text-[9px] text-gray-500 font-mono mt-0.5">ID: {currentReq.studentId}</p>
+          </div>
+          <div>
+            <div className="border-b border-black w-3/4 mx-auto mb-1 h-10"></div>
+            <p className="font-bold text-black">Registrar Releasing Officer</p>
+            <p className="text-[10px] text-gray-700">Counter Signature & University Seal Stamp</p>
+            <p className="text-[9px] text-gray-500 font-mono mt-0.5">Counter Window Releasing</p>
+          </div>
+        </div>
+
+        {/* Action Buttons (Screen Only) */}
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2 print:hidden">
+          {isStaff && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowInternalEdit(true)}
+              className="gap-1.5 cursor-pointer"
+            >
               <Edit3 className="size-3.5" /> Edit Receipt & Line
             </Button>
           )}
@@ -2185,14 +5077,25 @@ function DigitalReceiptModal({
             variant="outline"
             size="sm"
             onClick={() => window.print()}
+            className="gap-1.5 cursor-pointer"
           >
             <Printer className="size-3.5" /> Print Receipt
           </Button>
-          <Button size="sm" onClick={onClose}>
+          <Button size="sm" onClick={onClose} className="cursor-pointer">
             Close
           </Button>
         </div>
       </section>
+
+      {/* Staff Edit Modal */}
+      {showInternalEdit && (
+        <EditReceiptModal
+          request={currentReq}
+          onClose={() => setShowInternalEdit(false)}
+          onSave={handleSaveReceiptEdit}
+          loading={internalSaving}
+        />
+      )}
     </div>
   );
 }
@@ -2384,7 +5287,7 @@ function ManageRequests({
   setFlash: (f: Flash) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("All");
+  const [status, setStatus] = useState("Active");
 
   // Receipt view and edit modals
   const [viewingReceipt, setViewingReceipt] = useState<RequestItem | null>(null);
@@ -2394,14 +5297,28 @@ function ManageRequests({
   const shown = useMemo(
     () =>
       requests
-        .filter(
-          (r) =>
-            (status === "All" || r.status === status) &&
-            `${r.id} ${r.student} ${r.document} line #${r.lineNumber ?? 1}`
-              .toLowerCase()
-              .includes(query.toLowerCase())
-        )
-        .sort((a, b) => (a.lineNumber ?? 0) - (b.lineNumber ?? 0)),
+        .filter((r) => {
+          // If status is "Active", remove Claimed/Done items so new requests come there!
+          const statusMatch =
+            status === "Active"
+              ? r.status !== "Claimed"
+              : status === "All"
+              ? true
+              : r.status === status;
+
+          const queryMatch = `${r.id} ${r.student} ${r.document} line #${r.lineNumber ?? 1}`
+            .toLowerCase()
+            .includes(query.toLowerCase());
+
+          return statusMatch && queryMatch;
+        })
+        .sort((a, b) => {
+          const pWeight = { Urgent: 3, Priority: 2, Regular: 1 };
+          const wA = pWeight[a.priority ?? "Regular"] ?? 1;
+          const wB = pWeight[b.priority ?? "Regular"] ?? 1;
+          if (wA !== wB) return wB - wA;
+          return (a.lineNumber ?? 0) - (b.lineNumber ?? 0);
+        }),
     [requests, query, status]
   );
 
@@ -2443,6 +5360,16 @@ function ManageRequests({
             : r
         )
       );
+
+      if (result.request.status === "Claimed") {
+        const found = requests.find((r) => r.id === id);
+        if (found) {
+          archiveClaimedRecord(
+            { ...found, status: "Claimed" },
+            "Registrar Staff"
+          );
+        }
+      }
 
       setFlash({
         tone: "success",
@@ -2510,8 +5437,8 @@ function ManageRequests({
         requests.map((r) => (r.id === editingReceipt.id ? updatedItem : r))
       );
 
-      if (viewingReceipt && viewingReceipt.id === editingReceipt.id) {
-        setViewingReceipt(updatedItem);
+      if (updated.status === "Claimed") {
+        archiveClaimedRecord(updatedItem, "Registrar Staff");
       }
 
       setEditingReceipt(null);
@@ -2558,20 +5485,36 @@ function ManageRequests({
           aria-label="Filter by status"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="field sm:w-52"
+          className="field sm:w-56 font-medium"
         >
-          <option>All</option>
-          {[
-            "Pending",
-            "Processing",
-            "Ready for Claiming",
-            "Claimed",
-            "Needs Correction",
-          ].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
+          <option value="Active">Active Queue (Excludes Claimed)</option>
+          <option value="All">All Requests (Including Claimed)</option>
+          <option value="Pending">Pending</option>
+          <option value="Processing">Processing</option>
+          <option value="Ready for Claiming">Ready for Claiming</option>
+          <option value="Needs Correction">Needs Correction</option>
+          <option value="Claimed">Claimed / Done (Archived)</option>
         </select>
       </div>
+
+      {/* Claimed Archival Notice */}
+      {status === "Active" && requests.some((r) => r.status === "Claimed") && (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+            <span>
+              {requests.filter((r) => r.status === "Claimed").length} completed/claimed document(s) have been removed from the active queue and stored in the <strong>Claimed Documents Backup Vault</strong>.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setStatus("Claimed")}
+            className="text-primary hover:underline font-semibold shrink-0 cursor-pointer"
+          >
+            Show Claimed
+          </button>
+        </div>
+      )}
 
       {/* Requests table */}
       <div className="mt-4 overflow-x-auto rounded-md border border-border bg-card">
@@ -2722,16 +5665,25 @@ function AdminView({
   navigate,
   requests,
   setFlash,
+  users = [],
+  onUsersUpdated,
+  onOpenCalendar,
 }: {
   view: View;
   navigate: (v: View) => void;
   requests: RequestItem[];
   setFlash: (f: Flash) => void;
+  users?: AccountUser[];
+  onUsersUpdated?: () => void;
+  onOpenCalendar?: () => void;
 }) {
+  const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
+
   if (view === "users") {
     return (
       <UsersPanel
         setFlash={setFlash}
+        onUsersUpdated={onUsersUpdated}
       />
     );
   }
@@ -2744,6 +5696,8 @@ function AdminView({
     );
   }
 
+  const pendingCount = users.filter((u) => u.approvalStatus === "pending").length;
+
   return (
     <div className="animate-rise">
       <PageHeading
@@ -2752,10 +5706,33 @@ function AdminView({
         text="Manage access, document types, and system records."
       />
 
+      {pendingCount > 0 && (
+        <div className="mt-6 flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between text-amber-950 dark:text-amber-200">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <p className="font-bold text-sm">
+                {pendingCount} Student Application{pendingCount > 1 ? "s" : ""} Pending Review
+              </p>
+              <p className="text-xs opacity-90">
+                New student registrations are waiting for admission verification.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white shrink-0 font-bold cursor-pointer"
+            onClick={() => navigate("users")}
+          >
+            Review Applications →
+          </Button>
+        </div>
+      )}
+
       <div className="mt-8 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Metric
           label="User accounts"
-          value={127}
+          value={users.length}
           icon={<UsersRound />}
         />
 
@@ -2826,26 +5803,29 @@ function AdminView({
               0,
               3
             )}
+            onSelect={setSelectedReceipt}
           />
         </div>
       </section>
+
+      {selectedReceipt && (
+        <DigitalReceiptModal
+          request={selectedReceipt}
+          onClose={() => setSelectedReceipt(null)}
+          isStaff={true}
+          onOpenCalendar={onOpenCalendar}
+        />
+      )}
     </div>
   );
 }
 
-type AccountUser = {
-  id: string;
-  name: string;
-  studentId?: string;
-  email: string;
-  role: string;
-  createdAt?: string;
-};
-
 function UsersPanel({
   setFlash,
+  onUsersUpdated,
 }: {
   setFlash: (f: Flash) => void;
+  onUsersUpdated?: () => void;
 }) {
   const [users, setUsers] = useState<AccountUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2854,7 +5834,7 @@ function UsersPanel({
   // Search & Role Filter
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<
-    "all" | "student" | "staff" | "admin"
+    "all" | "pending" | "student" | "staff" | "admin"
   >("all");
 
   // Add Staff Form state
@@ -2914,6 +5894,7 @@ function UsersPanel({
       }
 
       setUsers(data.users || []);
+      onUsersUpdated?.();
     } catch (err) {
       console.error("Fetch users error:", err);
       setError(
@@ -2926,6 +5907,7 @@ function UsersPanel({
 
   useEffect(() => {
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Step 1: Form Validation before showing Confirmation Modal
@@ -3015,11 +5997,12 @@ function UsersPanel({
       }
 
       // Prepend to local users list
+      const createdStaff = result.user as { id?: string; _id?: string; name: string; studentId?: string };
       setUsers((prev) => [
         {
           id:
-            (result.user as any).id ||
-            (result.user as any)._id ||
+            createdStaff.id ||
+            createdStaff._id ||
             `staff-${Date.now()}`,
           name: result.user.name,
           studentId: result.user.studentId,
@@ -3119,12 +6102,70 @@ function UsersPanel({
     }
   };
 
+  const handleApproveUser = async (u: AccountUser) => {
+    const token = localStorage.getItem("queueless_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/users/${u.id}/approve`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to admit account.");
+
+      setFlash({
+        tone: "success",
+        text: `${u.name} has been admitted/approved.`,
+      });
+      fetchUsers();
+    } catch (err) {
+      setFlash({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Failed to admit account.",
+      });
+    }
+  };
+
+  const handleRejectUser = async (u: AccountUser) => {
+    const token = localStorage.getItem("queueless_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/users/${u.id}/reject`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to reject account.");
+
+      setFlash({
+        tone: "success",
+        text: `${u.name}'s registration has been rejected.`,
+      });
+      fetchUsers();
+    } catch (err) {
+      setFlash({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Failed to reject account.",
+      });
+    }
+  };
+
   // Filtered accounts
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const roleMatch =
         roleFilter === "all"
           ? true
+          : roleFilter === "pending"
+          ? u.approvalStatus === "pending"
           : u.role.toLowerCase() === roleFilter.toLowerCase();
       const q = searchTerm.toLowerCase().trim();
       const searchMatch =
@@ -3139,6 +6180,7 @@ function UsersPanel({
   const counts = useMemo(() => {
     return {
       all: users.length,
+      pending: users.filter((u) => u.approvalStatus === "pending").length,
       student: users.filter((u) => u.role.toLowerCase() === "student").length,
       staff: users.filter((u) => u.role.toLowerCase() === "staff").length,
       admin: users.filter((u) => u.role.toLowerCase() === "admin").length,
@@ -3321,14 +6363,19 @@ function UsersPanel({
             </button>
             <button
               type="button"
-              onClick={() => setRoleFilter("staff")}
-              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-                roleFilter === "staff"
-                  ? "bg-primary text-primary-foreground"
+              onClick={() => setRoleFilter("pending")}
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                roleFilter === "pending"
+                  ? "bg-amber-600 text-white font-bold"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              Staff ({counts.staff})
+              <span>Pending Review</span>
+              {counts.pending > 0 && (
+                <span className="rounded-full bg-amber-100 text-amber-900 px-1.5 py-0.2 text-[10px] font-extrabold">
+                  {counts.pending}
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -3340,6 +6387,17 @@ function UsersPanel({
               }`}
             >
               Students ({counts.student})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoleFilter("staff")}
+              className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                roleFilter === "staff"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Staff ({counts.staff})
             </button>
             <button
               type="button"
@@ -3414,6 +6472,16 @@ function UsersPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-bold text-foreground">{u.name}</p>
                   {getRoleBadge(u.role)}
+                  {u.approvalStatus === "pending" && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                      <Clock3 className="size-3" /> Pending Review (24h)
+                    </span>
+                  )}
+                  {u.approvalStatus === "rejected" && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-400">
+                      <X className="size-3" /> Rejected
+                    </span>
+                  )}
                   {isCurrentUser && (
                     <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                       You
@@ -3427,6 +6495,35 @@ function UsersPanel({
               </div>
 
               <div className="flex items-center gap-2">
+                {u.approvalStatus === "pending" && (
+                  <>
+                    <Button
+                      size="sm"
+                      className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1"
+                      onClick={() => handleApproveUser(u)}
+                    >
+                      <Check className="size-3.5" /> Admit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 text-xs gap-1"
+                      onClick={() => handleRejectUser(u)}
+                    >
+                      <X className="size-3.5" /> Reject
+                    </Button>
+                  </>
+                )}
+                {u.approvalStatus === "rejected" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs gap-1"
+                    onClick={() => handleApproveUser(u)}
+                  >
+                    <Check className="size-3.5" /> Admit
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -3436,7 +6533,7 @@ function UsersPanel({
                       ? "You cannot delete your own active admin account"
                       : `Delete ${u.name}`
                   }
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive text-xs"
                   onClick={() => handlePromptDelete(u)}
                 >
                   <Trash2 className="size-3.5" /> Remove
@@ -3770,12 +6867,24 @@ function RequestCards({
             onClick={() => onSelect?.(r)}
           >
             {/* Line number priority badge */}
-            <div className="flex sm:flex-col items-center justify-center rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 min-w-[70px] text-center">
+            <div
+              className={`flex sm:flex-col items-center justify-center rounded-lg border px-3 py-1.5 min-w-[70px] text-center ${
+                r.status === "Claimed"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  : "border-primary/20 bg-primary/10 text-primary"
+              }`}
+            >
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1 sm:mr-0">
-                Line
+                {r.status === "Claimed" ? "Done" : "Line"}
               </span>
-              <span className="text-base font-black text-primary">
-                #{r.lineNumber ?? 1}
+              <span
+                className={`text-base font-black ${
+                  r.status === "Claimed"
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-primary"
+                }`}
+              >
+                {r.status === "Claimed" ? "✓" : `#${r.lineNumber ?? 1}`}
               </span>
             </div>
 
@@ -3975,23 +7084,27 @@ function StatusBadge({
   status: Status;
 }) {
   const tone =
-    status ===
-    "Ready for Claiming"
-      ? "bg-success-soft text-success"
+    status === "Ready for Claiming"
+      ? "bg-success-soft text-success border border-emerald-500/30"
       : status === "Processing"
-      ? "bg-info-soft text-info"
+      ? "bg-info-soft text-info border border-blue-500/30"
       : status === "Claimed"
-      ? "bg-primary text-primary-foreground"
-      : status ===
-        "Needs Correction"
-      ? "bg-warning-soft text-warning-foreground"
-      : "bg-muted text-muted-foreground";
+      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40"
+      : status === "Needs Correction"
+      ? "bg-warning-soft text-warning-foreground border border-amber-500/30"
+      : "bg-muted text-muted-foreground border border-border";
 
   return (
     <span
-      className={`${tone} inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold`}
+      className={`${tone} inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold`}
     >
-      {status}
+      {status === "Claimed" ? (
+        <>
+          <CheckCircle2 className="size-3 text-emerald-600 dark:text-emerald-400" /> Done / Claimed
+        </>
+      ) : (
+        status
+      )}
     </span>
   );
 }
@@ -4098,25 +7211,85 @@ function FlashMessage({
 function Notice({
   title,
   text,
+  tone = "info",
+  time,
+  isUnread = false,
+  onClick,
 }: {
   title: string;
   text: string;
+  tone?: "success" | "warning" | "info" | "urgent";
+  time?: string;
+  isUnread?: boolean;
+  onClick?: () => void;
 }) {
+  const getIcon = () => {
+    switch (tone) {
+      case "urgent":
+        return <AlertTriangle className="size-4 text-destructive" />;
+      case "warning":
+        return <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />;
+      case "success":
+        return <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />;
+      default:
+        return <Clock3 className="size-4 text-blue-600 dark:text-blue-400" />;
+    }
+  };
+
+  const getIconBg = () => {
+    switch (tone) {
+      case "urgent":
+        return "bg-destructive/15 text-destructive border-destructive/20";
+      case "warning":
+        return "bg-amber-500/15 text-amber-600 border-amber-500/20";
+      case "success":
+        return "bg-emerald-500/15 text-emerald-600 border-emerald-500/20";
+      default:
+        return "bg-blue-500/15 text-blue-600 border-blue-500/20";
+    }
+  };
+
   return (
-    <div className="flex gap-3 rounded-md bg-muted p-3">
-      <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-success-soft text-success">
-        <Check className="size-4" />
+    <div
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      className={`group relative flex gap-3 rounded-lg border p-3 text-left transition ${
+        isUnread
+          ? "border-primary/40 bg-primary/5 shadow-xs hover:bg-primary/10"
+          : "border-border/60 bg-muted/40 hover:bg-muted"
+      } ${onClick ? "cursor-pointer" : ""}`}
+    >
+      <div
+        className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border ${getIconBg()}`}
+      >
+        {getIcon()}
       </div>
 
-      <div>
-        <p className="text-xs font-bold">
-          {title}
-        </p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-1">
+          <p className="text-xs font-bold text-foreground truncate">{title}</p>
+          {time && (
+            <span className="shrink-0 text-[10px] text-muted-foreground font-medium">
+              {time}
+            </span>
+          )}
+        </div>
 
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">
           {text}
         </p>
+
+        {onClick && (
+          <p className="mt-1.5 text-[10px] font-semibold text-primary group-hover:underline flex items-center gap-1">
+            Open details <ChevronRight className="size-3" />
+          </p>
+        )}
       </div>
+
+      {isUnread && (
+        <span className="absolute top-3 right-2 size-2 rounded-full bg-primary" />
+      )}
     </div>
   );
 }
