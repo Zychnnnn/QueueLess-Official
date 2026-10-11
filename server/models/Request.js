@@ -15,6 +15,10 @@ const requestSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    phone: {
+      type: String,
+      default: "",
+    },
     document: {
       type: String,
       required: true,

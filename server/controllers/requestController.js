@@ -68,6 +68,7 @@ export const createRequest = async (req, res) => {
       pickupDate: req.body.pickupDate || "",
       student: user.name,
       studentId: user.studentId,
+      phone: req.body.phone || user.phone || "",
       document,
       purpose,
       remarks: remarks || "",
@@ -92,8 +93,8 @@ export const getRequests = async (req, res) => {
   try {
     let requests;
 
-    // Students can only see their own requests
-    if (req.user.role === "student") {
+    // Students and guests can only see their own requests
+    if (req.user.role === "student" || req.user.role === "guest") {
       const user = await User.findById(req.user.id);
 
       if (!user) {
@@ -205,6 +206,7 @@ export const updateRequest = async (req, res) => {
     const updateFields = {};
     if (status !== undefined) updateFields.status = status;
     if (remarks !== undefined) updateFields.remarks = remarks;
+    if (phone !== undefined) updateFields.phone = phone;
     if (lineNumber !== undefined && lineNumber !== null) {
       updateFields.lineNumber = Number(lineNumber);
     }

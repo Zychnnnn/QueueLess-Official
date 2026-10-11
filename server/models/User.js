@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["student", "staff", "admin"],
+      enum: ["student", "staff", "admin", "guest"],
       default: "student",
     },
 
@@ -58,6 +58,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "approved", "rejected"],
       default: "approved",
+    },
+
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    lastLogin: {
+      type: Date,
     },
   },
   {

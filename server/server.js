@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dns from "dns";
+import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
@@ -63,11 +65,19 @@ app.use(limiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/requests", requestRoutes);
 
-app.get("/", (req, res) => {
-  res.json({
-    message: "QueueLess API is running",
+const staticPath = path.resolve(process.cwd(), ".output", "public");
+if (fs.existsSync(staticPath)) {
+  app.use(express.static(staticPath));
+  app.get(/^(?!\/api).*/, (req, res) => {
+    res.sendFile(path.join(staticPath, "index.html"));
   });
-});
+} else {
+  app.get("/", (req, res) => {
+    res.json({
+      message: "QueueLess API is running",
+    });
+  });
+}
 
 app.use((error, req, res, next) => {
   console.error("Unhandled API error:", error);

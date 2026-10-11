@@ -17,6 +17,7 @@ import {
   Calendar,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -32,6 +33,7 @@ import {
   LogOut,
   Menu,
   Plus,
+  Phone,
   Printer,
   QrCode,
   RefreshCw,
@@ -87,14 +89,15 @@ async function readApiResponse(
   }
 }
 
-type Role = "student" | "staff" | "admin";
+type Role = "student" | "staff" | "admin" | "guest";
 
 type View =
   | "dashboard"
   | "new"
   | "requests"
   | "users"
-  | "documents";
+  | "documents"
+  | "profile";
 
 type Status =
   | "Pending"
@@ -109,6 +112,7 @@ type RequestItem = {
   id: string;
   student: string;
   studentId: string;
+  phone?: string;
   document: string;
   purpose: string;
   date: string;
@@ -132,6 +136,8 @@ type AuthUser = {
   email: string;
   role: Role;
   picture?: string;
+  phone?: string;
+  lastLogin?: string;
   isPriority?: boolean;
   userType?: "priority" | "normal";
 };
@@ -141,6 +147,8 @@ type AccountUser = {
   name: string;
   studentId?: string;
   email: string;
+  phone?: string;
+  lastLogin?: string;
   role: string;
   isPriority?: boolean;
   userType?: "priority" | "normal";
@@ -396,6 +404,11 @@ function QueueLessApp() {
       const user: AuthUser =
         JSON.parse(savedUser);
 
+      if (!user.lastLogin) {
+        user.lastLogin = new Date().toISOString();
+        localStorage.setItem("queueless_user", JSON.stringify(user));
+      }
+
       setCurrentUser(user);
       setRole(user.role);
       setSignedIn(true);
@@ -444,6 +457,7 @@ function QueueLessApp() {
               id: String(request.requestNumber ?? ""),
               student: String(request.student ?? ""),
               studentId: String(request.studentId ?? ""),
+              phone: String(request.phone ?? ""),
               document: String(request.document ?? ""),
               purpose: String(request.purpose ?? ""),
               date: String(request.date ?? ""),
@@ -513,17 +527,21 @@ function QueueLessApp() {
   const handleSignIn = async (
     user: AuthUser
   ) => {
-    setCurrentUser(user);
-    setRole(user.role);
+    const userWithLogin: AuthUser = {
+      ...user,
+      lastLogin: user.lastLogin || new Date().toISOString(),
+    };
+    setCurrentUser(userWithLogin);
+    setRole(userWithLogin.role);
     setSignedIn(true);
 
-    if (user.role === "admin") {
+    if (userWithLogin.role === "admin") {
       fetchAdminUsers();
     }
 
     localStorage.setItem(
       "queueless_user",
-      JSON.stringify(user)
+      JSON.stringify(userWithLogin)
     );
 
     setFlash({
@@ -570,6 +588,7 @@ function QueueLessApp() {
           id: String(request.requestNumber ?? ""),
           student: String(request.student ?? ""),
           studentId: String(request.studentId ?? ""),
+          phone: String(request.phone ?? ""),
           document: String(request.document ?? ""),
           purpose: String(request.purpose ?? ""),
           date: String(request.date ?? ""),
@@ -1038,8 +1057,21 @@ function QueueLessApp() {
               )}
             </Button>
 
-            <div className="ml-2 hidden items-center gap-3 border-l border-border pl-4 md:flex">
-              <div className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground">
+            <button
+              type="button"
+              onClick={() => {
+                if (role === "student" || role === "guest") {
+                  navigate("profile");
+                }
+              }}
+              title={role === "student" || role === "guest" ? "Click to open My Profile & Password" : undefined}
+              className={`ml-2 hidden items-center gap-3 border-l border-border pl-4 md:flex text-left transition rounded-xl py-1 px-2 -mr-2 ${
+                role === "student" || role === "guest"
+                  ? "hover:bg-accent/60 cursor-pointer group"
+                  : ""
+              }`}
+            >
+              <div className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-primary text-primary-foreground ring-2 ring-transparent group-hover:ring-primary/40 transition">
                 {currentUser?.picture ? (
                   <img
                     src={currentUser.picture}
@@ -1053,7 +1085,7 @@ function QueueLessApp() {
 
               <div>
                 <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-bold">
+                  <p className="text-sm font-bold group-hover:text-primary transition">
                     {name}
                   </p>
                   {role === "student" && (
@@ -1063,19 +1095,26 @@ function QueueLessApp() {
                       </span>
                     ) : (
                       <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground border border-border">
-                        Normal User
+                        Guest
                       </span>
                     )
+                  )}
+                  {role === "guest" && (
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground border border-border">
+                      Guest
+                    </span>
                   )}
                 </div>
 
                 <p className="text-xs capitalize text-muted-foreground">
                   {role === "staff"
                     ? "Registrar staff"
+                    : role === "guest" || currentUser?.userType === "normal" || currentUser?.studentId?.startsWith("GUEST")
+                    ? "Guest"
                     : role}
                 </p>
               </div>
-            </div>
+            </button>
           </div>
         </div>
       </header>
@@ -1104,7 +1143,7 @@ function QueueLessApp() {
               }
             />
 
-            {role === "student" && (
+            {(role === "student" || role === "guest") && (
               <>
                 <NavButton
                   active={view === "new"}
@@ -1167,15 +1206,6 @@ function QueueLessApp() {
               </>
             )}
 
-            <NavButton
-              active={false}
-              icon={<Calendar />}
-              label="Pickup Calendar"
-              onClick={() => {
-                setCalendarOpen(true);
-                setMenuOpen(false);
-              }}
-            />
           </nav>
 
           <div className="mt-auto border-t border-border pt-4">
@@ -1210,7 +1240,7 @@ function QueueLessApp() {
             />
           )}
 
-          {role === "student" ? (
+          {role === "student" || role === "guest" ? (
             <StudentView
               view={view}
               navigate={navigate}
@@ -1218,6 +1248,7 @@ function QueueLessApp() {
               setRequests={setRequests}
               setFlash={setFlash}
               currentUser={currentUser}
+              setCurrentUser={setCurrentUser}
               onOpenCalendar={() => setCalendarOpen(true)}
             />
           ) : role === "staff" ? (
@@ -1301,7 +1332,7 @@ function AuthScreen({
   onSignIn: (user: AuthUser) => void;
 }) {
   const [mode, setMode] =
-    useState<"login" | "register" | "forgot-password">(
+    useState<"login" | "register" | "guest-register" | "forgot-password">(
       "login"
     );
 
@@ -1392,6 +1423,8 @@ function AuthScreen({
         email: result.user.email,
         role: result.user.role,
         picture: result.user.picture,
+        phone: result.user.phone || "",
+        lastLogin: result.user.lastLogin || new Date().toISOString(),
         isPriority: result.user.isPriority,
         userType: result.user.userType,
       });
@@ -1621,6 +1654,8 @@ function AuthScreen({
         email: result.user.email,
         role: result.user.role,
         picture: result.user.picture,
+        phone: result.user.phone || "",
+        lastLogin: result.user.lastLogin || new Date().toISOString(),
         isPriority: result.user.isPriority,
         userType: result.user.userType,
       });
@@ -1765,6 +1800,74 @@ function AuthScreen({
     }
   };
 
+  const submitGuestRegister = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+
+    const data = new FormData(e.currentTarget);
+    const fullName = String(data.get("fullName") ?? "").trim();
+    const email = String(data.get("email") ?? "").trim();
+    const phone = String(data.get("phone") ?? "").trim();
+    const password = String(data.get("password") ?? "");
+    const confirmPassword = String(data.get("confirmPassword") ?? "");
+
+    if (!fullName || !email) {
+      setError("Please complete all required fields.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must contain at least 6 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Password and Confirm Password must match.");
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (phone && cleanPhone.length < 10) {
+      setError("Enter your valid phone number");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await fetch(`${API_URL}/api/auth/register-guest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fullName,
+          email,
+          phone,
+          password,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.message || "Failed to create guest account.");
+        return;
+      }
+
+      if (result.token && result.user) {
+        localStorage.setItem("queueless_token", result.token);
+        localStorage.setItem("queueless_user", JSON.stringify(result.user));
+        onSignIn(result.user);
+      } else {
+        setMode("login");
+      }
+    } catch (error) {
+      console.error("Guest registration error:", error);
+      setError("Cannot connect to the server. Make sure the backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-primary">
       <img
@@ -1873,7 +1976,7 @@ function AuthScreen({
                     type="text"
                     autoComplete="username"
                     className="field"
-                    placeholder="00-0000-000000 or your email"
+                    placeholder="Enter your username"
                     required
                   />
                 </Field>
@@ -1958,7 +2061,7 @@ function AuthScreen({
                 </Button>
               </div>
 
-              <div className="mt-5 flex items-center justify-between gap-4 text-xs">
+              <div className="mt-4 flex items-center justify-between gap-4 text-xs">
                 <span className="text-muted-foreground">
                   New student?
                 </span>
@@ -1985,6 +2088,16 @@ function AuthScreen({
                 setError("");
               }}
               onSubmit={submitRegister}
+              error={error}
+              loading={loading}
+            />
+          ) : mode === "guest-register" ? (
+            <GuestRegistration
+              onBack={() => {
+                setMode("login");
+                setError("");
+              }}
+              onSubmit={submitGuestRegister}
               error={error}
               loading={loading}
             />
@@ -2212,6 +2325,135 @@ function Registration({
           {loading
             ? "Submitting registration..."
             : "Create account"}
+
+          {!loading && (
+            <ArrowRight />
+          )}
+        </Button>
+      </form>
+    </>
+  );
+}
+
+function GuestRegistration({
+  onBack,
+  onSubmit,
+  error,
+  loading,
+}: {
+  onBack: () => void;
+  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+  error: string;
+  loading: boolean;
+}) {
+  return (
+    <>
+      <Button
+        variant="ghost"
+        className="-ml-3"
+        type="button"
+        onClick={onBack}
+      >
+        <ArrowLeft /> Back to sign in
+      </Button>
+
+      <p className="mt-5 text-xs font-bold uppercase text-primary">
+        Outsider / Guest Portal
+      </p>
+
+      <h2 className="mt-2 font-display text-3xl font-bold">
+        Guest Registration
+      </h2>
+
+      <p className="mt-2 text-sm text-muted-foreground">
+        For outsiders, alumni, and non-enrolled individuals requesting school documents. No student ID or institutional email required.
+      </p>
+
+      <form
+        className="mt-6 grid gap-4 sm:grid-cols-2"
+        onSubmit={onSubmit}
+      >
+        <div className="sm:col-span-2">
+          <Field label="Full Name">
+            <input
+              name="fullName"
+              required
+              className="field"
+              placeholder="e.g. Maria Clara"
+            />
+          </Field>
+        </div>
+
+        <div className="sm:col-span-2">
+          <Field label="Email Address (Any email e.g. Gmail, Yahoo)">
+            <input
+              name="email"
+              type="email"
+              required
+              className="field"
+              placeholder="e.g. yourname@gmail.com"
+            />
+          </Field>
+        </div>
+
+        <div className="sm:col-span-2">
+          <Field label="Phone Number">
+            <input
+              name="phone"
+              type="tel"
+              inputMode="numeric"
+              className="field font-mono text-sm"
+              placeholder="Enter your valid phone number"
+              maxLength={11}
+              onInput={(e) => {
+                const target = e.currentTarget;
+                target.value = target.value.replace(/\D/g, "").slice(0, 11);
+              }}
+            />
+          </Field>
+        </div>
+
+        <div className="sm:col-span-2">
+          <Field label="Password">
+            <input
+              name="password"
+              type="password"
+              required
+              className="field"
+              placeholder="At least 6 characters"
+              minLength={6}
+            />
+          </Field>
+        </div>
+
+        <div className="sm:col-span-2">
+          <Field label="Confirm Password">
+            <input
+              name="confirmPassword"
+              type="password"
+              required
+              className="field"
+              placeholder="Re-enter your password"
+              minLength={6}
+            />
+          </Field>
+        </div>
+
+        {error && (
+          <div className="sm:col-span-2">
+            <InlineError text={error} />
+          </div>
+        )}
+
+        <Button
+          size="lg"
+          type="submit"
+          className="sm:col-span-2"
+          disabled={loading}
+        >
+          {loading
+            ? "Creating guest account..."
+            : "Create Guest Account"}
 
           {!loading && (
             <ArrowRight />
@@ -2556,6 +2798,372 @@ function ForgotPasswordWithOtp({
   );
 }
 
+function StudentProfileView({
+  currentUser,
+  setCurrentUser,
+  setFlash,
+  onBack,
+}: {
+  currentUser: AuthUser;
+  setCurrentUser: (u: AuthUser | null) => void;
+  setFlash: (f: Flash) => void;
+  onBack: () => void;
+}) {
+  const [editName, setEditName] = useState(currentUser.name);
+  const [editPhone, setEditPhone] = useState(currentUser.phone || "");
+  const [editPicture, setEditPicture] = useState(currentUser.picture || "");
+  const [saving, setSaving] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState("");
+
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+
+  const formatLastLogin = (dateStr?: string) => {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const validDate = isNaN(d.getTime()) ? new Date() : d;
+    const dateFormatted = validDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const timeFormatted = validDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${dateFormatted}, ${timeFormatted}`;
+  };
+
+  const handleSaveProfile = async () => {
+    const cleanDigits = editPhone.replace(/\D/g, "");
+    if (!cleanDigits || cleanDigits.length < 10) {
+      setFlash({
+        tone: "error",
+        text: "Enter your valid phone number",
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("queueless_token");
+      const res = await fetch(`${API_URL}/api/auth/profile`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: editName.trim(),
+          phone: cleanDigits,
+          picture: editPicture.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to update profile.");
+
+      const updatedUser: AuthUser = { ...currentUser, ...data.user };
+      setCurrentUser(updatedUser);
+      localStorage.setItem("queueless_user", JSON.stringify(updatedUser));
+
+      setFlash({ tone: "success", text: "Profile updated successfully." });
+    } catch (err) {
+      setFlash({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Failed to update profile.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setPwError("");
+    setPwSuccess("");
+
+    if (newPassword.length < 6) {
+      setPwError("New password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError("New passwords do not match.");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      const token = localStorage.getItem("queueless_token");
+      const res = await fetch(`${API_URL}/api/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to change password.");
+
+      setPwSuccess("Password changed successfully!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : "Failed to change password.");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const isGuestUser =
+    currentUser.role === "guest" ||
+    currentUser.userType === "normal" ||
+    Boolean(currentUser.studentId?.startsWith("GUEST"));
+
+  return (
+    <div className="animate-rise">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" size="icon" onClick={onBack} className="size-8 cursor-pointer">
+          <ChevronLeft className="size-4" />
+        </Button>
+        <PageHeading
+          eyebrow="Account settings"
+          title="My Profile"
+          text="View and manage your account information."
+        />
+      </div>
+
+      {/* Profile Card */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+        {/* Left: Profile Info */}
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+            <UserRound className="size-4 text-primary" /> Profile Information
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Update your personal details. Staff can view your phone number.</p>
+
+          <div className="mt-5 space-y-4">
+            {/* Avatar with Image Upload */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex size-18 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden border border-border">
+                {editPicture ? (
+                  <img src={editPicture} alt="Profile" className="size-full object-cover" />
+                ) : (
+                  <UserRound className="size-9" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <p className="text-xs font-semibold text-foreground">Profile Photo</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-accent/80 text-xs font-bold hover:bg-accent cursor-pointer transition shadow-xs">
+                    <span>Upload Image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            if (typeof reader.result === "string") {
+                              setEditPicture(reader.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                  {editPicture && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-muted-foreground hover:text-destructive cursor-pointer"
+                      onClick={() => setEditPicture("")}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Field label="Full Name">
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="field"
+                required
+              />
+            </Field>
+
+            <Field label="Phone Number">
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={editPhone}
+                onChange={(e) => {
+                  const numbersOnly = e.target.value.replace(/\D/g, "");
+                  setEditPhone(numbersOnly.slice(0, 11));
+                }}
+                placeholder="Enter your valid phone number"
+                className="field"
+                maxLength={11}
+                required
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Enter your valid phone number
+              </p>
+            </Field>
+
+            {/* Read-only fields */}
+            <Field label="Email Address">
+              <input type="email" value={currentUser.email} className="field bg-muted/50" readOnly />
+            </Field>
+
+
+
+            <div className="flex items-center justify-between rounded-lg bg-muted/50 border border-border px-4 py-3">
+              <div>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Last Login</p>
+                <p className="text-sm font-bold text-foreground mt-0.5">{formatLastLogin(currentUser.lastLogin)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Role</p>
+                <p className="text-sm font-bold text-foreground mt-0.5 capitalize">{isGuestUser ? "Guest" : currentUser.role}</p>
+              </div>
+            </div>
+
+            <Button onClick={handleSaveProfile} disabled={saving} className="w-full gap-2 cursor-pointer">
+              {saving ? (
+                <><Loader2 className="size-4 animate-spin" /> Saving...</>
+              ) : (
+                <><CheckCircle2 className="size-4" /> Save Profile</>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Right: Change Password */}
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+            <Shield className="size-4 text-primary" /> Change Password
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Update your password to keep your account secure.</p>
+
+          <form onSubmit={handleChangePassword} className="mt-5 space-y-4">
+            <Field label="Current Password">
+              <div className="relative">
+                <input
+                  type={showCurrentPw ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="field pr-10"
+                  required
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowCurrentPw(!showCurrentPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  {showCurrentPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </Field>
+
+            <Field label="New Password">
+              <div className="relative">
+                <input
+                  type={showNewPw ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  className="field pr-10"
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowNewPw(!showNewPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  {showNewPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </Field>
+
+            <Field label="Confirm New Password">
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter new password"
+                className="field"
+                required
+                minLength={6}
+              />
+            </Field>
+
+            {pwError && (
+              <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-2.5 text-xs font-semibold text-red-600 dark:text-red-400">
+                {pwError}
+              </div>
+            )}
+
+            {pwSuccess && (
+              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                <CheckCircle2 className="size-4 shrink-0" /> {pwSuccess}
+              </div>
+            )}
+
+            <Button type="submit" variant="outline" disabled={changingPassword} className="w-full gap-2 cursor-pointer">
+              {changingPassword ? (
+                <><Loader2 className="size-4 animate-spin" /> Changing...</>
+              ) : (
+                "Change Password"
+              )}
+            </Button>
+          </form>
+
+          {/* Account Info */}
+          <div className="mt-6 border-t border-border pt-4">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Account Details</h4>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Account Type</span>
+                <span className="font-semibold capitalize">{isGuestUser ? "Guest" : currentUser.role}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Priority Status</span>
+                <span className="font-semibold">
+                  {currentUser.isPriority ? "⭐ Priority Student" : "Regular Queue"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Phone</span>
+                <span className="font-semibold font-mono">{currentUser.phone || "Not set"}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StudentView({
   view,
   navigate,
@@ -2563,6 +3171,7 @@ function StudentView({
   setRequests,
   setFlash,
   currentUser,
+  setCurrentUser,
   onOpenCalendar,
 }: {
   view: View;
@@ -2571,6 +3180,7 @@ function StudentView({
   setRequests: (r: RequestItem[]) => void;
   setFlash: (f: Flash) => void;
   currentUser: AuthUser | null;
+  setCurrentUser: (u: AuthUser | null) => void;
   onOpenCalendar?: () => void;
 }) {
   const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
@@ -2595,7 +3205,48 @@ function StudentView({
     );
   });
 
+  const isGuestUser =
+    currentUser.role === "guest" ||
+    currentUser.userType === "normal" ||
+    Boolean(currentUser.studentId?.startsWith("GUEST"));
+
   if (view === "new") {
+    // Normal users / guests must update profile (phone number) first!
+    if (isGuestUser && (!currentUser.phone || !currentUser.phone.trim())) {
+      return (
+        <div className="animate-rise max-w-xl mx-auto my-8">
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-center shadow-lg">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 mb-3">
+              <Phone className="size-6" />
+            </div>
+            <h3 className="font-display text-xl font-bold text-foreground">
+              Contact Information Required
+            </h3>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+              Enter your valid phone number before requesting a document.
+            </p>
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                size="default"
+                onClick={() => navigate("dashboard")}
+                className="w-full sm:w-auto cursor-pointer"
+              >
+                Back to Dashboard
+              </Button>
+              <Button
+                size="default"
+                onClick={() => navigate("profile")}
+                className="w-full sm:w-auto gap-2 font-bold cursor-pointer"
+              >
+                <UserRound className="size-4" /> Update Profile Now
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <NewRequest
         currentUser={currentUser}
@@ -2630,38 +3281,92 @@ function StudentView({
     );
   }
 
+  if (view === "profile") {
+    return (
+      <StudentProfileView
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
+        setFlash={setFlash}
+        onBack={() => navigate("dashboard")}
+      />
+    );
+  }
+
   const isUserPriority = Boolean(
     currentUser.isPriority || currentUser.userType === "priority"
   );
 
+  const formatLastLogin = (dateStr?: string) => {
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const validDate = isNaN(d.getTime()) ? new Date() : d;
+    const dateFormatted = validDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const timeFormatted = validDate.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+    return `${dateFormatted}, ${timeFormatted}`;
+  };
+
   return (
     <div className="animate-rise">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeading
-          eyebrow="Student portal"
-          title={`Good day, ${currentUser.name}!`}
-          text={`Student ID: ${currentUser.studentId} • PHINMA University of Pangasinan`}
-        />
-
-        {isUserPriority && (
-          <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-amber-800 dark:text-amber-300">
-            <span className="text-xl">⭐</span>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <p className="text-xs font-black uppercase tracking-wider">Priority Student</p>
-                <span className="rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-bold">PHINMA Official</span>
-              </div>
-              <p className="text-[11px] opacity-80">Automatic Priority Queue in Registrar</p>
+        <div className="flex items-center gap-3.5">
+          <div className="relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-border shadow-xs overflow-hidden">
+            {currentUser.picture ? (
+              <img src={currentUser.picture} alt={currentUser.name} className="size-full object-cover" />
+            ) : (
+              <UserRound className="size-7" />
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              {isGuestUser ? "Guest Portal" : `Student portal • ID: ${currentUser.studentId}`}
+            </p>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold text-foreground">
+              Good day, {currentUser.name}!
+            </h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span>PHINMA University of Pangasinan</span>
+              <span>•</span>
+              <span className="inline-flex items-center gap-1 font-semibold text-primary">
+                <Clock3 className="size-3" />
+                Last Login: {formatLastLogin(currentUser.lastLogin)}
+              </span>
+              {currentUser.phone && (
+                <>
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1 font-mono text-foreground font-medium">
+                    <Phone className="size-3 text-emerald-600" />
+                    {currentUser.phone}
+                  </span>
+                </>
+              )}
             </div>
           </div>
-        )}
+        </div>
+
       </div>
 
       {/* Clean Quick Actions Row */}
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <Button
           size="default"
-          onClick={() => navigate("new")}
+          onClick={() => {
+            if (isGuestUser && (!currentUser.phone || !currentUser.phone.trim() || currentUser.phone.replace(/\D/g, "").length < 10)) {
+              setFlash({
+                tone: "error",
+                text: "Enter your valid phone number",
+              });
+              navigate("profile");
+            } else {
+              navigate("new");
+            }
+          }}
           className="gap-2 cursor-pointer shadow-sm"
         >
           <FilePlus2 className="size-4" /> Request a Document
@@ -2840,6 +3545,9 @@ function NewRequest({
   const [copies, setCopies] =
     useState<number>(1);
 
+  const [phone, setPhone] =
+    useState(currentUser.phone || "");
+
   const [remarks, setRemarks] =
     useState("");
 
@@ -2862,6 +3570,12 @@ function NewRequest({
       setError(
         "Please provide a valid purpose for this request."
       );
+      return;
+    }
+
+    const cleanDigits = phone.replace(/\D/g, "");
+    if (!cleanDigits || cleanDigits.length < 10) {
+      setError("Enter your valid phone number");
       return;
     }
 
@@ -2947,6 +3661,7 @@ function NewRequest({
               document: doc,
               purpose:
                 purpose.trim(),
+              phone: phone.trim(),
               copies,
               remarks:
                 remarks.trim(),
@@ -2970,6 +3685,7 @@ function NewRequest({
         id: result.request.requestNumber,
         student: result.request.student,
         studentId: result.request.studentId,
+        phone: result.request.phone || phone.trim(),
         document: result.request.document,
         purpose: result.request.purpose,
         remarks: result.request.remarks || "",
@@ -3013,27 +3729,7 @@ function NewRequest({
         text="Complete the details below. Required fields are marked with an asterisk."
       />
 
-      {currentUser.isPriority || currentUser.userType === "priority" ? (
-        <div className="mt-4 flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300">
-          <span className="text-base">⭐</span>
-          <div>
-            <p className="font-bold">Priority Processing Active</p>
-            <p className="text-[11px] opacity-85">
-              Because you are signed in with an official PHINMA credential, your request receives Priority Queue ranking.
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-4 flex items-center gap-3 rounded-lg border border-border bg-muted/60 p-3.5 text-xs text-muted-foreground">
-          <UserRound className="size-4 shrink-0 text-blue-500" />
-          <div>
-            <p className="font-semibold text-foreground">Standard Queue Processing</p>
-            <p className="text-[11px]">
-              You are signed in with a personal account. This request will be processed in Regular Queue order.
-            </p>
-          </div>
-        </div>
-      )}
+
 
       <form
         onSubmit={handlePreSubmit}
@@ -3135,6 +3831,27 @@ function NewRequest({
                   3 copies
                 </option>
               </select>
+            </Field>
+          </div>
+
+          <div className="mt-4">
+            <Field label="Phone Number">
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={phone}
+                onChange={(e) => {
+                  const numbersOnly = e.target.value.replace(/\D/g, "");
+                  setPhone(numbersOnly.slice(0, 11));
+                }}
+                placeholder="Enter your valid phone number"
+                className="field"
+                maxLength={11}
+                required
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Enter your valid phone number
+              </p>
             </Field>
           </div>
 
@@ -3922,39 +4639,44 @@ function StaffCalendarEditModal({
         <form onSubmit={handleFormSubmit} className="mt-4 space-y-3.5">
           <Field label="Scheduled Counter Pickup Date">
             <input
-              type="text"
+              type="date"
               value={pickupDate}
               onChange={(e) => setPickupDate(e.target.value)}
-              placeholder="e.g. Oct 05, 2026 or 2026-10-05"
               className="field"
               required
             />
           </Field>
 
-          {/* Quick date shortcuts */}
+          {/* Dynamic quick date shortcuts for upcoming weekdays */}
           <div className="flex flex-wrap gap-1.5 text-[10px]">
             <span className="text-muted-foreground font-semibold self-center mr-1">Quick:</span>
-            <button
-              type="button"
-              onClick={() => setPickupDate("Oct 05, 2026")}
-              className="rounded-md border border-border bg-muted/60 px-2 py-0.5 font-medium hover:border-primary cursor-pointer"
-            >
-              Oct 05, 2026
-            </button>
-            <button
-              type="button"
-              onClick={() => setPickupDate("Oct 07, 2026")}
-              className="rounded-md border border-border bg-muted/60 px-2 py-0.5 font-medium hover:border-primary cursor-pointer"
-            >
-              Oct 07, 2026
-            </button>
-            <button
-              type="button"
-              onClick={() => setPickupDate("Oct 12, 2026")}
-              className="rounded-md border border-border bg-muted/60 px-2 py-0.5 font-medium hover:border-primary cursor-pointer"
-            >
-              Oct 12, 2026
-            </button>
+            {(() => {
+              const shortcuts: { label: string; value: string }[] = [];
+              const d = new Date();
+              d.setDate(d.getDate() + 1);
+              while (shortcuts.length < 3) {
+                const day = d.getDay();
+                if (day !== 0 && day !== 6) {
+                  const yyyy = d.getFullYear();
+                  const mm = String(d.getMonth() + 1).padStart(2, "0");
+                  const dd = String(d.getDate()).padStart(2, "0");
+                  const isoDate = `${yyyy}-${mm}-${dd}`;
+                  const label = d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
+                  shortcuts.push({ label, value: isoDate });
+                }
+                d.setDate(d.getDate() + 1);
+              }
+              return shortcuts.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setPickupDate(s.value)}
+                  className="rounded-md border border-border bg-muted/60 px-2 py-0.5 font-medium hover:border-primary cursor-pointer"
+                >
+                  {s.label}
+                </button>
+              ));
+            })()}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -4050,7 +4772,10 @@ function PickupCalendarModal({
   onSelectRequest?: (req: RequestItem) => void;
   onUpdateRequest?: (req: RequestItem) => void;
 }) {
-  const [currentDate, setCurrentDate] = useState(() => new Date(2026, 9, 1)); // October 2026
+  const [currentDate, setCurrentDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   const [selectedDay, setSelectedDay] = useState<number | null>(() => new Date().getDate());
   const [filterType, setFilterType] = useState<
     "active" | "all" | "ready" | "processing" | "done" | "mine"
@@ -4395,14 +5120,14 @@ function PickupCalendarModal({
         {/* Calendar Grid */}
         <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">
           {/* Day of Week Headers */}
-          <div className="grid grid-cols-7 border-b border-border bg-muted/40 text-center text-[11px] font-bold text-muted-foreground py-2">
-            <div>Sun</div>
-            <div>Mon</div>
-            <div>Tue</div>
-            <div>Wed</div>
-            <div>Thu</div>
-            <div>Fri</div>
-            <div>Sat</div>
+          <div className="grid grid-cols-7 border-b border-border bg-muted/40 text-center text-[11px] font-bold py-2">
+            <div className="text-red-400/70">Sun</div>
+            <div className="text-muted-foreground">Mon</div>
+            <div className="text-muted-foreground">Tue</div>
+            <div className="text-muted-foreground">Wed</div>
+            <div className="text-muted-foreground">Thu</div>
+            <div className="text-muted-foreground">Fri</div>
+            <div className="text-red-400/70">Sat</div>
           </div>
 
           {/* Days Grid */}
@@ -4420,6 +5145,8 @@ function PickupCalendarModal({
               const dayNum = i + 1;
               const isToday = isCurrentMonth && today.getDate() === dayNum;
               const isSelected = selectedDay === dayNum;
+              const dayOfWeek = new Date(year, month, dayNum).getDay();
+              const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
               const dayRequests = requestsByDay[dayNum] || [];
               const activeRequests = dayRequests.filter(
                 (r) => r.status !== "Claimed"
@@ -4447,6 +5174,8 @@ function PickupCalendarModal({
                   className={`relative min-h-[58px] sm:min-h-[68px] p-1.5 text-left transition flex flex-col justify-between ${
                     isSelected
                       ? "bg-primary/10 ring-2 ring-primary ring-inset z-10"
+                      : isWeekend
+                      ? "bg-muted/30 cursor-pointer"
                       : "bg-card hover:bg-muted/50 cursor-pointer"
                   }`}
                 >
@@ -4457,14 +5186,20 @@ function PickupCalendarModal({
                           ? "bg-primary text-primary-foreground font-black shadow-sm"
                           : isSelected
                           ? "text-primary font-black"
+                          : isWeekend
+                          ? "text-muted-foreground/60"
                           : "text-foreground"
                       }`}
                     >
                       {dayNum}
                     </span>
 
-                    {/* Counter reduces when items are claimed! */}
-                    {activeCount > 0 ? (
+                    {/* Weekend label */}
+                    {isWeekend && activeCount === 0 && doneCount === 0 ? (
+                      <span className="text-[8px] font-semibold text-muted-foreground/50 uppercase">
+                        Closed
+                      </span>
+                    ) : activeCount > 0 ? (
                       <span className="rounded-full bg-primary/15 px-1.5 py-0.2 text-[9px] font-black text-primary">
                         {activeCount}
                       </span>
@@ -4970,6 +5705,21 @@ function DigitalReceiptModal({
           <ReceiptField label="Submission Date" value={currentReq.date} />
           <ReceiptField label="Student Name" value={currentReq.student} />
           <ReceiptField label="Student ID Number" value={currentReq.studentId} />
+          <div className="flex flex-col">
+            <span className="text-muted-foreground font-medium print:text-black">Contact Phone</span>
+            {currentReq.phone ? (
+              <a
+                href={`tel:${currentReq.phone}`}
+                className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 font-mono print:text-black"
+                title="Click to call student"
+              >
+                <Phone className="size-3" />
+                {currentReq.phone}
+              </a>
+            ) : (
+              <span className="font-semibold text-muted-foreground italic">Not provided</span>
+            )}
+          </div>
           <ReceiptField label="Document Requested" value={currentReq.document} />
           <ReceiptField
             label="Number of Copies"
@@ -5161,8 +5911,17 @@ function EditReceiptModal({
             <h3 className="text-lg font-bold text-foreground">
               Edit Request Receipt & Queue Line
             </h3>
-            <p className="text-xs text-muted-foreground">
-              Updating receipt for {request.id} ({request.student})
+            <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-2 mt-0.5">
+              <span>{request.id} • {request.student} ({request.studentId})</span>
+              {request.phone && (
+                <a
+                  href={`tel:${request.phone}`}
+                  className="font-semibold text-emerald-600 hover:text-emerald-700 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                  title="Call student"
+                >
+                  <Phone className="size-3" /> {request.phone}
+                </a>
+              )}
             </p>
           </div>
           <Button
@@ -5566,7 +6325,19 @@ function ManageRequests({
 
                 <td className="px-5 py-4">
                   <p className="font-semibold text-foreground">{r.student}</p>
-                  <p className="text-xs text-muted-foreground">{r.studentId}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{r.studentId}</p>
+                  {r.phone ? (
+                    <a
+                      href={`tel:${r.phone}`}
+                      className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
+                      title="Click to call student"
+                    >
+                      <Phone className="size-3" />
+                      {r.phone}
+                    </a>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground/60 italic">No phone</span>
+                  )}
                 </td>
 
                 <td className="max-w-64 px-5 py-4">
@@ -6489,8 +7260,30 @@ function UsersPanel({
                   )}
                 </div>
 
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {u.studentId || u.id} · {u.email}
+                <p className="mt-0.5 text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span>{u.studentId || u.id}</span>
+                  <span>·</span>
+                  <span>{u.email}</span>
+                  {u.phone && (
+                    <>
+                      <span>·</span>
+                      <a
+                        href={`tel:${u.phone}`}
+                        className="font-mono font-semibold text-emerald-600 hover:text-emerald-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        title="Call user"
+                      >
+                        <Phone className="size-3" /> {u.phone}
+                      </a>
+                    </>
+                  )}
+                  {u.lastLogin && (
+                    <>
+                      <span>·</span>
+                      <span className="text-[11px] text-muted-foreground/80">
+                        Last login: {new Date(u.lastLogin).toLocaleDateString()}
+                      </span>
+                    </>
+                  )}
                 </p>
               </div>
 

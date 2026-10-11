@@ -133,6 +133,93 @@ export const register = async (req, res) => {
   }
 };
 
+// ── Guest Registration ─────────────────────────────────────
+export const registerGuest = async (req, res) => {
+  try {
+    const { name, email, password, phone } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: "Name, email, and password are required.",
+      });
+    }
+
+    const cleanName = name.trim();
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Validate email format
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(cleanEmail)) {
+      return res.status(400).json({
+        message: "Please enter a valid email address.",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Password must contain at least 6 characters.",
+      });
+    }
+
+    const existingUser = await User.findOne({ email: cleanEmail });
+    if (existingUser) {
+      return res.status(409).json({
+        message: "An account with this email already exists. Please sign in instead.",
+      });
+    }
+
+    const guestId = "GUEST-" + Math.floor(10000 + Math.random() * 90000);
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+      name: cleanName,
+      studentId: guestId,
+      email: cleanEmail,
+      password: hashedPassword,
+      phone: phone ? phone.trim() : "",
+      role: "guest",
+      isPriority: false,
+      userType: "normal",
+      approvalStatus: "approved",
+      lastLogin: new Date(),
+    });
+
+    console.log(`[QueueLess Auth] New Guest registered: ${user.name} (${user.email}, ${guestId})`);
+
+    const token = jwt.sign(
+      {
+        id: user._id,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: "1d",
+      }
+    );
+
+    return res.status(201).json({
+      message: "Guest account created successfully.",
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        studentId: user.studentId,
+        email: user.email,
+        phone: user.phone || "",
+        lastLogin: user.lastLogin ? user.lastLogin.toISOString() : new Date().toISOString(),
+        role: user.role,
+        isPriority: false,
+        userType: "normal",
+      },
+    });
+  } catch (error) {
+    console.error("registerGuest error:", error);
+    return res.status(500).json({
+      message: "Server error during guest registration.",
+    });
+  }
+};
+
 export const login = async (req, res) => {
   try {
     const { email, studentId, identifier: rawIdentifier, password, loginType } = req.body;
@@ -248,8 +335,11 @@ export const login = async (req, res) => {
       userType = isPriority ? "priority" : "normal";
       user.isPriority = isPriority;
       user.userType = userType;
-      await user.save();
     }
+
+    // Record last login
+    user.lastLogin = new Date();
+    await user.save();
 
     // Return login response
     return res.status(200).json({
@@ -262,6 +352,8 @@ export const login = async (req, res) => {
         email: user.email,
         role: user.role,
         picture: user.picture,
+        phone: user.phone || "",
+        lastLogin: user.lastLogin ? user.lastLogin.toISOString() : "",
         isPriority,
         userType,
       },
@@ -359,6 +451,8 @@ export const getUsers = async (req, res) => {
         name: u.name,
         studentId: u.studentId,
         email: u.email,
+        phone: u.phone || "",
+        lastLogin: u.lastLogin ? u.lastLogin.toISOString() : "",
         role: u.role,
         isPriority: u.isPriority,
         userType: u.userType,
@@ -590,6 +684,7 @@ export const googleLogin = async (req, res) => {
         picture,
         isPriority,
         userType,
+        lastLogin: new Date(),
       });
 
       console.log(`[MongoDB] New user registered via Google: ${user.email} (Priority: ${user.isPriority})`);
@@ -608,6 +703,8 @@ export const googleLogin = async (req, res) => {
         user.userType = user.isPriority ? "priority" : "normal";
         needsSave = true;
       }
+      user.lastLogin = new Date();
+      needsSave = true;
       if (needsSave) {
         await user.save();
       }
@@ -636,6 +733,8 @@ export const googleLogin = async (req, res) => {
         email: user.email,
         role: user.role,
         picture: user.picture,
+        phone: user.phone || "",
+        lastLogin: user.lastLogin ? user.lastLogin.toISOString() : new Date().toISOString(),
         isPriority: user.isPriority,
         userType: user.userType,
       },
@@ -670,8 +769,10 @@ export const requestPasswordResetOtp = async (req, res) => {
       ],
     };
 
-    if (role && ["admin", "staff", "student"].includes(role)) {
+    if (role === "admin" || role === "staff") {
       query.role = role;
+    } else if (role === "student" || role === "guest") {
+      query.role = { $in: ["student", "guest"] };
     }
 
     const user = await User.findOne(query);
@@ -885,3 +986,88 @@ export const resetPassword = async (req, res) => {
 
 
 
+
+// ── Profile Update ─────────────────────────────────────────
+export const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, phone, picture } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (name !== undefined && name.trim()) user.name = name.trim();
+    if (phone !== undefined) user.phone = phone.trim();
+    if (picture !== undefined) user.picture = picture.trim();
+
+    await user.save();
+
+    return res.status(200).json({
+      message: "Profile updated successfully.",
+      user: {
+        id: user._id,
+        name: user.name,
+        studentId: user.studentId,
+        email: user.email,
+        role: user.role,
+        picture: user.picture || "",
+        phone: user.phone || "",
+        lastLogin: user.lastLogin ? user.lastLogin.toISOString() : "",
+        isPriority: user.isPriority,
+        userType: user.userType,
+      },
+    });
+  } catch (error) {
+    console.error("updateProfile error:", error);
+    return res.status(500).json({ message: "Server error while updating profile." });
+  }
+};
+
+// ── Change Password ────────────────────────────────────────
+export const changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        message: "Current password and new password are required.",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        message: "New password must be at least 6 characters.",
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (!user.password) {
+      return res.status(400).json({
+        message: "Your account uses Google Sign-In and does not have a password. Set one from the forgot password page.",
+      });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Current password is incorrect." });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    return res.status(200).json({
+      message: "Password changed successfully.",
+    });
+  } catch (error) {
+    console.error("changePassword error:", error);
+    return res.status(500).json({ message: "Server error while changing password." });
+  }
+};

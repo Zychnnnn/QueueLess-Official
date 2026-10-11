@@ -200,13 +200,13 @@ function ForgotPasswordPage() {
                 Forgot password?
               </h2>
               <p className="mt-2 text-sm text-gray-600">
-                Enter your registered email address or student / staff ID. We'll send a 6-digit OTP code to your registered email to verify your account.
+                Enter your registered email address or username. We'll send a 6-digit OTP code to your registered email to verify your account.
               </p>
 
               <form onSubmit={handleRequestOtp} className="mt-6 space-y-4">
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="email" className="text-sm font-semibold text-gray-700">
-                    Email or Student / Staff ID
+                    Username or Email
                   </label>
                   <div className="relative flex items-center">
                     <input
@@ -214,7 +214,7 @@ function ForgotPasswordPage() {
                       type="text"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. STAFF-001, 2026-12345, or email"
+                      placeholder="Enter your username or email"
                       autoComplete="username"
                       required
                       autoFocus

@@ -2,6 +2,7 @@ import express from "express";
 import {
   createStaff,
   register,
+  registerGuest,
   login,
   googleLogin,
   getUsers,
@@ -11,6 +12,8 @@ import {
   requestPasswordResetOtp,
   verifyPasswordResetOtp,
   resetPassword,
+  updateProfile,
+  changePassword,
 } from "../controllers/authController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 import roleMiddleware from "../middleware/roleMiddleware.js";
@@ -18,6 +21,7 @@ import roleMiddleware from "../middleware/roleMiddleware.js";
 const router = express.Router();
 
 router.post("/register", register);
+router.post("/register-guest", registerGuest);
 router.post("/login", login);
 router.post("/google", googleLogin);
 router.post("/forgot-password", requestPasswordResetOtp);
@@ -53,5 +57,9 @@ router.delete(
   roleMiddleware("admin"),
   deleteUser
 );
+
+// Profile routes (any authenticated user)
+router.patch("/profile", authMiddleware, updateProfile);
+router.post("/change-password", authMiddleware, changePassword);
 
 export default router;

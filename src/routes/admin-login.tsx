@@ -152,7 +152,7 @@ export function AdminLoginPage() {
                 htmlFor="adminId"
                 className="text-sm font-semibold text-gray-700"
               >
-                Admin ID or Email
+                Username
               </label>
               <input
                 ref={adminIdRef}
@@ -162,7 +162,7 @@ export function AdminLoginPage() {
                 value={adminId}
                 onChange={(e) => setAdminId(e.target.value)}
                 onInput={(e) => setAdminId(e.currentTarget.value)}
-                placeholder="admin@up.phinma.edu.ph"
+                placeholder="Enter your username"
                 autoComplete="username"
                 required
                 className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none transition focus:border-[#1a3a1a] focus:ring-2 focus:ring-[#1a3a1a]/10"

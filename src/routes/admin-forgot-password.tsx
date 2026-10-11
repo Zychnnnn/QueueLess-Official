@@ -221,7 +221,7 @@ function AdminForgotPasswordPage() {
                 Forgot password?
               </h2>
               <p className="mt-2 text-sm text-gray-600">
-                Enter your Admin ID or institutional email address. We'll send an official 6-digit verification code to your registered email inbox.
+                Enter your Admin username or institutional email address. We'll send an official 6-digit verification code to your registered email inbox.
               </p>
 
               <form onSubmit={handleRequestOtp} className="mt-6 space-y-4">
@@ -230,7 +230,7 @@ function AdminForgotPasswordPage() {
                     htmlFor="identifier"
                     className="text-sm font-semibold text-gray-700"
                   >
-                    Admin ID or Email
+                    Username or Email
                   </label>
                   <div className="relative flex items-center">
                     <input
@@ -238,7 +238,7 @@ function AdminForgotPasswordPage() {
                       type="text"
                       value={identifier}
                       onChange={(e) => setIdentifier(e.target.value)}
-                      placeholder="e.g. ADMIN-001 or admin@up.phinma.edu.ph"
+                      placeholder="Enter your username or email"
                       autoComplete="username"
                       required
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 pl-10 text-sm text-gray-800 placeholder-gray-400 outline-none transition focus:border-[#1a3a1a] focus:ring-2 focus:ring-[#1a3a1a]/10"

@@ -16,7 +16,7 @@ const router = express.Router();
 router.post(
   "/",
   authMiddleware,
-  roleMiddleware("student", "staff", "admin"),
+  roleMiddleware("student", "staff", "admin", "guest"),
   createRequest
 );
 
