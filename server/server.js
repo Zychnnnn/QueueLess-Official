@@ -68,8 +68,11 @@ app.use("/api/requests", requestRoutes);
 const staticPath = path.resolve(process.cwd(), ".output", "public");
 if (fs.existsSync(staticPath)) {
   app.use(express.static(staticPath));
-  app.get(/^(?!\/api).*/, (req, res) => {
-    res.sendFile(path.join(staticPath, "index.html"));
+  app.use((req, res, next) => {
+    if (req.method === "GET" && !req.path.startsWith("/api")) {
+      return res.sendFile(path.join(staticPath, "index.html"));
+    }
+    next();
   });
 } else {
   app.get("/", (req, res) => {
