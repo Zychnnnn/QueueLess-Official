@@ -11,6 +11,8 @@ import {
 
 import {
   AlertTriangle,
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   ArrowRight,
   Bell,
@@ -349,6 +351,44 @@ function QueueLessApp() {
       return [];
     }
   });
+
+  const [archivedNotificationIds, setArchivedNotificationIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("queueless_archived_notifications");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [notificationTab, setNotificationTab] = useState<"inbox" | "archived">("inbox");
+
+  const archiveNotification = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setArchivedNotificationIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      try {
+        localStorage.setItem("queueless_archived_notifications", JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const unarchiveNotification = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setArchivedNotificationIds((prev) => {
+      const next = prev.filter((item) => item !== id);
+      try {
+        localStorage.setItem("queueless_archived_notifications", JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   const markNotificationAsRead = (id: string) => {
     setReadNotificationIds((prev) => {
@@ -853,22 +893,55 @@ function QueueLessApp() {
     return [];
   }, [requests, currentUser, adminUsers]);
 
+  const activeNotifications = useMemo(() => {
+    return notifications.filter((n) => !archivedNotificationIds.includes(n.id));
+  }, [notifications, archivedNotificationIds]);
+
+  const archivedNotifications = useMemo(() => {
+    return notifications.filter((n) => archivedNotificationIds.includes(n.id));
+  }, [notifications, archivedNotificationIds]);
+
   const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !readNotificationIds.includes(n.id))
+    return activeNotifications.filter((n) => !readNotificationIds.includes(n.id))
       .length;
-  }, [notifications, readNotificationIds]);
+  }, [activeNotifications, readNotificationIds]);
+
+  const hasReadInInbox = useMemo(() => {
+    return activeNotifications.some((n) => readNotificationIds.includes(n.id));
+  }, [activeNotifications, readNotificationIds]);
 
   const markAllNotificationsAsRead = () => {
-    const allIds = notifications.map((n) => n.id);
-    setReadNotificationIds(allIds);
-    try {
-      localStorage.setItem(
-        "queueless_read_notifications",
-        JSON.stringify(allIds)
-      );
-    } catch {
-      // ignore
-    }
+    const allIds = activeNotifications.map((n) => n.id);
+    setReadNotificationIds((prev) => {
+      const combined = Array.from(new Set([...prev, ...allIds]));
+      try {
+        localStorage.setItem(
+          "queueless_read_notifications",
+          JSON.stringify(combined)
+        );
+      } catch {
+        // ignore
+      }
+      return combined;
+    });
+  };
+
+  const archiveAllRead = () => {
+    setArchivedNotificationIds((prev) => {
+      const readIds = activeNotifications
+        .filter((n) => readNotificationIds.includes(n.id))
+        .map((n) => n.id);
+      const combined = Array.from(new Set([...prev, ...readIds]));
+      try {
+        localStorage.setItem(
+          "queueless_archived_notifications",
+          JSON.stringify(combined)
+        );
+      } catch {
+        // ignore
+      }
+      return combined;
+    });
   };
 
   if (!signedIn) {
@@ -956,55 +1029,148 @@ function QueueLessApp() {
                   />
 
                   <div className="absolute right-0 top-12 z-40 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-                    <div className="flex items-center justify-between border-b border-border/80 pb-3">
-                      <div className="flex items-center gap-2">
-                        <p className="font-display text-base font-bold text-foreground">
-                          Notifications
-                        </p>
-                        {unreadCount > 0 && (
-                          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-extrabold text-primary">
-                            {unreadCount} new
-                          </span>
-                        )}
+                    <div className="border-b border-border/80 pb-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <p className="font-display text-base font-bold text-foreground">
+                            Notifications
+                          </p>
+                          {unreadCount > 0 && (
+                            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-extrabold text-primary">
+                              {unreadCount} new
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {notificationTab === "inbox" && unreadCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={markAllNotificationsAsRead}
+                              className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                            >
+                              Mark read
+                            </button>
+                          )}
+
+                          {notificationTab === "inbox" && hasReadInInbox && (
+                            <button
+                              type="button"
+                              onClick={archiveAllRead}
+                              className="text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+                              title="Archive all read notifications"
+                            >
+                              Archive read
+                            </button>
+                          )}
+
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Close notifications"
+                            className="size-7 rounded-md cursor-pointer"
+                            onClick={() => setNotificationsOpen(false)}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {unreadCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={markAllNotificationsAsRead}
-                            className="text-xs font-semibold text-primary hover:underline cursor-pointer"
-                          >
-                            Mark all read
-                          </button>
-                        )}
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Close notifications"
-                          className="size-7 rounded-md cursor-pointer"
-                          onClick={() => setNotificationsOpen(false)}
+                      {/* Inbox vs Archived Tab Switch */}
+                      <div className="mt-2.5 flex items-center gap-1 rounded-lg bg-muted/60 p-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setNotificationTab("inbox")}
+                          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 font-semibold transition cursor-pointer ${
+                            notificationTab === "inbox"
+                              ? "bg-card text-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
                         >
-                          <X className="size-4" />
-                        </Button>
+                          <Bell className="size-3.5" />
+                          <span>Inbox</span>
+                          {activeNotifications.length > 0 && (
+                            <span className="rounded-full bg-primary/15 px-1.5 py-0.2 text-[10px] font-bold text-primary">
+                              {activeNotifications.length}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setNotificationTab("archived")}
+                          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 font-semibold transition cursor-pointer ${
+                            notificationTab === "archived"
+                              ? "bg-card text-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <Archive className="size-3.5" />
+                          <span>Archived</span>
+                          {archivedNotifications.length > 0 && (
+                            <span className="rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px] font-bold text-muted-foreground">
+                              {archivedNotifications.length}
+                            </span>
+                          )}
+                        </button>
                       </div>
                     </div>
 
                     <div className="mt-3 max-h-[380px] overflow-y-auto space-y-2.5 pr-0.5">
-                      {notifications.length > 0 ? (
-                        notifications.map((notification) => (
+                      {notificationTab === "inbox" ? (
+                        activeNotifications.length > 0 ? (
+                          activeNotifications.map((notification) => (
+                            <Notice
+                              key={notification.id}
+                              title={notification.title}
+                              text={notification.text}
+                              tone={notification.tone}
+                              time={notification.time}
+                              isUnread={
+                                !readNotificationIds.includes(notification.id)
+                              }
+                              onArchive={() => archiveNotification(notification.id)}
+                              isArchived={false}
+                              onClick={() => {
+                                markNotificationAsRead(notification.id);
+                                if (notification.requestId) {
+                                  const found = requests.find(
+                                    (r) => r.id === notification.requestId
+                                  );
+                                  if (found) {
+                                    setActiveReceiptModal(found);
+                                  }
+                                }
+                                if (notification.actionView) {
+                                  navigate(notification.actionView);
+                                }
+                                setNotificationsOpen(false);
+                              }}
+                            />
+                          ))
+                        ) : (
+                          <div className="py-8 text-center">
+                            <Bell className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                            <p className="text-sm font-medium text-foreground">
+                              Inbox is clear
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              You're all caught up with your updates!
+                            </p>
+                          </div>
+                        )
+                      ) : archivedNotifications.length > 0 ? (
+                        archivedNotifications.map((notification) => (
                           <Notice
                             key={notification.id}
                             title={notification.title}
                             text={notification.text}
                             tone={notification.tone}
                             time={notification.time}
-                            isUnread={
-                              !readNotificationIds.includes(notification.id)
-                            }
+                            isUnread={false}
+                            onArchive={() => unarchiveNotification(notification.id)}
+                            isArchived={true}
                             onClick={() => {
-                              markNotificationAsRead(notification.id);
                               if (notification.requestId) {
                                 const found = requests.find(
                                   (r) => r.id === notification.requestId
@@ -1022,12 +1188,12 @@ function QueueLessApp() {
                         ))
                       ) : (
                         <div className="py-8 text-center">
-                          <Bell className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                          <Archive className="mx-auto size-8 text-muted-foreground/40 mb-2" />
                           <p className="text-sm font-medium text-foreground">
-                            No notifications yet
+                            No archived notifications
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            You're all caught up with your updates!
+                            Notifications you archive will be kept here.
                           </p>
                         </div>
                       )}
@@ -6426,27 +6592,67 @@ function LogoutConfirmModal({
 
 function ConfirmStatusModal({
   request,
-  targetStatus,
+  initialTargetStatus,
   onClose,
   onConfirm,
   loading = false,
 }: {
   request: RequestItem;
-  targetStatus: Status;
+  initialTargetStatus: Status;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (payload: {
+    status: Status;
+    paymentStatus: string;
+    pickupDate: string;
+    remarks: string;
+  }) => void;
   loading?: boolean;
 }) {
+  const [status, setStatus] = useState<Status>(initialTargetStatus);
+  const [paymentStatus, setPaymentStatus] = useState<string>(
+    request.paymentStatus || "Prepare payment within the day"
+  );
+  const [pickupDate, setPickupDate] = useState<string>(
+    request.pickupDate || (initialTargetStatus === "Ready for Claiming" ? "Ready for Claiming Now" : "Within the day (Today)")
+  );
+  const [remarks, setRemarks] = useState<string>(request.remarks || "");
+
+  const paymentPresets = [
+    "Prepare payment within the day",
+    "Pay upon claiming at Counter",
+    "Paid",
+    "Pending Payment",
+    "Exempted / Free of Charge",
+    "Proceed to Registrar Staff",
+  ];
+
+  const schedulePresets = [
+    "Within the day (Today)",
+    "Tomorrow • Window 2",
+    "Ready for Claiming Now",
+    "Standard Schedule",
+  ];
+
+  const handleSubmit = (e?: FormEvent) => {
+    e?.preventDefault();
+    onConfirm({
+      status,
+      paymentStatus: paymentStatus.trim() || "Proceed to Registrar Staff",
+      pickupDate: pickupDate.trim() || "Standard Schedule",
+      remarks: remarks.trim(),
+    });
+  };
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150 overflow-y-auto"
       onClick={() => !loading && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Confirm Request Processing"
-        className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+        aria-label="Process Request & Update Receipt"
+        className="w-full max-w-lg my-8 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3">
@@ -6455,78 +6661,178 @@ function ConfirmStatusModal({
           </div>
           <div>
             <h3 className="font-display text-base font-bold text-foreground">
-              Confirm Status Update
+              Process Request & Update Receipt
             </h3>
             <p className="text-xs text-muted-foreground">
-              Process document and notify student
+              Edit payment requirement and schedule before applying to receipt
             </p>
           </div>
         </div>
 
-        <div className="mt-4 space-y-3 rounded-xl border border-border bg-muted/40 p-4 text-xs">
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <span className="text-muted-foreground">Request ID:</span>
-            <span className="font-bold text-primary">{request.id}</span>
+        {/* Request Summary Strip */}
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-border bg-muted/30 p-3 text-xs">
+          <div>
+            <span className="text-[11px] text-muted-foreground">Request & Queue:</span>
+            <p className="font-bold text-foreground">
+              {request.id} <span className="text-primary font-black ml-1">(Line #{request.lineNumber ?? 1})</span>
+            </p>
+          </div>
+          <div>
+            <span className="text-[11px] text-muted-foreground">Student:</span>
+            <p className="font-semibold text-foreground truncate">{request.student} ({request.studentId})</p>
+          </div>
+          <div className="col-span-2 pt-1 border-t border-border/50">
+            <span className="text-[11px] text-muted-foreground">Document:</span>
+            <p className="font-semibold text-foreground">{request.document} ({request.copies || 1} copy/copies)</p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3.5">
+          {/* Status Selection */}
+          <div>
+            <label className="text-xs font-bold text-foreground block mb-1">
+              Workflow Status
+            </label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as Status)}
+              className="field font-semibold text-xs cursor-pointer"
+            >
+              <option value="Pending">Pending (Queue verification)</option>
+              <option value="Processing">Processing (Registrar actively preparing)</option>
+              <option value="Ready for Claiming">Ready for Claiming (Available at counter)</option>
+              <option value="Claimed">Claimed (Officially released)</option>
+              <option value="Needs Correction">Needs Correction (Follow-up required)</option>
+            </select>
           </div>
 
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <span className="text-muted-foreground">Student:</span>
-            <span className="font-semibold text-foreground">{request.student} ({request.studentId})</span>
-          </div>
-
-          <div className="flex items-center justify-between border-b border-border/60 pb-2">
-            <span className="text-muted-foreground">Document:</span>
-            <span className="font-semibold text-foreground">{request.document}</span>
-          </div>
-
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-muted-foreground">Status Transition:</span>
-            <div className="flex items-center gap-2">
-              <span className="line-through text-muted-foreground/80">{request.status}</span>
-              <span className="text-muted-foreground">→</span>
-              <span className="rounded bg-primary/15 px-2 py-0.5 font-bold text-primary">
-                {targetStatus}
-              </span>
+          {/* Payment Requirement (Directive) */}
+          <div>
+            <label className="text-xs font-bold text-foreground block mb-1">
+              Payment Directive (Applied to Receipt & Emailed)
+            </label>
+            <input
+              type="text"
+              value={paymentStatus}
+              onChange={(e) => setPaymentStatus(e.target.value)}
+              placeholder="e.g., Prepare payment within the day"
+              className="field text-xs font-semibold"
+            />
+            {/* 1-click Preset Chips */}
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {paymentPresets.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setPaymentStatus(preset)}
+                  className={`rounded-md px-2 py-0.5 text-[10px] font-semibold border transition cursor-pointer ${
+                    paymentStatus === preset
+                      ? "border-primary bg-primary/15 text-primary font-bold"
+                      : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
 
-        <div className="mt-3.5 flex items-start gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 p-2.5 text-xs text-emerald-800 dark:text-emerald-300">
-          <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
-          <span>
-            An automated email notification will be sent to the student informing them of this status update and instructions.
-          </span>
-        </div>
+          {/* When to Claim / Schedule */}
+          <div>
+            <label className="text-xs font-bold text-foreground block mb-1">
+              When to Claim (Pickup Schedule)
+            </label>
+            <input
+              type="text"
+              value={pickupDate}
+              onChange={(e) => setPickupDate(e.target.value)}
+              placeholder="e.g., Within the day (Today) or Tomorrow • Window 2"
+              className="field text-xs font-semibold"
+            />
+            {/* Schedule Presets */}
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {schedulePresets.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setPickupDate(preset)}
+                  className={`rounded-md px-2 py-0.5 text-[10px] font-semibold border transition cursor-pointer ${
+                    pickupDate === preset
+                      ? "border-primary bg-primary/15 text-primary font-bold"
+                      : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+          </div>
 
-        <div className="mt-5 flex items-center justify-end gap-2.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-            disabled={loading}
-            className="cursor-pointer font-medium"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={onConfirm}
-            disabled={loading}
-            className="gap-1.5 cursor-pointer font-semibold shadow-sm"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" /> Updating...
-              </>
-            ) : (
-              <>
-                <Check className="size-3.5" /> Confirm & Notify Student
-              </>
-            )}
-          </Button>
-        </div>
+          {/* Remarks / Instructions */}
+          <div>
+            <label className="text-xs font-bold text-foreground block mb-1">
+              Instructions / Remarks to Student (Optional)
+            </label>
+            <textarea
+              rows={2}
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="e.g., Please present your valid school ID at Window 2 upon payment."
+              className="field text-xs resize-none"
+            />
+          </div>
+
+          {/* Digital Receipt Live Preview Helper */}
+          <div className="rounded-lg border border-primary/25 bg-primary/5 p-2.5 text-xs">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-primary block mb-1">
+              Receipt Preview
+            </span>
+            <div className="flex items-center justify-between text-foreground font-semibold text-[11px]">
+              <span>Queue Line #{request.lineNumber ?? 1}</span>
+              <span>When to Claim: {pickupDate || "Standard Schedule"}</span>
+            </div>
+            <p className="mt-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+              Payment: {paymentStatus || "Proceed to Registrar Staff"}
+            </p>
+          </div>
+
+          {/* Student Email Notification Notice */}
+          <div className="flex items-start gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 p-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+            <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+            <span>
+              An automated email notification will be dispatched to the student with this payment instruction, claim schedule, and queue line position immediately.
+            </span>
+          </div>
+
+          <div className="mt-5 flex items-center justify-end gap-2.5 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              disabled={loading}
+              className="cursor-pointer font-medium"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={loading}
+              className="gap-1.5 cursor-pointer font-semibold shadow-sm"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Saving & Emailing...
+                </>
+              ) : (
+                <>
+                  <Check className="size-3.5" /> Confirm & Apply to Receipt
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -6672,6 +6978,74 @@ function ManageRequests({
             ? error.message
             : "Failed to update request status. Please try again.",
       });
+    }
+  };
+
+  const handleProcessRequest = async (payload: {
+    status: Status;
+    paymentStatus: string;
+    pickupDate: string;
+    remarks: string;
+  }) => {
+    if (!pendingStatusChange) return;
+    const reqId = pendingStatusChange.request.id;
+    const token = localStorage.getItem("queueless_token");
+    if (!token) {
+      setFlash({
+        tone: "error",
+        text: "Your session has expired. Please sign in again.",
+      });
+      return;
+    }
+
+    try {
+      setStatusLoading(true);
+      const response = await fetch(
+        `${API_URL}/api/requests/${encodeURIComponent(reqId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to process request & update receipt.");
+      }
+
+      const updatedItem: RequestItem = {
+        ...pendingStatusChange.request,
+        ...payload,
+      };
+
+      setRequests(
+        requests.map((r) => (r.id === reqId ? updatedItem : r))
+      );
+
+      if (payload.status === "Claimed") {
+        archiveClaimedRecord(updatedItem, "Registrar Staff");
+      }
+
+      setPendingStatusChange(null);
+      setFlash({
+        tone: "success",
+        text: `Receipt updated & student notified for ${reqId} (${payload.status}).`,
+      });
+    } catch (err) {
+      console.error("Process request error:", err);
+      setFlash({
+        tone: "error",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Failed to process request and update receipt.",
+      });
+    } finally {
+      setStatusLoading(false);
     }
   };
 
@@ -6922,18 +7296,18 @@ function ManageRequests({
         </div>
       </div>
 
-      {/* High-Visibility Requests Table */}
-      <div className="mt-3 overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
-        <table className="w-full text-left text-xs sm:text-sm">
-          <thead className="border-b border-border bg-muted/60 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+      {/* High-Visibility Requests Table (Scrollable Container) */}
+      <div className="mt-3 max-h-[580px] overflow-y-auto overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
+        <table className="w-full text-left text-xs sm:text-sm border-collapse">
+          <thead className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur text-[11px] font-bold uppercase tracking-wider text-muted-foreground shadow-xs">
             <tr>
-              <th className="py-3 pl-4 pr-2 w-28">Queue Line</th>
-              <th className="py-3 px-3 w-32">Request ID</th>
-              <th className="py-3 px-3 min-w-[170px]">Student</th>
-              <th className="py-3 px-3 min-w-[170px]">Document</th>
-              <th className="py-3 px-3 w-28 whitespace-nowrap">Submitted</th>
-              <th className="py-3 px-3 w-36">Status</th>
-              <th className="py-3 pr-4 pl-3 w-56 text-right">Actions</th>
+              <th className="py-3 pl-4 pr-2 w-24">Queue Line</th>
+              <th className="py-3 px-3 w-28">Request ID</th>
+              <th className="py-3 px-3 min-w-[160px]">Student</th>
+              <th className="py-3 px-3 min-w-[160px]">Document</th>
+              <th className="py-3 px-3 w-24 whitespace-nowrap">Submitted</th>
+              <th className="py-3 px-3 w-32">Status</th>
+              <th className="py-3 pr-4 pl-3 w-52 text-right">Actions</th>
             </tr>
           </thead>
 
@@ -7022,7 +7396,7 @@ function ManageRequests({
                   </td>
 
                   {/* Actions (Grouped cleanly, no clipping) */}
-                  <td className="py-3 pr-4 pl-3 text-right">
+                  <td className="py-3 pr-4 pl-3 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1.5">
                       <Button
                         variant="outline"
@@ -7044,27 +7418,24 @@ function ManageRequests({
                         <Edit3 className="size-3" /> Edit
                       </Button>
 
-                      <select
-                        aria-label={`Update ${r.id} status`}
-                        value={r.status}
-                        onChange={(e) => {
-                          const next = e.target.value as Status;
-                          if (next !== r.status) {
-                            setPendingStatusChange({ request: r, nextStatus: next });
-                          }
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const nextStatus: Status =
+                            r.status === "Pending"
+                              ? "Processing"
+                              : r.status === "Processing"
+                              ? "Ready for Claiming"
+                              : r.status === "Ready for Claiming"
+                              ? "Claimed"
+                              : "Processing";
+                          setPendingStatusChange({ request: r, nextStatus });
                         }}
-                        className="h-7 rounded-md border border-input bg-background px-1.5 text-xs font-semibold cursor-pointer"
+                        className="h-7 px-2.5 text-xs font-bold cursor-pointer gap-1 shadow-xs"
+                        title="Process Request & Update Payment/Receipt"
                       >
-                        {[
-                          "Pending",
-                          "Processing",
-                          "Ready for Claiming",
-                          "Claimed",
-                          "Needs Correction",
-                        ].map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
+                        <ClipboardCheck className="size-3" /> Process
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -7106,19 +7477,10 @@ function ManageRequests({
       {pendingStatusChange && (
         <ConfirmStatusModal
           request={pendingStatusChange.request}
-          targetStatus={pendingStatusChange.nextStatus}
+          initialTargetStatus={pendingStatusChange.nextStatus}
           loading={statusLoading}
           onClose={() => setPendingStatusChange(null)}
-          onConfirm={async () => {
-            const { request: targetReq, nextStatus } = pendingStatusChange;
-            try {
-              setStatusLoading(true);
-              await update(targetReq.id, nextStatus);
-              setPendingStatusChange(null);
-            } finally {
-              setStatusLoading(false);
-            }
-          }}
+          onConfirm={handleProcessRequest}
         />
       )}
     </div>
@@ -8702,6 +9064,8 @@ function Notice({
   time,
   isUnread = false,
   onClick,
+  onArchive,
+  isArchived = false,
 }: {
   title: string;
   text: string;
@@ -8709,6 +9073,8 @@ function Notice({
   time?: string;
   isUnread?: boolean;
   onClick?: () => void;
+  onArchive?: () => void;
+  isArchived?: boolean;
 }) {
   const getIcon = () => {
     switch (tone) {
@@ -8756,11 +9122,30 @@ function Notice({
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-1">
           <p className="text-xs font-bold text-foreground truncate">{title}</p>
-          {time && (
-            <span className="shrink-0 text-[10px] text-muted-foreground font-medium">
-              {time}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {time && (
+              <span className="text-[10px] text-muted-foreground font-medium">
+                {time}
+              </span>
+            )}
+            {onArchive && (
+              <button
+                type="button"
+                title={isArchived ? "Restore to inbox" : "Archive notification"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onArchive();
+                }}
+                className="rounded p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted/80 transition cursor-pointer"
+              >
+                {isArchived ? (
+                  <ArchiveRestore className="size-3.5 text-primary" />
+                ) : (
+                  <Archive className="size-3.5" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">
@@ -8775,7 +9160,7 @@ function Notice({
       </div>
 
       {isUnread && (
-        <span className="absolute top-3 right-2 size-2 rounded-full bg-primary" />
+        <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-primary" />
       )}
     </div>
   );
