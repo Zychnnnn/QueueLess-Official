@@ -125,6 +125,7 @@ type RequestItem = {
   priority?: Priority;
   copies?: number;
   pickupDate?: string;
+  paymentStatus?: string;
 };
 
 type Flash = {
@@ -460,6 +461,7 @@ function QueueLessApp() {
               priority: (request.priority as Priority) || "Regular",
               copies: request.copies || 1,
               pickupDate: request.pickupDate || "",
+              paymentStatus: typeof request.paymentStatus === "string" ? request.paymentStatus : "Proceed to Registrar Staff",
             }));
 
           setRequests(
@@ -591,6 +593,7 @@ function QueueLessApp() {
           priority: (request.priority as Priority) || "Regular",
           copies: typeof request.copies === "number" ? request.copies : 1,
           pickupDate: typeof request.pickupDate === "string" ? request.pickupDate : "",
+          paymentStatus: typeof request.paymentStatus === "string" ? request.paymentStatus : "Proceed to Registrar Staff",
         }));
 
       setRequests(
@@ -3654,6 +3657,7 @@ function NewRequest({
         priority: result.request.priority || "Regular",
         copies: result.request.copies || copies || 1,
         pickupDate: result.request.pickupDate || "",
+        paymentStatus: result.request.paymentStatus || "Proceed to Registrar Staff",
       };
 
       setShowConfirmModal(false);
@@ -5468,6 +5472,7 @@ function DigitalReceiptModal({
     copies: number;
     document: string;
     purpose: string;
+    paymentStatus: string;
   }) => {
     try {
       setInternalSaving(true);
@@ -5713,11 +5718,21 @@ function DigitalReceiptModal({
 
             <div className="border-t border-border/60 pt-3 print:border-gray-300">
               <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Current Status
+                Payment Status
               </p>
-              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
-                {currentReq.status}
-              </p>
+              <div className="mt-0.5">
+                <span
+                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold ${
+                    currentReq.paymentStatus === "Paid"
+                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 print:border-black print:text-black"
+                      : currentReq.paymentStatus === "Exempted / Free of Charge"
+                      ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 print:border-black print:text-black"
+                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 print:border-black print:text-black"
+                  }`}
+                >
+                  {currentReq.paymentStatus || "Proceed to Registrar Staff"}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -5805,6 +5820,7 @@ function EditReceiptModal({
     copies: number;
     document: string;
     purpose: string;
+    paymentStatus: string;
   }) => void;
   loading?: boolean;
 }) {
@@ -5818,6 +5834,9 @@ function EditReceiptModal({
   const [copies, setCopies] = useState<number>(request.copies || 1);
   const [document, setDocument] = useState<string>(request.document);
   const [purpose, setPurpose] = useState<string>(request.purpose);
+  const [paymentStatus, setPaymentStatus] = useState<string>(
+    request.paymentStatus || "Proceed to Registrar Staff"
+  );
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -5830,6 +5849,7 @@ function EditReceiptModal({
       copies: Number(copies),
       document,
       purpose,
+      paymentStatus: paymentStatus.trim(),
     });
   };
 
@@ -5917,6 +5937,21 @@ function EditReceiptModal({
               </select>
             </Field>
 
+            <Field label="Payment Status">
+              <select
+                value={paymentStatus}
+                onChange={(e) => setPaymentStatus(e.target.value)}
+                className="field font-medium"
+              >
+                <option value="Proceed to Registrar Staff">Proceed to Registrar Staff</option>
+                <option value="Paid">Paid</option>
+                <option value="Pending Payment">Pending Payment</option>
+                <option value="Exempted / Free of Charge">Exempted / Free of Charge</option>
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <Field label="Copies">
               <input
                 type="number"
@@ -5926,17 +5961,17 @@ function EditReceiptModal({
                 className="field"
               />
             </Field>
-          </div>
 
-          <Field label="Scheduled Pickup Date / Counter Window">
-            <input
-              type="text"
-              value={pickupDate}
-              onChange={(e) => setPickupDate(e.target.value)}
-              placeholder="e.g. Window 2 • Sep 29, 2026 (2:00 PM)"
-              className="field"
-            />
-          </Field>
+            <Field label="Pickup Schedule / Window">
+              <input
+                type="text"
+                value={pickupDate}
+                onChange={(e) => setPickupDate(e.target.value)}
+                placeholder="e.g. Window 2 • Sep 29, 2026 (2:00 PM)"
+                className="field"
+              />
+            </Field>
+          </div>
 
           <Field label="Registrar Remarks / Notes to Student">
             <textarea
@@ -6093,6 +6128,7 @@ function ManageRequests({
     copies: number;
     document: string;
     purpose: string;
+    paymentStatus: string;
   }) => {
     if (!editingReceipt) return;
 

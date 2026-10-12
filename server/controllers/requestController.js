@@ -51,6 +51,7 @@ export const createRequest = async (req, res) => {
       remarks: remarks || "",
       date,
       status: "Pending",
+      paymentStatus: req.body.paymentStatus || "Proceed to Registrar Staff",
     });
 
     return res.status(201).json({
@@ -146,6 +147,7 @@ export const updateRequest = async (req, res) => {
       document,
       purpose,
       copies,
+      paymentStatus,
     } = req.body;
 
     if (req.user.role !== "staff" && req.user.role !== "admin") {
@@ -168,6 +170,7 @@ export const updateRequest = async (req, res) => {
     if (copies !== undefined && copies !== null) {
       updateFields.copies = Number(copies);
     }
+    if (paymentStatus !== undefined) updateFields.paymentStatus = paymentStatus;
 
     const request = await Request.findOneAndUpdate(
       { requestNumber },

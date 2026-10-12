@@ -63,6 +63,10 @@ const requestSchema = new mongoose.Schema(
       ],
       default: "Pending",
     },
+    paymentStatus: {
+      type: String,
+      default: "Proceed to Registrar Staff",
+    },
   },
   { timestamps: true }
 );
