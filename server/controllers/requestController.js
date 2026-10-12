@@ -3,8 +3,6 @@ import User from "../models/User.js";
 
 export const createRequest = async (req, res) => {
   try {
-    console.log("CREATE REQUEST BODY:", req.body);
-
     const {
       requestNumber,
       document,
@@ -13,39 +11,20 @@ export const createRequest = async (req, res) => {
       date,
     } = req.body;
 
-    // Get logged-in user's information from JWT
     const user = await User.findById(req.user.id);
-
     if (!user) {
-      return res.status(404).json({
-        message: "User not found.",
-      });
+      return res.status(404).json({ message: "User not found." });
     }
 
-    // Check required fields
-    if (
-      !requestNumber ||
-      !document ||
-      !purpose ||
-      !date
-    ) {
-      return res.status(400).json({
-        message: "Required request fields are missing.",
-      });
+    if (!requestNumber || !document || !purpose || !date) {
+      return res.status(400).json({ message: "Required request fields are missing." });
     }
 
-    // Check duplicate request number
-    const existingRequest = await Request.findOne({
-      requestNumber,
-    });
-
+    const existingRequest = await Request.findOne({ requestNumber });
     if (existingRequest) {
-      return res.status(409).json({
-        message: "Request number already exists.",
-      });
+      return res.status(409).json({ message: "Request number already exists." });
     }
 
-    // Auto-generate sequential line-by-line number
     let lineNumber = req.body.lineNumber;
     if (!lineNumber) {
       const highestLineRequest = await Request.findOne().sort({ lineNumber: -1 });
@@ -55,11 +34,9 @@ export const createRequest = async (req, res) => {
           : (await Request.countDocuments()) + 1;
     }
 
-    // Default priority based on user status (phinmaed/official student = Priority, personal = Regular)
     const defaultPriority =
       user.isPriority || user.userType === "priority" ? "Priority" : "Regular";
 
-    // Create request using authenticated user's information
     const request = await Request.create({
       requestNumber,
       lineNumber,
@@ -82,10 +59,7 @@ export const createRequest = async (req, res) => {
     });
   } catch (error) {
     console.error("Create request error:", error);
-
-    return res.status(500).json({
-      message: "Server error while creating request.",
-    });
+    return res.status(500).json({ message: "Server error while creating request." });
   }
 };
 
@@ -93,21 +67,16 @@ export const getRequests = async (req, res) => {
   try {
     let requests;
 
-    // Students and guests can only see their own requests
     if (req.user.role === "student" || req.user.role === "guest") {
       const user = await User.findById(req.user.id);
-
       if (!user) {
-        return res.status(404).json({
-          message: "User not found.",
-        });
+        return res.status(404).json({ message: "User not found." });
       }
 
       requests = await Request.find({
         studentId: user.studentId,
       }).sort({ lineNumber: 1, createdAt: 1 });
     } else {
-      // Staff and admin can see all requests ordered by line number
       requests = await Request.find().sort({
         lineNumber: 1,
         createdAt: 1,
@@ -117,10 +86,7 @@ export const getRequests = async (req, res) => {
     return res.status(200).json(requests);
   } catch (error) {
     console.error("Get requests error:", error);
-
-    return res.status(500).json({
-      message: "Server error while getting requests.",
-    });
+    return res.status(500).json({ message: "Server error while getting requests." });
   }
 };
 
@@ -137,18 +103,11 @@ export const updateRequestStatus = async (req, res) => {
       "Needs Correction",
     ];
 
-    // Validate status
     if (!status || !allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: "Invalid request status.",
-      });
+      return res.status(400).json({ message: "Invalid request status." });
     }
 
-    // Only staff and admin should reach this controller
-    if (
-      req.user.role !== "staff" &&
-      req.user.role !== "admin"
-    ) {
+    if (req.user.role !== "staff" && req.user.role !== "admin") {
       return res.status(403).json({
         message: "Only staff and admin can update request status.",
       });
@@ -161,9 +120,7 @@ export const updateRequestStatus = async (req, res) => {
     );
 
     if (!request) {
-      return res.status(404).json({
-        message: "Request not found.",
-      });
+      return res.status(404).json({ message: "Request not found." });
     }
 
     return res.status(200).json({
@@ -172,10 +129,7 @@ export const updateRequestStatus = async (req, res) => {
     });
   } catch (error) {
     console.error("Update request status error:", error);
-
-    return res.status(500).json({
-      message: "Server error while updating request status.",
-    });
+    return res.status(500).json({ message: "Server error while updating request status." });
   }
 };
 
@@ -185,6 +139,7 @@ export const updateRequest = async (req, res) => {
     const {
       status,
       remarks,
+      phone,
       lineNumber,
       priority,
       pickupDate,
@@ -193,11 +148,7 @@ export const updateRequest = async (req, res) => {
       copies,
     } = req.body;
 
-    // Only staff and admin can edit receipt details
-    if (
-      req.user.role !== "staff" &&
-      req.user.role !== "admin"
-    ) {
+    if (req.user.role !== "staff" && req.user.role !== "admin") {
       return res.status(403).json({
         message: "Only staff and admin can edit request receipt details.",
       });
@@ -225,9 +176,7 @@ export const updateRequest = async (req, res) => {
     );
 
     if (!request) {
-      return res.status(404).json({
-        message: "Request not found.",
-      });
+      return res.status(404).json({ message: "Request not found." });
     }
 
     return res.status(200).json({
@@ -236,9 +185,6 @@ export const updateRequest = async (req, res) => {
     });
   } catch (error) {
     console.error("Update request error:", error);
-
-    return res.status(500).json({
-      message: "Server error while updating request receipt.",
-    });
+    return res.status(500).json({ message: "Server error while updating request receipt." });
   }
 };

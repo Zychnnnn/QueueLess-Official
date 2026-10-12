@@ -383,20 +383,10 @@ function QueueLessApp() {
     }
   };
 
-  /*
-   * Restore saved login session.
-   */
   useEffect(() => {
-    const savedUser =
-      localStorage.getItem("queueless_user");
+    const savedUser = localStorage.getItem("queueless_user");
+    const savedToken = localStorage.getItem("queueless_token");
 
-    const savedToken =
-      localStorage.getItem("queueless_token");
-
-    /*
-     * If either the user or token is missing,
-     * do not restore the session.
-     */
     if (!savedUser || !savedToken) {
       localStorage.removeItem("queueless_user");
       localStorage.removeItem("queueless_token");
@@ -626,7 +616,6 @@ function QueueLessApp() {
 
     const currentRole = currentUser.role;
 
-    // --- STUDENT NOTIFICATIONS ---
     if (currentRole === "student") {
       const list: NotificationItem[] = [];
       const studentIdClean = (currentUser.studentId || "").trim().toLowerCase();
@@ -794,7 +783,6 @@ function QueueLessApp() {
       return list;
     }
 
-    // --- ADMIN NOTIFICATIONS ---
     if (currentRole === "admin") {
       const list: NotificationItem[] = [];
 
@@ -1630,10 +1618,6 @@ function AuthScreen({
         return;
       }
 
-      /*
-       * IMPORTANT:
-       * Save the JWT returned by the backend.
-       */
       if (!result.token) {
         setError(
           "Login succeeded, but no authentication token was returned."
@@ -1646,9 +1630,6 @@ function AuthScreen({
         result.token
       );
 
-      /*
-       * Backend decides the actual role.
-       */
       onSignIn({
         id: result.user.id,
         name: result.user.name,
@@ -3214,7 +3195,6 @@ function StudentView({
     Boolean(currentUser.studentId?.startsWith("GUEST"));
 
   if (view === "new") {
-    // Normal users / guests must update profile (phone number) first!
     if (isGuestUser && (!currentUser.phone || !currentUser.phone.trim())) {
       return (
         <div className="animate-rise max-w-xl mx-auto my-8">
@@ -3612,34 +3592,10 @@ function NewRequest({
           "queueless_token"
         );
 
-      /*
-       * JWT is required for protected request creation.
-       */
       if (!token) {
-        setError(
-          "You are not authenticated. Please sign in again."
-        );
+        setError("You are not authenticated. Please sign in again.");
         return;
       }
-
-      console.log(
-        "QUEUELESS DEBUG:",
-        {
-          currentUser,
-          requestNumber,
-          student:
-            currentUser.name,
-          studentId:
-            currentUser.studentId,
-          document: doc,
-          purpose:
-            purpose.trim(),
-          copies,
-          remarks:
-            remarks.trim(),
-          date,
-        }
-      );
 
       const response =
         await fetch(
@@ -4833,7 +4789,6 @@ function PickupCalendarModal({
     const trimmed = dateStr.trim();
     if (!trimmed) return null;
 
-    // Pattern 1: YYYY-MM-DD or YYYY/MM/DD
     const isoMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (isoMatch) {
       return new Date(
@@ -4843,7 +4798,6 @@ function PickupCalendarModal({
       );
     }
 
-    // Pattern 2: Month DD, YYYY e.g. "Oct 05, 2026" or "October 5, 2026"
     const textMatch = trimmed.match(/^([a-zA-Z]+)\s+(\d{1,2}),?\s*(\d{4})/);
     if (textMatch) {
       const monthPrefix = textMatch[1].slice(0, 3).toLowerCase();
@@ -4870,7 +4824,6 @@ function PickupCalendarModal({
       }
     }
 
-    // Pattern 3: MM/DD/YYYY
     const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     if (slashMatch) {
       return new Date(

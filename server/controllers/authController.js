@@ -12,7 +12,6 @@ export const isSchoolCredential = (email = "", studentId = "") => {
   const cleanEmail = email.toLowerCase().trim();
   const cleanId = studentId ? studentId.trim() : "";
 
-  // Priority if email contains .edu.ph (e.g. reirei.edu.ph@gmail.com, student@up.phinma.edu.ph) or phinmaed.com
   const isSchoolEmail =
     cleanEmail.includes(".edu.ph") ||
     cleanEmail.endsWith("@phinmaed.com") ||
@@ -46,7 +45,6 @@ export const register = async (req, res) => {
       });
     }
 
-    // Student Account: Student ID is strictly required in format 00-0000-000000
     if (!cleanStudentId) {
       return res.status(400).json({
         message: "Student ID is required for student registration (e.g. 00-0000-000000).",
@@ -87,7 +85,6 @@ export const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Save with pending approval status
     const user = await User.create({
       name: cleanName,
       studentId: finalStudentId,
@@ -99,11 +96,6 @@ export const register = async (req, res) => {
       approvalStatus: "pending",
     });
 
-    console.log(
-      `[QueueLess Registration] New pending user: ${user.name} (${user.email}, ID: ${user.studentId}, Type: ${user.userType})`
-    );
-
-    // Notify admin asynchronously
     sendAdminRegistrationNotification({
       name: user.name,
       email: user.email,
@@ -126,14 +118,12 @@ export const register = async (req, res) => {
     });
   } catch (error) {
     console.error("Registration error:", error);
-
     return res.status(500).json({
       message: "Server error during registration.",
     });
   }
 };
 
-// ── Guest Registration ─────────────────────────────────────
 export const registerGuest = async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
@@ -147,7 +137,6 @@ export const registerGuest = async (req, res) => {
     const cleanName = name.trim();
     const cleanEmail = email.toLowerCase().trim();
 
-    // Validate email format
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailPattern.test(cleanEmail)) {
       return res.status(400).json({
@@ -155,16 +144,16 @@ export const registerGuest = async (req, res) => {
       });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({
-        message: "Password must contain at least 6 characters.",
-      });
-    }
-
     const existingUser = await User.findOne({ email: cleanEmail });
     if (existingUser) {
       return res.status(409).json({
-        message: "An account with this email already exists. Please sign in instead.",
+        message: "An account with this email address already exists.",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters.",
       });
     }
 
@@ -183,8 +172,6 @@ export const registerGuest = async (req, res) => {
       approvalStatus: "approved",
       lastLogin: new Date(),
     });
-
-    console.log(`[QueueLess Auth] New Guest registered: ${user.name} (${user.email}, ${guestId})`);
 
     const token = jwt.sign(
       {
@@ -223,34 +210,22 @@ export const registerGuest = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, studentId, identifier: rawIdentifier, password, loginType } = req.body;
-
     const inputIdentifier = (email || studentId || rawIdentifier || "").trim();
 
-    // Check required fields
     if (!inputIdentifier || !password) {
       return res.status(400).json({
         message: "Student ID or Email, and password are required.",
       });
     }
 
-    const allowedLoginTypes = [
-      "student",
-      "staff",
-      "admin",
-    ];
-
-    if (
-      loginType &&
-      !allowedLoginTypes.includes(loginType)
-    ) {
+    const allowedLoginTypes = ["student", "staff", "admin"];
+    if (loginType && !allowedLoginTypes.includes(loginType)) {
       return res.status(400).json({
         message: "Choose a valid login type.",
       });
     }
 
     const cleanLower = inputIdentifier.toLowerCase();
-
-    // Find user by either email or studentId (matches format e.g. 00-0000-000000)
     const user = await User.findOne({
       $or: [
         { email: cleanLower },
@@ -272,14 +247,12 @@ export const login = async (req, res) => {
       });
     }
 
-    // Role verification: Admin and staff portals require respective roles
     if (loginType && user.role !== loginType) {
       return res.status(403).json({
         message: "Cannot sign in.",
       });
     }
 
-    // Student login portal: Admin and Staff accounts cannot sign in through the student page
     if (!loginType || loginType === "student") {
       if (user.role !== "student") {
         return res.status(403).json({
@@ -288,7 +261,6 @@ export const login = async (req, res) => {
       }
     }
 
-    // Check review/approval status for student/normal user accounts
     if (user.approvalStatus === "pending") {
       return res.status(403).json({
         message:
@@ -303,19 +275,13 @@ export const login = async (req, res) => {
       });
     }
 
-    // Compare password with hashed password
-    const isPasswordValid = await bcrypt.compare(
-      password,
-      user.password
-    );
-
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({
         message: "Invalid Student ID / email or password.",
       });
     }
 
-    // Create JWT token
     const token = jwt.sign(
       {
         id: user._id,
@@ -327,7 +293,6 @@ export const login = async (req, res) => {
       }
     );
 
-    // Determine priority if not already saved
     let isPriority = user.isPriority;
     let userType = user.userType;
     if (isPriority === undefined || !userType) {
@@ -337,11 +302,9 @@ export const login = async (req, res) => {
       user.userType = userType;
     }
 
-    // Record last login
     user.lastLogin = new Date();
     await user.save();
 
-    // Return login response
     return res.status(200).json({
       message: "Login successful.",
       token,
@@ -370,14 +333,14 @@ export const login = async (req, res) => {
     return res.status(500).json({
       message: isDbError
         ? "Database connection error. Please ensure your current IP address is whitelisted in MongoDB Atlas."
-        : "Server error during login. Please try again.",
+        : "Server error during login.",
     });
   }
 };
 
-export const createStaff = async (req, res) => {
+export const createStaffAccount = async (req, res) => {
   try {
-    const { name, email, password, staffId: customStaffId } = req.body;
+    const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -385,40 +348,32 @@ export const createStaff = async (req, res) => {
       });
     }
 
-    const cleanName = name.trim();
     const cleanEmail = email.toLowerCase().trim();
+    const existing = await User.findOne({ email: cleanEmail });
 
-    if (!cleanName || !cleanEmail) {
-      return res.status(400).json({
-        message: "Name and email are required.",
+    if (existing) {
+      return res.status(409).json({
+        message: "A staff or user account with this email already exists.",
       });
     }
 
     if (password.length < 8) {
       return res.status(400).json({
-        message: "Password must contain at least 8 characters.",
+        message: "Staff password must contain at least 8 characters.",
       });
     }
 
-    const existingUser = await User.findOne({
-      email: cleanEmail,
-    });
-
-    if (existingUser) {
-      return res.status(409).json({
-        message: "Email is already registered.",
-      });
-    }
+    const staffCount = await User.countDocuments({ role: "staff" });
+    const staffId = `STAFF-${String(staffCount + 1).padStart(3, "0")}`;
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const staffId = customStaffId ? customStaffId.trim() : `STAFF-${Date.now().toString().slice(-5)}`;
-
     const user = await User.create({
-      name: cleanName,
-      studentId: staffId,
+      name: name.trim(),
       email: cleanEmail,
+      studentId: staffId,
       password: hashedPassword,
       role: "staff",
+      approvalStatus: "approved",
     });
 
     return res.status(201).json({
@@ -426,14 +381,13 @@ export const createStaff = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        studentId: user.studentId,
         email: user.email,
+        studentId: user.studentId,
         role: user.role,
       },
     });
   } catch (error) {
-    console.error("Staff creation error:", error);
-
+    console.error("Create staff error:", error);
     return res.status(500).json({
       message: "Server error while creating staff account.",
     });
@@ -462,7 +416,6 @@ export const getUsers = async (req, res) => {
     });
   } catch (error) {
     console.error("Fetch users error:", error);
-
     return res.status(500).json({
       message: "Server error while fetching users.",
     });
@@ -483,9 +436,6 @@ export const approveUser = async (req, res) => {
     user.approvalStatus = "approved";
     await user.save();
 
-    console.log(`[QueueLess Admin] Admitted user: ${user.name} (${user.email})`);
-
-    // Notify user of approval
     sendAccountStatusNotification({
       toEmail: user.email,
       name: user.name,
@@ -505,7 +455,6 @@ export const approveUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Approve user error:", error);
-
     return res.status(500).json({
       message: "Server error while approving user.",
     });
@@ -526,9 +475,6 @@ export const rejectUser = async (req, res) => {
     user.approvalStatus = "rejected";
     await user.save();
 
-    console.log(`[QueueLess Admin] Rejected user: ${user.name} (${user.email})`);
-
-    // Notify user of rejection
     sendAccountStatusNotification({
       toEmail: user.email,
       name: user.name,
@@ -548,7 +494,6 @@ export const rejectUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Reject user error:", error);
-
     return res.status(500).json({
       message: "Server error while rejecting user.",
     });
@@ -566,7 +511,6 @@ export const deleteUser = async (req, res) => {
     }
 
     const user = await User.findById(id);
-
     if (!user) {
       return res.status(404).json({
         message: "User account not found.",
@@ -581,7 +525,6 @@ export const deleteUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete user error:", error);
-
     return res.status(500).json({
       message: "Server error while deleting user.",
     });
@@ -651,15 +594,11 @@ export const googleLogin = async (req, res) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-
-    // Check if official school account (phinmaed.com / student ID)
     const isPriority = isSchoolCredential(cleanEmail, "");
     const userType = isPriority ? "priority" : "normal";
 
-    // Check if user already exists
     let user = await User.findOne({ email: cleanEmail });
 
-    // Role verification for login portals
     if (user && loginType && user.role !== loginType) {
       return res.status(403).json({
         message: "Cannot sign in.",
@@ -667,7 +606,6 @@ export const googleLogin = async (req, res) => {
     }
 
     if (!user) {
-      // Extract student ID format if present in email prefix, else generate formatted ID
       const idMatch = cleanEmail.match(/^(\d{4}-\d{5})/);
       const studentId = idMatch
         ? idMatch[1]
@@ -686,8 +624,6 @@ export const googleLogin = async (req, res) => {
         userType,
         lastLogin: new Date(),
       });
-
-      console.log(`[MongoDB] New user registered via Google: ${user.email} (Priority: ${user.isPriority})`);
     } else {
       let needsSave = false;
       if (!user.googleId && googleId) {
@@ -708,8 +644,6 @@ export const googleLogin = async (req, res) => {
       if (needsSave) {
         await user.save();
       }
-
-      console.log(`[MongoDB] Existing user logged in via Google: ${user.email} (Priority: ${user.isPriority})`);
     }
 
     const token = jwt.sign(
@@ -759,8 +693,6 @@ export const requestPasswordResetOtp = async (req, res) => {
     }
 
     const cleanInput = input.toLowerCase();
-
-    // Query user in MongoDB by email or studentId/staffId/adminId
     const query = {
       $or: [
         { email: cleanInput },
@@ -793,14 +725,10 @@ export const requestPasswordResetOtp = async (req, res) => {
       });
     }
 
-    // Always use the official email stored in the DB
     const userEmail = user.email.toLowerCase().trim();
-
-    // Generate 6-digit OTP code
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Save or update OTP in DB for this exact user's email
     await PasswordResetOtp.findOneAndUpdate(
       { email: userEmail },
       {
@@ -811,14 +739,8 @@ export const requestPasswordResetOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    console.log(
-      `[QueueLess Auth] Password Reset OTP for ${userEmail} (${user.role} - ${user.studentId}): ${otp}`
-    );
-
-    // Send OTP directly to user's registered email inbox
     const sendResult = await sendOtpEmail(userEmail, otp);
 
-    // Mask email for privacy (e.g., ad***@up.phinma.edu.ph)
     const atIndex = userEmail.indexOf("@");
     const maskedEmail =
       atIndex > 2
@@ -852,13 +774,12 @@ export const verifyPasswordResetOtp = async (req, res) => {
 
     let cleanEmail = input.toLowerCase();
 
-    // If an ID was supplied instead of an email, resolve to registered email in DB
     if (!cleanEmail.includes("@")) {
       const user = await User.findOne({
         $or: [
           { studentId: input },
           { studentId: input.toUpperCase() },
-          { email: cleanInput },
+          { email: cleanEmail },
         ],
       });
       if (user && user.email) {
@@ -885,7 +806,6 @@ export const verifyPasswordResetOtp = async (req, res) => {
       });
     }
 
-    // Mark as verified
     record.verified = true;
     await record.save();
 
@@ -920,13 +840,12 @@ export const resetPassword = async (req, res) => {
 
     let cleanEmail = input.toLowerCase();
 
-    // If an ID was supplied instead of an email, resolve to registered email in DB
     if (!cleanEmail.includes("@")) {
       const existingUser = await User.findOne({
         $or: [
           { studentId: input },
           { studentId: input.toUpperCase() },
-          { email: cleanInput },
+          { email: cleanEmail },
         ],
       });
       if (existingUser && existingUser.email) {
@@ -965,12 +884,7 @@ export const resetPassword = async (req, res) => {
     user.password = hashedPassword;
     await user.save();
 
-    // Clean up OTP record
     await PasswordResetOtp.deleteOne({ _id: record._id });
-
-    console.log(
-      `[QueueLess Auth] Password successfully reset for: ${cleanEmail} (${user.role})`
-    );
 
     return res.status(200).json({
       message: "Password reset successfully. You can now sign in with your new password.",
@@ -984,10 +898,6 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-
-
-
-// ── Profile Update ─────────────────────────────────────────
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1025,7 +935,6 @@ export const updateProfile = async (req, res) => {
   }
 };
 
-// ── Change Password ────────────────────────────────────────
 export const changePassword = async (req, res) => {
   try {
     const userId = req.user.id;
