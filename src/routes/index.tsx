@@ -1403,16 +1403,6 @@ function QueueLessApp() {
                     navigate("requests")
                   }
                 />
-                <NavButton
-                  active={
-                    view === "profile"
-                  }
-                  icon={<UserRound />}
-                  label="My profile"
-                  onClick={() =>
-                    navigate("profile")
-                  }
-                />
               </>
             )}
 
