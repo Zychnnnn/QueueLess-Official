@@ -3471,14 +3471,30 @@ function StudentProfileView({
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Account Type</span>
-                <span className="font-semibold capitalize">{isGuestUser ? "Guest" : currentUser.role}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Priority Status</span>
                 <span className="font-semibold">
-                  {currentUser.isPriority ? "⭐ Priority Student" : "Regular Queue"}
+                  {currentUser.role === "staff"
+                    ? "Registrar Staff"
+                    : currentUser.role === "admin"
+                    ? "Administrator"
+                    : isGuestUser
+                    ? "Guest"
+                    : "Student"}
                 </span>
               </div>
+              {(currentUser.role === "student" || currentUser.role === "guest" || isGuestUser) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Priority Status</span>
+                  <span className="font-semibold">
+                    {currentUser.isPriority ? "⭐ Priority Student" : "Regular Queue"}
+                  </span>
+                </div>
+              )}
+              {(currentUser.role === "staff" || currentUser.role === "admin") && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Office</span>
+                  <span className="font-semibold">Registrar's Office</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Phone</span>
                 <span className="font-semibold font-mono">{currentUser.phone || "Not set"}</span>
@@ -6850,13 +6866,6 @@ function ConfirmStatusModal({
             </p>
           </div>
 
-          {/* Student Email Notification Notice */}
-          <div className="flex items-start gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 p-2.5 text-xs text-emerald-800 dark:text-emerald-300">
-            <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
-            <span>
-              An automated email notification will be dispatched to the student with this payment instruction, claim schedule, and queue line position immediately.
-            </span>
-          </div>
 
           <div className="mt-5 flex items-center justify-end gap-2.5 pt-1">
             <Button
