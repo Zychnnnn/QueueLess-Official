@@ -5618,52 +5618,108 @@ function DigitalReceiptModal({
           </div>
         )}
 
-        {/* Structured Transaction Table */}
-        <div className="mt-3.5 overflow-hidden rounded-lg border border-border print:border-black">
-          <table className="w-full text-left text-xs border-collapse">
-            <tbody>
-              <tr className="border-b border-border bg-muted/40 print:border-black print:bg-gray-100">
-                <td className="w-1/4 p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Reference No.</td>
-                <td className="w-1/4 p-2.5 font-mono font-bold text-foreground print:text-black">{currentReq.id}</td>
-                <td className="w-1/4 p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Date Filed</td>
-                <td className="w-1/4 p-2.5 font-semibold text-foreground print:text-black">{currentReq.date}</td>
-              </tr>
-              <tr className="border-b border-border print:border-black">
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Student Name</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">{currentReq.student}</td>
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Student ID No.</td>
-                <td className="p-2.5 font-mono font-bold text-foreground print:text-black">{currentReq.studentId}</td>
-              </tr>
-              <tr className="border-b border-border bg-muted/40 print:border-black print:bg-gray-100">
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Contact Phone</td>
-                <td className="p-2.5 font-mono text-foreground print:text-black">{currentReq.phone || "On File"}</td>
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Queue Line</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">Line #{lineNum}</td>
-              </tr>
-              <tr className="border-b border-border print:border-black">
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Document</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">{currentReq.document}</td>
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Copies</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">{currentReq.copies || 1}</td>
-              </tr>
-              <tr className="border-b border-border bg-muted/40 print:border-black print:bg-gray-100">
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Purpose</td>
-                <td className="p-2.5 font-medium text-foreground print:text-black" colSpan={3}>
-                  {currentReq.purpose || "Official Record Request"}
-                </td>
-              </tr>
-              <tr>
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">
-                  {isClaimed ? "Date Claimed" : "Pickup Schedule"}
-                </td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">
-                  {currentReq.pickupDate || (isClaimed ? currentReq.date : "Standard Schedule")}
-                </td>
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Status</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">{currentReq.status}</td>
-              </tr>
-            </tbody>
-          </table>
+        {/* Receipt Details Grid */}
+        <div className="mt-4 rounded-xl border border-border bg-muted/15 p-4 sm:p-5 print:border-black print:bg-white print:p-3">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3.5 text-xs">
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Reference No.
+              </p>
+              <p className="mt-0.5 font-mono text-sm font-bold text-foreground print:text-black">
+                {currentReq.id}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Date Filed
+              </p>
+              <p className="mt-0.5 text-sm font-semibold text-foreground print:text-black">
+                {currentReq.date}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Student Name
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
+                {currentReq.student}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Student ID No.
+              </p>
+              <p className="mt-0.5 font-mono text-sm font-bold text-foreground print:text-black">
+                {currentReq.studentId}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Contact Phone
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-foreground print:text-black">
+                {currentReq.phone || "On File"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Queue Line
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
+                Line #{lineNum}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Document Requested
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
+                {currentReq.document}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Copies
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-foreground print:text-black">
+                {currentReq.copies || 1} {currentReq.copies === 1 ? "copy" : "copies"}
+              </p>
+            </div>
+
+            <div className="col-span-2 border-t border-border/60 pt-3 print:border-gray-300">
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Purpose
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-foreground print:text-black">
+                {currentReq.purpose || "Official Record Request"}
+              </p>
+            </div>
+
+            <div className="border-t border-border/60 pt-3 print:border-gray-300">
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                {isClaimed ? "Date Claimed" : "Pickup Schedule"}
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
+                {currentReq.pickupDate || (isClaimed ? currentReq.date : "Standard Schedule")}
+              </p>
+            </div>
+
+            <div className="border-t border-border/60 pt-3 print:border-gray-300">
+              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                Current Status
+              </p>
+              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
+                {currentReq.status}
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Remarks */}
