@@ -7360,17 +7360,15 @@ function ManageRequests({
       </div>
 
       {/* High-Visibility Requests Table (Scrollable Container) */}
-      <div className="mt-3 max-h-[580px] overflow-y-auto overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
-        <table className="w-full text-left text-xs sm:text-sm border-collapse">
-          <thead className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur text-[11px] font-bold uppercase tracking-wider text-muted-foreground shadow-xs">
+      <div className="mt-3 max-h-[580px] overflow-y-auto rounded-xl border border-border bg-card shadow-xs">
+        <table className="w-full text-left text-xs border-collapse table-fixed">
+          <thead className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-muted-foreground shadow-xs">
             <tr>
-              <th className="py-3 pl-4 pr-2 w-24">Queue Line</th>
-              <th className="py-3 px-3 w-28">Request ID</th>
-              <th className="py-3 px-3 min-w-[160px]">Student</th>
-              <th className="py-3 px-3 min-w-[160px]">Document</th>
-              <th className="py-3 px-3 w-24 whitespace-nowrap">Submitted</th>
-              <th className="py-3 px-3 w-32">Status</th>
-              <th className="py-3 pr-4 pl-3 w-52 text-right">Actions</th>
+              <th className="py-2.5 pl-3 pr-2 w-[90px]">Queue</th>
+              <th className="py-2.5 px-2 w-[35%]">Student</th>
+              <th className="py-2.5 px-2">Document</th>
+              <th className="py-2.5 px-2 w-[80px]">Status</th>
+              <th className="py-2.5 pl-2 pr-3 w-[110px] text-right">Actions</th>
             </tr>
           </thead>
 
@@ -7399,86 +7397,78 @@ function ManageRequests({
                   key={r.id}
                   className={`border-b border-border/70 transition-colors hover:bg-muted/30 ${borderAccent}`}
                 >
-                  {/* Line number and priority badge */}
-                  <td className="py-3 pl-4 pr-2">
+                  {/* Queue line + priority badge */}
+                  <td className="py-2.5 pl-3 pr-2">
                     <div className="flex flex-col gap-1 items-start">
-                      <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-black text-primary border border-primary/20">
+                      <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-black text-primary border border-primary/20 whitespace-nowrap">
                         Line #{r.lineNumber ?? 1}
                       </span>
                       {isUrgent && (
-                        <span className="inline-flex items-center rounded bg-rose-500/15 px-1.5 py-0.2 text-[10px] font-black text-rose-700 dark:text-rose-400 border border-rose-500/30">
+                        <span className="inline-flex items-center rounded bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-black text-rose-700 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap">
                           ⚡ Urgent
                         </span>
                       )}
                       {isPriority && (
-                        <span className="inline-flex items-center rounded bg-amber-500/15 px-1.5 py-0.2 text-[10px] font-bold text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                        <span className="inline-flex items-center rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
                           ★ Priority
                         </span>
                       )}
                     </div>
                   </td>
 
-                  {/* Request ID */}
-                  <td className="py-3 px-3 font-mono font-bold text-primary text-xs">
-                    {r.id}
-                  </td>
-
-                  {/* Student */}
-                  <td className="py-3 px-3">
-                    <p className="font-bold text-foreground text-xs sm:text-sm leading-tight">{r.student}</p>
-                    <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{r.studentId}</p>
+                  {/* Student — includes Request ID and phone */}
+                  <td className="py-2.5 px-2">
+                    <p className="font-bold text-foreground text-xs leading-tight truncate">{r.student}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">{r.studentId}</p>
+                    <p className="font-mono text-[10px] text-primary/70 mt-0.5 truncate">{r.id}</p>
                     {r.phone ? (
                       <a
                         href={`tel:${r.phone}`}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline mt-0.5 cursor-pointer"
+                        className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline mt-0.5 cursor-pointer"
                         title="Call student"
                       >
-                        <Phone className="size-2.5" /> {r.phone}
+                        <Phone className="size-2.5 shrink-0" /> {r.phone}
                       </a>
                     ) : (
-                      <span className="text-[10px] text-muted-foreground/60 italic">No phone</span>
+                      <span className="text-[10px] text-muted-foreground/50 italic">No phone</span>
                     )}
                   </td>
 
                   {/* Document */}
-                  <td className="py-3 px-3">
-                    <p className="font-semibold text-foreground text-xs leading-tight">{r.document}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <td className="py-2.5 px-2">
+                    <p className="font-semibold text-foreground text-xs leading-tight line-clamp-2">{r.document}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
                       {r.copies || 1} {(r.copies || 1) === 1 ? "copy" : "copies"} · {r.purpose}
                     </p>
-                  </td>
-
-                  {/* Submitted Date */}
-                  <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">
-                    {r.date}
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">{r.date}</p>
                   </td>
 
                   {/* Status Badge */}
-                  <td className="py-3 px-3">
+                  <td className="py-2.5 px-2">
                     <StatusBadge status={r.status} />
                   </td>
 
-                  {/* Actions (Grouped cleanly, no clipping) */}
-                  <td className="py-3 pr-4 pl-3 text-right whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-1.5">
+                  {/* Actions — icon-only buttons with tooltips */}
+                  <td className="py-2.5 pl-2 pr-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="outline"
-                        size="sm"
+                        size="icon"
                         onClick={() => setViewingReceipt(r)}
-                        className="h-7 px-2 text-xs cursor-pointer font-medium"
+                        className="h-7 w-7 cursor-pointer shrink-0"
                         title="View Receipt"
                       >
-                        <Eye className="size-3" /> Receipt
+                        <Eye className="size-3.5" />
                       </Button>
 
                       <Button
                         variant="outline"
-                        size="sm"
+                        size="icon"
                         onClick={() => setEditingReceipt(r)}
-                        className="h-7 px-2 text-xs cursor-pointer font-medium"
+                        className="h-7 w-7 cursor-pointer shrink-0"
                         title="Edit Receipt & Line Number"
                       >
-                        <Edit3 className="size-3" /> Edit
+                        <Edit3 className="size-3.5" />
                       </Button>
 
                       <Button
@@ -7494,10 +7484,10 @@ function ManageRequests({
                               : "Processing";
                           setPendingStatusChange({ request: r, nextStatus });
                         }}
-                        className="h-7 px-2.5 text-xs font-bold cursor-pointer gap-1 shadow-xs"
-                        title="Process Request & Update Payment/Receipt"
+                        className="h-7 px-2 text-[10px] font-bold cursor-pointer gap-1 shadow-xs shrink-0"
+                        title="Process Request"
                       >
-                        <ClipboardCheck className="size-3" /> Process
+                        <ClipboardCheck className="size-3" /> Go
                       </Button>
                     </div>
                   </td>
