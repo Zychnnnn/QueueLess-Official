@@ -5433,8 +5433,6 @@ function DigitalReceiptModal({
   const lineNum = currentReq.lineNumber ?? 1;
   const isClaimed = currentReq.status === "Claimed";
   const isReadyForClaiming = currentReq.status === "Ready for Claiming";
-  const refNumber = currentReq.id.startsWith("REQ-") ? currentReq.id : `REQ-${currentReq.id}`;
-  const archiveCode = `UPANG-REG-${String(currentReq.id).replace(/\D/g, "").padStart(5, "0") || currentReq.id}`;
 
   useEffect(() => {
     document.body.classList.add("modal-receipt-open");
@@ -5446,23 +5444,19 @@ function DigitalReceiptModal({
   const getPriorityBadge = (p?: Priority) => {
     if (p === "Urgent") {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-0.5 text-xs font-bold text-destructive print:border-black print:bg-white print:text-black">
-          ⚡ Urgent Priority
+        <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[10px] font-bold text-destructive print:border-black print:bg-white print:text-black">
+          Urgent
         </span>
       );
     }
     if (p === "Priority") {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400 print:border-black print:bg-white print:text-black">
-          ★ Priority Lane
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400 print:border-black print:bg-white print:text-black">
+          Priority Lane
         </span>
       );
     }
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2.5 py-0.5 text-xs font-semibold text-muted-foreground print:border-black print:bg-white print:text-black">
-        Regular Queue
-      </span>
-    );
+    return null;
   };
 
   const handleSaveReceiptEdit = async (updated: {
@@ -5529,7 +5523,7 @@ function DigitalReceiptModal({
         role="dialog"
         aria-modal="true"
         aria-label="Official Document Receipt"
-        className="relative w-full max-w-2xl max-h-[94vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl print:border-none print:shadow-none print:max-w-full print:p-0 print-receipt-card"
+        className="relative w-full max-w-xl max-h-[94vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl print:border-none print:shadow-none print:max-w-full print:p-0 print-receipt-card"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Screen Close Button */}
@@ -5545,230 +5539,92 @@ function DigitalReceiptModal({
           </Button>
         </div>
 
-        {/* Official Institutional Letterhead (Screen & Print) */}
+        {/* Official Institutional Letterhead */}
         <div className="text-center">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-full border-2 border-primary/40 bg-primary/10 text-primary print:border-black print:bg-white print:text-black">
-              <ShieldCheck className="size-7" />
-            </div>
-            <div className="text-left">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground print:text-black">
-                PHINMA Education • Republic of the Philippines
-              </p>
-              <h1 className="font-serif text-lg sm:text-xl font-black uppercase tracking-wider text-foreground print:text-black leading-tight">
-                PHINMA University of Pangasinan
-              </h1>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-primary print:text-black">
-                Office of the University Registrar
-              </p>
-            </div>
-          </div>
-          <p className="mt-1 text-[10px] text-muted-foreground print:text-gray-800">
-            Arellano Street, Dagupan City, Pangasinan 2400 • Tel: (075) 522-5635 • registrar.up@phinmaed.com
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground print:text-black">
+            PHINMA Education • Republic of the Philippines
+          </p>
+          <h1 className="font-serif text-lg font-black uppercase tracking-wider text-foreground print:text-black leading-tight mt-0.5">
+            PHINMA University of Pangasinan
+          </h1>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-primary print:text-black">
+            Office of the University Registrar
+          </p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground print:text-gray-700">
+            Arellano Street, Dagupan City, Pangasinan 2400 • Tel: (075) 522-5635
           </p>
         </div>
 
-        {/* Decorative Institutional Double Rule */}
+        {/* Divider Rule */}
         <div className="my-3 border-t-2 border-b border-foreground/30 py-0.5 print:border-black" />
 
-        {/* Receipt Document Title based on Status */}
-        <div className="text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border px-4 py-1 text-xs font-black uppercase tracking-widest print:border-black print:bg-white print:text-black">
-            {isClaimed ? (
-              <>
-                <CheckCircle2 className="size-3.5 text-emerald-600 print:hidden" />
-                <span className="text-emerald-700 dark:text-emerald-300 print:text-black">
-                  Official Document Release Receipt & Claim Acknowledgement
-                </span>
-              </>
-            ) : isReadyForClaiming ? (
-              <>
-                <ClipboardCheck className="size-3.5 text-primary print:hidden" />
-                <span className="text-primary print:text-black">
-                  Official Document Claim Stub & Pickup Pass
-                </span>
-              </>
-            ) : (
-              <>
-                <FileCheck2 className="size-3.5 text-foreground print:hidden" />
-                <span className="text-foreground print:text-black">
-                  Registrar Document Request Slip & Tracking Voucher
-                </span>
-              </>
-            )}
+        {/* Receipt Title & Status Bar */}
+        <div className="flex items-center justify-between border-b border-border pb-3 print:border-black">
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-wider text-foreground print:text-black">
+              {isClaimed
+                ? "Official Document Release Receipt"
+                : isReadyForClaiming
+                ? "Official Document Claim Stub"
+                : "Registrar Request Receipt"}
+            </h2>
+            <p className="text-[10px] text-muted-foreground print:text-gray-700">
+              {isClaimed
+                ? "Proof of document release and claim acknowledgement"
+                : isReadyForClaiming
+                ? "Present at registrar counter to claim your requested document"
+                : "Student copy • Keep for tracking your request"}
+            </p>
           </div>
-          <p className="mt-1 text-[10.5px] text-muted-foreground print:text-gray-800">
-            {isClaimed
-              ? "Permanent University Records Archive • Student Release Acknowledgment"
-              : isReadyForClaiming
-              ? "Valid for Document Release at Registrar Counter Window 2"
-              : "Official Student Queue Sequence & Service Acknowledgement"}
-          </p>
+          <div className="flex items-center gap-2">
+            {currentReq.priority && currentReq.priority !== "Regular" && getPriorityBadge(currentReq.priority)}
+            <StatusBadge status={currentReq.status} />
+          </div>
         </div>
 
         {editFlash && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 print:hidden">
+          <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 print:hidden">
             <CheckCircle2 className="size-4 shrink-0" />
             <span>{editFlash}</span>
           </div>
         )}
 
-        {/* Status Specific Official Banner / Stamp Block */}
-        {isClaimed ? (
-          /* CLAIMED: Official Release Voucher & Archival Certificate */
-          <div className="mt-4 rounded-xl border-2 border-emerald-600/50 bg-emerald-500/5 p-4 print:border-black print:bg-white">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white print:bg-black">
-                  <Check className="size-6 stroke-[3]" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 print:text-black">
-                      ✓ Document Officially Claimed & Released
-                    </span>
-                    <span className="rounded bg-emerald-600/10 border border-emerald-600/30 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 print:border-black print:text-black">
-                      Archived in Records Vault
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground print:text-gray-800">
-                    Released on: <strong>{currentReq.pickupDate || currentReq.date}</strong> • Handed over in complete order
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-left sm:text-right font-mono text-[10.5px]">
-                <div className="text-muted-foreground print:text-black">LEDGER CODE:</div>
-                <div className="font-bold text-emerald-700 dark:text-emerald-300 print:text-black">{archiveCode}</div>
-              </div>
+        {/* Ready for Claiming Info Box */}
+        {isReadyForClaiming && (
+          <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs print:border-black print:bg-white">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-foreground print:text-black">
+                Line #{lineNum} • Counter Window 2 (Releasing Desk)
+              </span>
+              <span className="text-[11px] font-semibold text-muted-foreground print:text-black">
+                Pickup: {currentReq.pickupDate || "Today"}
+              </span>
             </div>
-
-            <p className="mt-3 border-t border-emerald-500/20 pt-2.5 text-[10.5px] italic text-muted-foreground print:border-black print:text-gray-900 leading-relaxed">
-              "This certifies that the requested official academic document(s) listed below have been authenticated with the university registrar seal, signed by the registrar officer, and formally received by the authorized recipient."
+            <p className="mt-1 text-[11px] text-muted-foreground print:text-gray-700">
+              Please present your valid student ID or authorization letter when claiming.
             </p>
-          </div>
-        ) : isReadyForClaiming ? (
-          /* READY FOR CLAIMING: Official Counter Pickup Pass */
-          <div className="mt-4 rounded-xl border-2 border-primary/50 bg-primary/5 p-4 print:border-black print:bg-white">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-primary-foreground font-black min-w-[72px] print:bg-black print:text-white shadow-xs">
-                  <span className="text-[9px] uppercase tracking-wider opacity-90">Line No.</span>
-                  <span className="text-2xl leading-none">#{lineNum}</span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-black uppercase tracking-wide text-foreground print:text-black">
-                      Ready for Counter Releasing
-                    </span>
-                    {getPriorityBadge(currentReq.priority)}
-                  </div>
-                  <p className="text-xs font-bold text-primary mt-0.5 print:text-black">
-                    Proceed to: <strong>Counter Window 2 (Document Releasing Desk)</strong>
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-left sm:text-right text-xs">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground print:text-black">Scheduled Pickup Date</span>
-                <p className="font-black text-sm text-foreground print:text-black">{currentReq.pickupDate || "Today / Standard Schedule"}</p>
-              </div>
-            </div>
-
-            {/* Claiming Instructions & Requirements Box */}
-            <div className="mt-3.5 rounded-lg border border-primary/20 bg-background/80 p-3 text-[11px] text-muted-foreground print:border-black print:bg-white print:text-black">
-              <p className="font-bold text-foreground print:text-black flex items-center gap-1.5">
-                <span>📋 Claiming Guidelines & Requirements:</span>
-              </p>
-              <ul className="mt-1.5 list-disc list-inside space-y-1 text-[10.5px]">
-                <li>Present this <strong>Claim Stub & Pickup Pass</strong> (printed hard copy or digital barcode on smartphone).</li>
-                <li>Present your valid <strong>PHINMA UPang Student ID</strong> or government-issued photo ID.</li>
-                <li>If claimed by an authorized representative: Present an <strong>Authorization Letter</strong> signed by the student, a photocopy of the student ID, and the representative's valid photo ID.</li>
-                <li>Registrar Office Hours: <strong>Monday – Friday (8:00 AM – 5:00 PM)</strong> | <strong>Saturday (8:00 AM – 12:00 PM)</strong>.</li>
-              </ul>
-            </div>
-          </div>
-        ) : (
-          /* IN QUEUE / PROCESSING: Queue Banner */
-          <div className="mt-4 overflow-hidden rounded-xl border border-primary/30 bg-primary/5 p-4 print:border-black print:bg-white">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-primary-foreground shadow-sm min-w-[72px] print:bg-black print:text-white">
-                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-90">
-                    Line No.
-                  </span>
-                  <span className="text-2xl font-black">#{lineNum}</span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-foreground print:text-black">
-                      Queue Sequence & Priority
-                    </span>
-                    {getPriorityBadge(currentReq.priority)}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground print:text-gray-700">
-                    {currentReq.status === "Processing"
-                      ? "Currently in preparation and verification for scheduled releasing."
-                      : currentReq.status === "Needs Correction"
-                      ? "Correction required: please review registrar notes below."
-                      : `You are in line at position #${lineNum}. Track priority and status here.`}
-                  </p>
-                </div>
-              </div>
-
-              <div className="shrink-0 self-start sm:self-auto">
-                <StatusBadge status={currentReq.status} />
-              </div>
-            </div>
-
-            {/* Step Progress Tracker (Screen only) */}
-            <div className="mt-4 border-t border-primary/10 pt-3 print:hidden">
-              <div className="grid grid-cols-4 gap-1 text-center text-[10px]">
-                <div className="rounded py-1 font-semibold bg-primary text-primary-foreground">
-                  1. Submitted
-                </div>
-                <div
-                  className={`rounded py-1 font-semibold ${
-                    currentReq.status !== "Needs Correction"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  2. Line #{lineNum}
-                </div>
-                <div
-                  className={`rounded py-1 font-semibold ${
-                    currentReq.status === "Processing" ||
-                    currentReq.status === "Ready for Claiming" ||
-                    currentReq.status === "Claimed"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  3. Processing
-                </div>
-                <div
-                  className={`rounded py-1 font-semibold ${
-                    currentReq.status === "Ready for Claiming" ||
-                    currentReq.status === "Claimed"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  4. Claiming
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
-        {/* Structured Transaction Specifications Table */}
-        <div className="mt-4 overflow-hidden rounded-lg border border-border print:border-black">
+        {/* In Queue Helper */}
+        {!isClaimed && !isReadyForClaiming && (
+          <div className="mt-3 flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs print:border-black print:bg-white">
+            <span className="font-bold text-foreground print:text-black">
+              Queue Line #{lineNum}
+            </span>
+            <span className="text-[11px] text-muted-foreground print:text-black">
+              Target Pickup: {currentReq.pickupDate || "Standard Schedule"}
+            </span>
+          </div>
+        )}
+
+        {/* Structured Transaction Table */}
+        <div className="mt-3.5 overflow-hidden rounded-lg border border-border print:border-black">
           <table className="w-full text-left text-xs border-collapse">
             <tbody>
               <tr className="border-b border-border bg-muted/40 print:border-black print:bg-gray-100">
                 <td className="w-1/4 p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Reference No.</td>
-                <td className="w-1/4 p-2.5 font-mono font-bold text-foreground print:text-black">{refNumber}</td>
+                <td className="w-1/4 p-2.5 font-mono font-bold text-foreground print:text-black">{currentReq.id}</td>
                 <td className="w-1/4 p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Date Filed</td>
                 <td className="w-1/4 p-2.5 font-semibold text-foreground print:text-black">{currentReq.date}</td>
               </tr>
@@ -5780,27 +5636,15 @@ function DigitalReceiptModal({
               </tr>
               <tr className="border-b border-border bg-muted/40 print:border-black print:bg-gray-100">
                 <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Contact Phone</td>
-                <td className="p-2.5 font-mono text-foreground print:text-black">
-                  {currentReq.phone ? (
-                    <span className="font-bold">{currentReq.phone}</span>
-                  ) : (
-                    <span className="italic text-muted-foreground print:text-black">On Record</span>
-                  )}
-                </td>
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Queue Sequence</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">
-                  Line #{lineNum} • {currentReq.priority || "Regular"}
-                </td>
+                <td className="p-2.5 font-mono text-foreground print:text-black">{currentReq.phone || "On File"}</td>
+                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Queue Line</td>
+                <td className="p-2.5 font-bold text-foreground print:text-black">Line #{lineNum}</td>
               </tr>
               <tr className="border-b border-border print:border-black">
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Document Requested</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">
-                  {currentReq.document}
-                </td>
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Number of Copies</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">
-                  {currentReq.copies || 1} {currentReq.copies === 1 ? "copy" : "copies"}
-                </td>
+                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Document</td>
+                <td className="p-2.5 font-bold text-foreground print:text-black">{currentReq.document}</td>
+                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Copies</td>
+                <td className="p-2.5 font-bold text-foreground print:text-black">{currentReq.copies || 1}</td>
               </tr>
               <tr className="border-b border-border bg-muted/40 print:border-black print:bg-gray-100">
                 <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Purpose</td>
@@ -5813,124 +5657,38 @@ function DigitalReceiptModal({
                   {isClaimed ? "Date Claimed" : "Pickup Schedule"}
                 </td>
                 <td className="p-2.5 font-bold text-foreground print:text-black">
-                  {currentReq.pickupDate || (isClaimed ? currentReq.date : "Standard Registrar Schedule")}
+                  {currentReq.pickupDate || (isClaimed ? currentReq.date : "Standard Schedule")}
                 </td>
-                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Release Window</td>
-                <td className="p-2.5 font-bold text-foreground print:text-black">
-                  Counter 2 (Document Releasing)
-                </td>
+                <td className="p-2.5 font-bold uppercase text-muted-foreground print:text-black text-[10px]">Status</td>
+                <td className="p-2.5 font-bold text-foreground print:text-black">{currentReq.status}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* Registrar Instructions / Notes */}
+        {/* Remarks */}
         {currentReq.remarks && (
-          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200 print:border-black print:bg-white print:text-black">
-            <p className="font-bold flex items-center gap-1.5">
-              <span>📋 Registrar Notes & Remarks:</span>
-            </p>
-            <p className="mt-1 font-medium">{currentReq.remarks}</p>
+          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-900 dark:text-amber-200 print:border-black print:bg-white print:text-black">
+            <p className="font-bold">Remarks:</p>
+            <p className="mt-0.5">{currentReq.remarks}</p>
           </div>
         )}
 
-        {/* Scheduled Pickup Banner (Screen View Helper) */}
-        {!isClaimed && !isReadyForClaiming && (
-          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 print:border-black print:bg-white">
-            <div className="flex items-center gap-3">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary print:hidden">
-                <Calendar className="size-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-foreground print:text-black">
-                  Scheduled Pickup: {currentReq.pickupDate || "Standard Schedule"}
-                </p>
-                <p className="text-[11px] text-muted-foreground print:text-gray-700">
-                  Target release window. You will be notified once ready for counter releasing.
-                </p>
-              </div>
-            </div>
-
-            {onOpenCalendar && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onOpenCalendar}
-                className="h-7 text-xs gap-1.5 shrink-0 self-start sm:self-auto print:hidden cursor-pointer"
-              >
-                <Calendar className="size-3.5" /> View Calendar
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* Official Signatures & University Seal Section */}
-        <div className="mt-6 border-t-2 border-foreground/30 pt-4 print:border-black">
+        {/* Signatures Section */}
+        <div className="mt-6 border-t border-border pt-4 print:border-black">
           <div className="grid grid-cols-2 gap-8 text-center text-xs">
             <div>
-              <div className="border-b border-foreground/70 print:border-black w-4/5 mx-auto mb-1.5 h-9 flex items-end justify-center">
-                {isClaimed && (
-                  <span className="font-serif italic text-xs font-bold text-emerald-800 dark:text-emerald-300 print:text-black">
-                    {currentReq.student}
-                  </span>
-                )}
-              </div>
+              <div className="border-b border-foreground/60 print:border-black w-4/5 mx-auto mb-1 h-8"></div>
               <p className="font-bold text-foreground print:text-black">{currentReq.student}</p>
               <p className="text-[10px] text-muted-foreground print:text-gray-700">
-                {isClaimed ? "Receiver's Signature over Printed Name" : "Student / Authorized Receiver Signature"}
-              </p>
-              <p className="text-[9px] font-mono text-muted-foreground print:text-gray-600">
-                ID No: {currentReq.studentId}
+                {isClaimed ? "Receiver's Signature" : "Student Signature"}
               </p>
             </div>
 
             <div>
-              <div className="border-b border-foreground/70 print:border-black w-4/5 mx-auto mb-1.5 h-9 flex items-end justify-center">
-                {isClaimed && (
-                  <span className="font-serif italic text-xs font-bold text-emerald-800 dark:text-emerald-300 print:text-black">
-                    Registrar Records Officer
-                  </span>
-                )}
-              </div>
-              <p className="font-bold text-foreground print:text-black">Office of the University Registrar</p>
-              <p className="text-[10px] text-muted-foreground print:text-gray-700">
-                {isClaimed ? "Attested & Released by Records Section" : "Counter Releasing Officer & University Seal"}
-              </p>
-              <p className="text-[9px] font-mono text-muted-foreground print:text-gray-600">
-                Window 2 — Document Releasing Desk
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Security Barcode & Digital Verification Footer */}
-        <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border pt-3.5 text-[10px] text-muted-foreground print:border-black print:text-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-[2px] h-6">
-              {[2, 1, 3, 1, 2, 4, 1, 2, 3, 1, 4, 2, 1, 3, 2, 1, 2, 3, 1, 4, 1, 2].map((w, idx) => (
-                <span
-                  key={idx}
-                  className="h-full bg-foreground print:bg-black inline-block"
-                  style={{ width: `${w * 1.5}px` }}
-                />
-              ))}
-            </div>
-            <div>
-              <p className="font-mono font-bold tracking-wider text-foreground print:text-black">
-                {refNumber}
-              </p>
-              <p className="text-[9px]">Ledger: {archiveCode}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-right">
-            <QrCode className="size-5 shrink-0 text-foreground print:text-black" />
-            <div>
-              <p className="font-semibold text-foreground print:text-black">
-                PHINMA University of Pangasinan
-              </p>
-              <p className="text-[9px]">QueueLess System-Generated Document Release Voucher</p>
+              <div className="border-b border-foreground/60 print:border-black w-4/5 mx-auto mb-1 h-8"></div>
+              <p className="font-bold text-foreground print:text-black">Registrar Staff</p>
+              <p className="text-[10px] text-muted-foreground print:text-gray-700">Authorized Signature</p>
             </div>
           </div>
         </div>
@@ -5953,7 +5711,7 @@ function DigitalReceiptModal({
             onClick={() => window.print()}
             className="gap-1.5 cursor-pointer font-bold shadow-sm text-xs"
           >
-            <Printer className="size-3.5" /> Print Receipt / Claim Stub
+            <Printer className="size-3.5" /> Print Receipt
           </Button>
           <Button size="sm" variant="outline" onClick={onClose} className="cursor-pointer text-xs">
             Close
