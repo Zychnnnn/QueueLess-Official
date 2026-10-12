@@ -8671,6 +8671,38 @@ function RequestList({
   student?: boolean;
 }) {
   const [selected, setSelected] = useState<RequestItem | null>(null);
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "claimed">("all");
+
+  const stats = useMemo(() => {
+    let active = 0;
+    let claimed = 0;
+    requests.forEach((r) => {
+      if (r.status === "Claimed") claimed++;
+      else active++;
+    });
+    return { total: requests.length, active, claimed };
+  }, [requests]);
+
+  const filtered = useMemo(() => {
+    return requests.filter((r) => {
+      const matchStatus =
+        statusFilter === "active"
+          ? r.status !== "Claimed"
+          : statusFilter === "claimed"
+          ? r.status === "Claimed"
+          : true;
+
+      const q = query.toLowerCase().trim();
+      const matchQuery =
+        !q ||
+        `${r.id} ${r.document} ${r.purpose} ${r.status} ${r.date} line #${r.lineNumber ?? 1}`
+          .toLowerCase()
+          .includes(q);
+
+      return matchStatus && matchQuery;
+    });
+  }, [requests, statusFilter, query]);
 
   return (
     <div className="animate-rise">
@@ -8680,12 +8712,87 @@ function RequestList({
         text={subtitle}
       />
 
-      <div className="mt-7">
+      {/* Quick Status Filters and Search */}
+      <div className="mt-6 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          <button
+            type="button"
+            onClick={() => setStatusFilter("all")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              statusFilter === "all"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            All ({stats.total})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("active")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              statusFilter === "active"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            Active / In Line ({stats.active})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter("claimed")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+              statusFilter === "claimed"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            Done / Claimed ({stats.claimed})
+          </button>
+        </div>
+
+        {requests.length > 2 && (
+          <div className="relative sm:w-64">
+            <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search requests..."
+              className="field pl-8.5 pr-7 py-1 text-xs"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Internal Scrollable Document Requests Container */}
+      <div className="mt-3">
         <RequestCards
-          requests={requests}
+          requests={filtered}
           onSelect={setSelected}
+          scrollable={true}
+          maxHeight="max-h-[500px]"
         />
       </div>
+
+      {filtered.length > 0 && (
+        <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground px-1">
+          <span>Showing {filtered.length} of {requests.length} request(s)</span>
+          {filtered.length > 3 && (
+            <span className="font-semibold text-primary">
+              Scroll inside the box to view all requests ↓
+            </span>
+          )}
+        </div>
+      )}
 
       {selected && (
         <DigitalReceiptModal
@@ -8701,18 +8808,28 @@ function RequestList({
 function RequestCards({
   requests,
   onSelect,
+  scrollable = false,
+  maxHeight = "max-h-[520px]",
 }: {
   requests: RequestItem[];
   onSelect?: (r: RequestItem) => void;
+  scrollable?: boolean;
+  maxHeight?: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-card">
+    <div
+      className={`rounded-xl border border-border bg-card shadow-xs ${
+        scrollable
+          ? `${maxHeight} overflow-y-auto overflow-x-hidden scrollbar-thin`
+          : "overflow-hidden"
+      }`}
+    >
       {requests.length ? (
         requests.map((r) => (
           <button
             key={r.id}
             type="button"
-            className="grid w-full gap-3 border-b border-border p-4 text-left transition last:border-b-0 hover:bg-muted/60 sm:grid-cols-[auto_1fr_1.2fr_auto] sm:items-center"
+            className="grid w-full gap-3 border-b border-border p-4 text-left transition last:border-b-0 hover:bg-muted/60 sm:grid-cols-[auto_1fr_1.2fr_auto] sm:items-center cursor-pointer"
             onClick={() => onSelect?.(r)}
           >
             {/* Line number priority badge */}
@@ -8770,7 +8887,7 @@ function RequestCards({
           </button>
         ))
       ) : (
-        <EmptyState text="No document requests yet." />
+        <EmptyState text="No document requests found." />
       )}
     </div>
   );
