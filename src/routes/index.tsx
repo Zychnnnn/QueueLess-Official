@@ -337,6 +337,7 @@ function QueueLessApp() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [activeReceiptModal, setActiveReceiptModal] =
     useState<RequestItem | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const [adminUsers, setAdminUsers] = useState<AccountUser[]>([]);
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>(() => {
@@ -1216,8 +1217,8 @@ function QueueLessApp() {
 
             <Button
               variant="ghost"
-              className="w-full justify-start text-muted-foreground"
-              onClick={signOut}
+              className="w-full justify-start text-muted-foreground cursor-pointer"
+              onClick={() => setShowLogoutConfirm(true)}
             >
               <LogOut /> Sign out
             </Button>
@@ -1291,6 +1292,17 @@ function QueueLessApp() {
             setActiveReceiptModal(null);
             setCalendarOpen(true);
           }}
+        />
+      )}
+
+      {showLogoutConfirm && (
+        <LogoutConfirmModal
+          user={currentUser}
+          onConfirm={() => {
+            setShowLogoutConfirm(false);
+            signOut();
+          }}
+          onCancel={() => setShowLogoutConfirm(false)}
         />
       )}
     </div>
@@ -4550,9 +4562,14 @@ function StaffCalendarEditModal({
   const [lineNumber, setLineNumber] = useState<number>(request.lineNumber ?? 1);
   const [priority, setPriority] = useState<Priority>(request.priority || "Regular");
   const [remarks, setRemarks] = useState(request.remarks || "");
+  const [confirming, setConfirming] = useState(false);
 
   const handleFormSubmit = (e: FormEvent) => {
     e.preventDefault();
+    setConfirming(true);
+  };
+
+  const handleConfirmSave = () => {
     onSave({
       pickupDate: pickupDate.trim(),
       status,
@@ -4599,8 +4616,82 @@ function StaffCalendarEditModal({
           </Button>
         </div>
 
-        <form onSubmit={handleFormSubmit} className="mt-4 space-y-3.5">
-          <Field label="Scheduled Counter Pickup Date">
+        {confirming ? (
+          <div className="mt-4 space-y-4 animate-in fade-in">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs">
+              <h4 className="font-bold text-sm text-foreground mb-1">
+                Confirm Schedule & Notify Student
+              </h4>
+              <p className="text-muted-foreground text-xs mb-3">
+                Review your schedule changes. An automated email notification will be dispatched to the student with this update.
+              </p>
+
+              <div className="space-y-2 border-t border-border/60 pt-2.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Request ID:</span>
+                  <span className="font-bold text-primary">{request.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Student:</span>
+                  <span className="font-semibold">{request.student} ({request.studentId})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Document:</span>
+                  <span className="font-medium">{request.document}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Status:</span>
+                  <span className="font-bold text-primary">{status}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">When to Claim:</span>
+                  <span className="font-bold text-foreground">{pickupDate || "Standard Schedule"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Queue Line:</span>
+                  <span className="font-bold">Line #{lineNumber} ({priority})</span>
+                </div>
+                {remarks && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Remarks:</span>
+                    <span className="font-medium italic text-foreground max-w-[60%] truncate">{remarks}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirming(false)}
+                disabled={saving}
+              >
+                Back to Edit
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleConfirmSave}
+                disabled={saving}
+                className="gap-1.5 cursor-pointer font-semibold"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="size-3.5" /> Confirm & Notify Student
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleFormSubmit} className="mt-4 space-y-3.5">
+            <Field label="Scheduled Counter Pickup Date">
             <input
               type="date"
               value={pickupDate}
@@ -4717,6 +4808,7 @@ function StaffCalendarEditModal({
             </Button>
           </div>
         </form>
+      )}
       </div>
     </div>
   );
@@ -5860,9 +5952,14 @@ function EditReceiptModal({
   const [paymentStatus, setPaymentStatus] = useState<string>(
     request.paymentStatus || "Proceed to Registrar Staff"
   );
+  const [confirming, setConfirming] = useState(false);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    setConfirming(true);
+  };
+
+  const handleConfirmSave = () => {
     onSave({
       lineNumber: Number(lineNumber),
       priority,
@@ -5915,8 +6012,85 @@ function EditReceiptModal({
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        {confirming ? (
+          <div className="mt-4 space-y-4 animate-in fade-in">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-xs">
+              <div className="flex items-center gap-2 mb-1.5">
+                <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <h4 className="font-bold text-sm text-foreground">
+                  Confirm Receipt Changes & Notify Student
+                </h4>
+              </div>
+              <p className="text-muted-foreground text-xs mb-3">
+                Please verify the updated details below. Saving will immediately update the digital receipt and dispatch an automated email notification to the student.
+              </p>
+
+              <div className="space-y-2 border-t border-border/60 pt-2.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Request ID:</span>
+                  <span className="font-bold text-primary">{request.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Student:</span>
+                  <span className="font-semibold">{request.student} ({request.studentId})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Queue Position:</span>
+                  <span className="font-bold text-foreground">Line #{lineNumber} ({priority})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Status:</span>
+                  <span className="font-bold text-primary">{status}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">When to Claim:</span>
+                  <span className="font-bold text-foreground">{pickupDate || "Standard Schedule"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Payment Instruction:</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">{paymentStatus}</span>
+                </div>
+                {remarks && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Remarks:</span>
+                    <span className="font-medium italic text-foreground max-w-[60%] truncate">{remarks}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirming(false)}
+                disabled={loading}
+              >
+                Back to Edit
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleConfirmSave}
+                disabled={loading}
+                className="gap-1.5 cursor-pointer font-semibold"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  <>
+                    <Check className="size-3.5" /> Confirm & Notify Student
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
             <Field label="Line Number (Queue Position)">
               <input
                 type="number"
@@ -6070,6 +6244,208 @@ function EditReceiptModal({
             </Button>
           </div>
         </form>
+      )}
+      </div>
+    </div>
+  );
+}
+
+function LogoutConfirmModal({
+  user,
+  onConfirm,
+  onCancel,
+}: {
+  user: AuthUser | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const roleLabel =
+    user?.role === "admin"
+      ? "Administrator"
+      : user?.role === "staff"
+      ? "Registrar Staff"
+      : user?.role === "guest" || user?.userType === "normal" || user?.studentId?.startsWith("GUEST")
+      ? "Guest / Visitor"
+      : "Student";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      onClick={onCancel}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirm Sign Out"
+        className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive shrink-0">
+            <LogOut className="size-5" />
+          </div>
+          <div>
+            <h3 className="font-display text-base font-bold text-foreground">
+              Confirm Sign Out
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Are you sure you want to end your session?
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3.5">
+          <div className="flex items-center gap-3">
+            <div className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-xs shrink-0">
+              {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-bold text-foreground">
+                {user?.name || "QueueLess User"}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {user?.email}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+              {roleLabel}
+            </span>
+          </div>
+        </div>
+
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          You will be logged out of your QueueLess account. Any unsaved changes will be discarded.
+        </p>
+
+        <div className="mt-5 flex items-center justify-end gap-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            className="cursor-pointer font-medium"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={onConfirm}
+            className="gap-1.5 cursor-pointer font-medium shadow-sm"
+          >
+            <LogOut className="size-3.5" />
+            Sign Out
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmStatusModal({
+  request,
+  targetStatus,
+  onClose,
+  onConfirm,
+  loading = false,
+}: {
+  request: RequestItem;
+  targetStatus: Status;
+  onClose: () => void;
+  onConfirm: () => void;
+  loading?: boolean;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      onClick={() => !loading && onClose()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Confirm Request Processing"
+        className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+            <ClipboardCheck className="size-5" />
+          </div>
+          <div>
+            <h3 className="font-display text-base font-bold text-foreground">
+              Confirm Status Update
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Process document and notify student
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3 rounded-xl border border-border bg-muted/40 p-4 text-xs">
+          <div className="flex items-center justify-between border-b border-border/60 pb-2">
+            <span className="text-muted-foreground">Request ID:</span>
+            <span className="font-bold text-primary">{request.id}</span>
+          </div>
+
+          <div className="flex items-center justify-between border-b border-border/60 pb-2">
+            <span className="text-muted-foreground">Student:</span>
+            <span className="font-semibold text-foreground">{request.student} ({request.studentId})</span>
+          </div>
+
+          <div className="flex items-center justify-between border-b border-border/60 pb-2">
+            <span className="text-muted-foreground">Document:</span>
+            <span className="font-semibold text-foreground">{request.document}</span>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-muted-foreground">Status Transition:</span>
+            <div className="flex items-center gap-2">
+              <span className="line-through text-muted-foreground/80">{request.status}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="rounded bg-primary/15 px-2 py-0.5 font-bold text-primary">
+                {targetStatus}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3.5 flex items-start gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 p-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+          <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+          <span>
+            An automated email notification will be sent to the student informing them of this status update and instructions.
+          </span>
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onClose}
+            disabled={loading}
+            className="cursor-pointer font-medium"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={onConfirm}
+            disabled={loading}
+            className="gap-1.5 cursor-pointer font-semibold shadow-sm"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" /> Updating...
+              </>
+            ) : (
+              <>
+                <Check className="size-3.5" /> Confirm & Notify Student
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -6091,6 +6467,11 @@ function ManageRequests({
   const [viewingReceipt, setViewingReceipt] = useState<RequestItem | null>(null);
   const [editingReceipt, setEditingReceipt] = useState<RequestItem | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{
+    request: RequestItem;
+    nextStatus: Status;
+  } | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
 
   const shown = useMemo(
     () =>
@@ -6419,8 +6800,13 @@ function ManageRequests({
                     <select
                       aria-label={`Update ${r.id} status`}
                       value={r.status}
-                      onChange={(e) => update(r.id, e.target.value as Status)}
-                      className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                      onChange={(e) => {
+                        const next = e.target.value as Status;
+                        if (next !== r.status) {
+                          setPendingStatusChange({ request: r, nextStatus: next });
+                        }
+                      }}
+                      className="h-8 rounded-md border border-input bg-background px-2 text-xs cursor-pointer font-medium"
                     >
                       {[
                         "Pending",
@@ -6465,6 +6851,26 @@ function ManageRequests({
           onClose={() => setEditingReceipt(null)}
           onSave={handleSaveReceiptEdit}
           loading={savingEdit}
+        />
+      )}
+
+      {/* Staff Status Change Confirmation Modal */}
+      {pendingStatusChange && (
+        <ConfirmStatusModal
+          request={pendingStatusChange.request}
+          targetStatus={pendingStatusChange.nextStatus}
+          loading={statusLoading}
+          onClose={() => setPendingStatusChange(null)}
+          onConfirm={async () => {
+            const { request: targetReq, nextStatus } = pendingStatusChange;
+            try {
+              setStatusLoading(true);
+              await update(targetReq.id, nextStatus);
+              setPendingStatusChange(null);
+            } finally {
+              setStatusLoading(false);
+            }
+          }}
         />
       )}
     </div>

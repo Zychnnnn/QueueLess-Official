@@ -1,5 +1,6 @@
 import Request from "../models/Request.js";
 import User from "../models/User.js";
+import { sendRequestUpdateNotification } from "../services/emailService.js";
 
 export const createRequest = async (req, res) => {
   try {
@@ -45,6 +46,7 @@ export const createRequest = async (req, res) => {
       pickupDate: req.body.pickupDate || "",
       student: user.name,
       studentId: user.studentId,
+      email: user.email || "",
       phone: req.body.phone || user.phone || "",
       document,
       purpose,
@@ -124,6 +126,9 @@ export const updateRequestStatus = async (req, res) => {
       return res.status(404).json({ message: "Request not found." });
     }
 
+    // Notify student via email asynchronously
+    notifyStudentOfUpdate(request);
+
     return res.status(200).json({
       message: "Request status updated successfully.",
       request,
@@ -131,6 +136,39 @@ export const updateRequestStatus = async (req, res) => {
   } catch (error) {
     console.error("Update request status error:", error);
     return res.status(500).json({ message: "Server error while updating request status." });
+  }
+};
+
+const notifyStudentOfUpdate = async (request) => {
+  try {
+    let studentEmail = request.email;
+    if (!studentEmail && request.studentId) {
+      const user = await User.findOne({ studentId: request.studentId });
+      if (user && user.email) studentEmail = user.email;
+    }
+    if (!studentEmail && request.student) {
+      const user = await User.findOne({ name: request.student });
+      if (user && user.email) studentEmail = user.email;
+    }
+
+    if (studentEmail) {
+      await sendRequestUpdateNotification({
+        toEmail: studentEmail,
+        studentName: request.student,
+        requestNumber: request.requestNumber,
+        document: request.document,
+        status: request.status,
+        pickupDate: request.pickupDate,
+        paymentStatus: request.paymentStatus,
+        remarks: request.remarks,
+        lineNumber: request.lineNumber,
+        copies: request.copies,
+      });
+    } else {
+      console.warn(`[Request Controller] No email found for request ${request.requestNumber}`);
+    }
+  } catch (err) {
+    console.error(`[Request Controller] Failed to notify student for ${request.requestNumber}:`, err?.message);
   }
 };
 
@@ -181,6 +219,9 @@ export const updateRequest = async (req, res) => {
     if (!request) {
       return res.status(404).json({ message: "Request not found." });
     }
+
+    // Notify student via email asynchronously
+    notifyStudentOfUpdate(request);
 
     return res.status(200).json({
       message: "Request receipt updated successfully.",

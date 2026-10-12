@@ -199,3 +199,166 @@ export const sendAccountStatusNotification = async ({
   }
 };
 
+export const sendRequestUpdateNotification = async ({
+  toEmail,
+  studentName,
+  requestNumber,
+  document,
+  status,
+  pickupDate,
+  paymentStatus,
+  remarks,
+  lineNumber,
+  copies,
+}) => {
+  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
+  const emailPassRaw =
+    process.env.EMAIL_PASS ||
+    process.env.GMAIL_PASS ||
+    process.env.GMAIL_APP_PASSWORD;
+  const emailPass = emailPassRaw ? emailPassRaw.replace(/\s+/g, "") : "";
+
+  if (!emailUser || !emailPass) {
+    console.warn(
+      `[Email Service] Status update notification skipped (credentials not configured) for ${toEmail} (${requestNumber} -> ${status}).`
+    );
+    return { sent: false, reason: "credentials_not_configured" };
+  }
+
+  if (!toEmail) {
+    console.warn(`[Email Service] No recipient email specified for request ${requestNumber}.`);
+    return { sent: false, reason: "missing_recipient" };
+  }
+
+  const transport = getTransporter();
+
+  // Color theme based on status
+  let themeColor = "#183d22";
+  let themeBg = "#f0fdf4";
+  let themeBorder = "#bbf7d0";
+  let statusHeadline = "Request Update";
+  let statusDescription = "Your document request has been updated by the Registrar Staff.";
+
+  if (status === "Ready for Claiming") {
+    themeColor = "#15803d";
+    themeBg = "#f0fdf4";
+    themeBorder = "#86efac";
+    statusHeadline = "Ready for Claiming!";
+    statusDescription = "Good news! Your document has been prepared and is now ready for pick-up at the Registrar Window.";
+  } else if (status === "Processing") {
+    themeColor = "#0369a1";
+    themeBg = "#f0f9ff";
+    themeBorder = "#bae6fd";
+    statusHeadline = "Now In Processing";
+    statusDescription = "The Registrar Staff is currently preparing and processing your document.";
+  } else if (status === "Claimed") {
+    themeColor = "#334155";
+    themeBg = "#f8fafc";
+    themeBorder = "#cbd5e1";
+    statusHeadline = "Document Claimed & Released";
+    statusDescription = "Your requested document has been officially claimed. Thank you for using QueueLess!";
+  } else if (status === "Needs Correction") {
+    themeColor = "#b45309";
+    themeBg = "#fffbeb";
+    themeBorder = "#fde68a";
+    statusHeadline = "Needs Correction / Follow-up";
+    statusDescription = "There is an issue or additional requirement needed for your document request. Please check the remarks below.";
+  }
+
+  const subject = status === "Ready for Claiming"
+    ? `[QueueLess] Ready for Claiming: ${document} (${requestNumber})`
+    : status === "Processing"
+    ? `[QueueLess] In Processing: ${document} (${requestNumber})`
+    : status === "Claimed"
+    ? `[QueueLess] Document Released: ${document} (${requestNumber})`
+    : status === "Needs Correction"
+    ? `[QueueLess] Action Required: ${document} (${requestNumber})`
+    : `[QueueLess] Request Update (${status}): ${requestNumber}`;
+
+  const mailOptions = {
+    from: `"QueueLess Registrar" <${emailUser}>`,
+    to: toEmail,
+    subject,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 28px 20px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb;">
+        <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #183d22; padding-bottom: 16px;">
+          <h2 style="color: #183d22; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">QueueLess Registrar</h2>
+          <p style="color: #6b7280; font-size: 12px; margin: 4px 0 0; text-transform: uppercase; letter-spacing: 1px;">PHINMA University of Pangasinan</p>
+        </div>
+
+        <p style="color: #1f2937; font-size: 15px; margin: 0 0 16px;">
+          Hello <strong>${studentName || "Student"}</strong>,
+        </p>
+
+        <div style="background-color: ${themeBg}; border: 1px solid ${themeBorder}; border-radius: 10px; padding: 18px; margin-bottom: 20px; text-align: center;">
+          <span style="display: inline-block; background-color: ${themeColor}; color: #ffffff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 4px 12px; border-radius: 9999px; margin-bottom: 8px;">
+            ${status}
+          </span>
+          <h3 style="color: ${themeColor}; margin: 6px 0 6px; font-size: 18px; font-weight: 700;">
+            ${statusHeadline}
+          </h3>
+          <p style="color: #4b5563; font-size: 13px; margin: 0; line-height: 1.5;">
+            ${statusDescription}
+          </p>
+        </div>
+
+        <div style="background-color: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 12px; color: #111827; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Document Details</h4>
+          
+          <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280; width: 40%;">Request ID:</td>
+              <td style="padding: 6px 0; color: #111827; font-weight: 600;">${requestNumber}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280;">Document:</td>
+              <td style="padding: 6px 0; color: #111827; font-weight: 600;">${document}${copies ? ` (${copies} copy/copies)` : ""}</td>
+            </tr>
+            ${lineNumber ? `
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280;">Queue Line Position:</td>
+              <td style="padding: 6px 0; color: #183d22; font-weight: 700;">Line #${lineNumber}</td>
+            </tr>
+            ` : ""}
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280;">When to Claim:</td>
+              <td style="padding: 6px 0; color: #111827; font-weight: 600;">${pickupDate || "Standard Schedule • Registrar Counter 2"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280;">Payment Requirement:</td>
+              <td style="padding: 6px 0; color: #b45309; font-weight: 600;">${paymentStatus || "Proceed to Registrar Staff"}</td>
+            </tr>
+            ${remarks ? `
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280; vertical-align: top;">Staff Remarks:</td>
+              <td style="padding: 6px 0; color: #111827; font-style: italic; background-color: #f3f4f6; border-radius: 4px; padding-left: 8px;">${remarks}</td>
+            </tr>
+            ` : ""}
+          </table>
+        </div>
+
+        <div style="background-color: #f8fafc; border-left: 3px solid #183d22; padding: 12px 14px; margin-bottom: 20px;">
+          <p style="margin: 0; font-size: 12px; color: #475569; line-height: 1.5;">
+            <strong>Important Reminder:</strong> Please present your valid Student ID and digital receipt at the Registrar Window upon claiming. Office hours are Monday to Saturday, 8:00 AM – 5:00 PM.
+          </p>
+        </div>
+
+        <p style="color: #9ca3af; font-size: 11px; margin: 20px 0 0; text-align: center; border-top: 1px solid #f3f4f6; pt-3;">
+          This is an automated notification from QueueLess Registrar System.<br />
+          PHINMA University of Pangasinan • College Building Ground Floor
+        </p>
+      </div>
+    `,
+  };
+
+  try {
+    const info = await transport.sendMail(mailOptions);
+    console.log(`[Email Service] Update email sent for ${requestNumber} to ${toEmail}: ${info.messageId}`);
+    return { sent: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`[Email Service] Failed to send update email to ${toEmail}:`, err.message);
+    return { sent: false, error: err.message };
+  }
+};
+
+
