@@ -394,6 +394,8 @@ export const createStaffAccount = async (req, res) => {
   }
 };
 
+export const createStaff = createStaffAccount;
+
 export const getUsers = async (req, res) => {
   try {
     const users = await User.find({}, "-password").sort({ createdAt: -1 });
