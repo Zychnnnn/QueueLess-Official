@@ -1326,6 +1326,7 @@ function AuthScreen({
 }: {
   onSignIn: (user: AuthUser) => void;
 }) {
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [mode, setMode] =
     useState<"login" | "register" | "guest-register" | "forgot-password">(
       "login"
@@ -1970,14 +1971,28 @@ function AuthScreen({
                 </Field>
 
                 <Field label="Password">
-                  <input
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    className="field"
-                    placeholder="Enter your password"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      name="password"
+                      type={showLoginPassword ? "text" : "password"}
+                      autoComplete="current-password"
+                      className="field pr-10"
+                      placeholder="Enter your password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      aria-label={showLoginPassword ? "Hide password" : "Show password"}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showLoginPassword ? (
+                        <EyeOff className="size-4" />
+                      ) : (
+                        <Eye className="size-4" />
+                      )}
+                    </button>
+                  </div>
                 </Field>
 
                 <div className="flex justify-end -mt-2">
