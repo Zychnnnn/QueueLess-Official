@@ -7359,147 +7359,142 @@ function ManageRequests({
         </div>
       </div>
 
-      {/* High-Visibility Requests Table (Scrollable Container) */}
-      <div className="mt-3 max-h-[580px] overflow-y-auto rounded-xl border border-border bg-card shadow-xs">
-        <table className="w-full text-left text-xs border-collapse table-fixed">
-          <thead className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-muted-foreground shadow-xs">
-            <tr>
-              <th className="py-2.5 pl-3 pr-2 w-[90px]">Queue</th>
-              <th className="py-2.5 px-2 w-[35%]">Student</th>
-              <th className="py-2.5 px-2">Document</th>
-              <th className="py-2.5 px-2 w-[80px]">Status</th>
-              <th className="py-2.5 pl-2 pr-3 w-[110px] text-right">Actions</th>
-            </tr>
-          </thead>
+      {/* Requests List (Scrollable Card Rows) */}
+      <div className="mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+        {/* Header row */}
+        <div className="sticky top-0 z-10 grid items-center gap-3 border-b border-border bg-muted/60 px-4 py-2.5 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+          style={{ gridTemplateColumns: "88px 1fr 1fr auto auto" }}>
+          <span>Queue</span>
+          <span>Student</span>
+          <span>Document</span>
+          <span>Status</span>
+          <span className="text-right">Actions</span>
+        </div>
 
-          <tbody>
-            {shown.map((r) => {
-              const isUrgent = r.priority === "Urgent";
-              const isPriority = r.priority === "Priority";
-              const isReady = r.status === "Ready for Claiming";
-              const isProcessing = r.status === "Processing";
-              const isCorrection = r.status === "Needs Correction";
+        <div className="max-h-[540px] overflow-y-auto divide-y divide-border/60">
+          {shown.map((r) => {
+            const isUrgent = r.priority === "Urgent";
+            const isPriority = r.priority === "Priority";
+            const isReady = r.status === "Ready for Claiming";
+            const isProcessing = r.status === "Processing";
+            const isCorrection = r.status === "Needs Correction";
 
-              const borderAccent = isUrgent
-                ? "border-l-4 border-l-rose-500 bg-rose-500/[0.04]"
-                : isPriority
-                ? "border-l-4 border-l-amber-500 bg-amber-500/[0.03]"
-                : isReady
-                ? "border-l-4 border-l-emerald-500 bg-emerald-500/[0.02]"
-                : isProcessing
-                ? "border-l-4 border-l-sky-500 bg-sky-500/[0.02]"
-                : isCorrection
-                ? "border-l-4 border-l-amber-600 bg-amber-600/[0.04]"
-                : "border-l-4 border-l-border/40";
+            const accentColor = isUrgent
+              ? "border-l-rose-500 bg-rose-500/[0.03]"
+              : isPriority
+              ? "border-l-amber-500 bg-amber-500/[0.025]"
+              : isReady
+              ? "border-l-emerald-500 bg-emerald-500/[0.02]"
+              : isProcessing
+              ? "border-l-sky-500 bg-sky-500/[0.02]"
+              : isCorrection
+              ? "border-l-amber-600 bg-amber-600/[0.03]"
+              : "border-l-border/50";
 
-              return (
-                <tr
-                  key={r.id}
-                  className={`border-b border-border/70 transition-colors hover:bg-muted/30 ${borderAccent}`}
-                >
-                  {/* Queue line + priority badge */}
-                  <td className="py-2.5 pl-3 pr-2">
-                    <div className="flex flex-col gap-1 items-start">
-                      <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-black text-primary border border-primary/20 whitespace-nowrap">
-                        Line #{r.lineNumber ?? 1}
-                      </span>
-                      {isUrgent && (
-                        <span className="inline-flex items-center rounded bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-black text-rose-700 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap">
-                          ⚡ Urgent
-                        </span>
-                      )}
-                      {isPriority && (
-                        <span className="inline-flex items-center rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
-                          ★ Priority
-                        </span>
-                      )}
-                    </div>
-                  </td>
+            return (
+              <div
+                key={r.id}
+                className={`grid items-center gap-3 border-l-4 px-4 py-3.5 transition-colors hover:bg-muted/25 ${accentColor}`}
+                style={{ gridTemplateColumns: "88px 1fr 1fr auto auto" }}
+              >
+                {/* Queue line + priority */}
+                <div className="flex flex-col gap-1">
+                  <span className="inline-flex w-fit items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-black text-primary border border-primary/20 whitespace-nowrap">
+                    Line #{r.lineNumber ?? 1}
+                  </span>
+                  {isUrgent && (
+                    <span className="inline-flex w-fit items-center rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-black text-rose-700 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap">
+                      ⚡ Urgent
+                    </span>
+                  )}
+                  {isPriority && (
+                    <span className="inline-flex w-fit items-center rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                      ★ Priority
+                    </span>
+                  )}
+                </div>
 
-                  {/* Student — includes Request ID and phone */}
-                  <td className="py-2.5 px-2">
-                    <p className="font-bold text-foreground text-xs leading-tight truncate">{r.student}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate">{r.studentId}</p>
-                    <p className="font-mono text-[10px] text-primary/70 mt-0.5 truncate">{r.id}</p>
-                    {r.phone ? (
-                      <a
-                        href={`tel:${r.phone}`}
-                        className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline mt-0.5 cursor-pointer"
-                        title="Call student"
-                      >
-                        <Phone className="size-2.5 shrink-0" /> {r.phone}
-                      </a>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground/50 italic">No phone</span>
-                    )}
-                  </td>
+                {/* Student */}
+                <div className="min-w-0">
+                  <p className="font-bold text-foreground text-sm leading-tight truncate">{r.student}</p>
+                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5 truncate">{r.studentId}</p>
+                  <p className="font-mono text-[10px] text-primary/60 mt-0.5 truncate">{r.id}</p>
+                  {r.phone ? (
+                    <a
+                      href={`tel:${r.phone}`}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline mt-0.5 cursor-pointer"
+                      title="Call student"
+                    >
+                      <Phone className="size-3 shrink-0" /> {r.phone}
+                    </a>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground/50 italic">No phone</span>
+                  )}
+                </div>
 
-                  {/* Document */}
-                  <td className="py-2.5 px-2">
-                    <p className="font-semibold text-foreground text-xs leading-tight line-clamp-2">{r.document}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                      {r.copies || 1} {(r.copies || 1) === 1 ? "copy" : "copies"} · {r.purpose}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">{r.date}</p>
-                  </td>
+                {/* Document */}
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground text-xs leading-snug line-clamp-2">{r.document}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                    {r.copies || 1} {(r.copies || 1) === 1 ? "copy" : "copies"} · {r.purpose}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">{r.date}</p>
+                </div>
 
-                  {/* Status Badge */}
-                  <td className="py-2.5 px-2">
-                    <StatusBadge status={r.status} />
-                  </td>
+                {/* Status badge */}
+                <div className="flex justify-center">
+                  <StatusBadge status={r.status} />
+                </div>
 
-                  {/* Actions — icon-only buttons with tooltips */}
-                  <td className="py-2.5 pl-2 pr-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setViewingReceipt(r)}
-                        className="h-7 w-7 cursor-pointer shrink-0"
-                        title="View Receipt"
-                      >
-                        <Eye className="size-3.5" />
-                      </Button>
+                {/* Actions */}
+                <div className="flex items-center gap-1.5 justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setViewingReceipt(r)}
+                    className="h-8 w-8 p-0 cursor-pointer"
+                    title="View Receipt"
+                  >
+                    <Eye className="size-3.5" />
+                  </Button>
 
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => setEditingReceipt(r)}
-                        className="h-7 w-7 cursor-pointer shrink-0"
-                        title="Edit Receipt & Line Number"
-                      >
-                        <Edit3 className="size-3.5" />
-                      </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingReceipt(r)}
+                    className="h-8 w-8 p-0 cursor-pointer"
+                    title="Edit Receipt & Line"
+                  >
+                    <Edit3 className="size-3.5" />
+                  </Button>
 
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          const nextStatus: Status =
-                            r.status === "Pending"
-                              ? "Processing"
-                              : r.status === "Processing"
-                              ? "Ready for Claiming"
-                              : r.status === "Ready for Claiming"
-                              ? "Claimed"
-                              : "Processing";
-                          setPendingStatusChange({ request: r, nextStatus });
-                        }}
-                        className="h-7 px-2 text-[10px] font-bold cursor-pointer gap-1 shadow-xs shrink-0"
-                        title="Process Request"
-                      >
-                        <ClipboardCheck className="size-3" /> Go
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const nextStatus: Status =
+                        r.status === "Pending"
+                          ? "Processing"
+                          : r.status === "Processing"
+                          ? "Ready for Claiming"
+                          : r.status === "Ready for Claiming"
+                          ? "Claimed"
+                          : "Processing";
+                      setPendingStatusChange({ request: r, nextStatus });
+                    }}
+                    className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs whitespace-nowrap"
+                    title="Process Request"
+                  >
+                    <ClipboardCheck className="size-3.5" /> Process
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
 
-        {shown.length === 0 && (
-          <EmptyState text="No requests match your search or filter." />
-        )}
+          {shown.length === 0 && (
+            <EmptyState text="No requests match your search or filter." />
+          )}
+        </div>
       </div>
 
       {/* Staff View Digital Receipt Modal */}
