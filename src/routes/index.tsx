@@ -5597,29 +5597,50 @@ function DigitalReceiptModal({
         {/* Ready for Claiming Info Box */}
         {isReadyForClaiming && (
           <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs print:border-black print:bg-white">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-foreground print:text-black">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 font-semibold">
+              <span className="text-foreground print:text-black">
                 Line #{lineNum} • Counter Window 2 (Releasing Desk)
               </span>
-              <span className="text-[11px] font-semibold text-muted-foreground print:text-black">
-                Pickup: {currentReq.pickupDate || "Today"}
+              <span className="text-xs font-bold text-primary print:text-black">
+                When to Claim: {currentReq.pickupDate || "Within the day"}
               </span>
             </div>
+            {currentReq.paymentStatus && (
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-muted-foreground print:text-black">Payment:</span>
+                <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold ${
+                  currentReq.paymentStatus === "Paid"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 print:border-black print:text-black"
+                    : currentReq.paymentStatus.toLowerCase().includes("within the day")
+                    ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30 print:border-black print:text-black"
+                    : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 print:border-black print:text-black"
+                }`}>
+                  {currentReq.paymentStatus}
+                </span>
+              </div>
+            )}
             <p className="mt-1 text-[11px] text-muted-foreground print:text-gray-700">
-              Please present your valid student ID or authorization letter when claiming.
+              Please present your valid student ID or authorization letter when claiming at the registrar counter.
             </p>
           </div>
         )}
 
         {/* In Queue Helper */}
         {!isClaimed && !isReadyForClaiming && (
-          <div className="mt-3 flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs print:border-black print:bg-white">
-            <span className="font-bold text-foreground print:text-black">
-              Queue Line #{lineNum}
-            </span>
-            <span className="text-[11px] text-muted-foreground print:text-black">
-              Target Pickup: {currentReq.pickupDate || "Standard Schedule"}
-            </span>
+          <div className="mt-3 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs print:border-black print:bg-white">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-foreground print:text-black">
+                Queue Line #{lineNum}
+              </span>
+              <span className="text-[11px] font-medium text-muted-foreground print:text-black">
+                When to Claim: {currentReq.pickupDate || "Standard Schedule"}
+              </span>
+            </div>
+            {currentReq.paymentStatus && (
+              <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-400 print:text-black">
+                Payment: {currentReq.paymentStatus}
+              </p>
+            )}
           </div>
         )}
 
@@ -5709,22 +5730,24 @@ function DigitalReceiptModal({
 
             <div className="border-t border-border/60 pt-3 print:border-gray-300">
               <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                {isClaimed ? "Date Claimed" : "Pickup Schedule"}
+                {isClaimed ? "Date Claimed" : "When to Claim"}
               </p>
               <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
-                {currentReq.pickupDate || (isClaimed ? currentReq.date : "Standard Schedule")}
+                {currentReq.pickupDate || (isClaimed ? currentReq.date : "Within the day")}
               </p>
             </div>
 
             <div className="border-t border-border/60 pt-3 print:border-gray-300">
               <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Payment Status
+                Payment Requirement
               </p>
               <div className="mt-0.5">
                 <span
                   className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold ${
                     currentReq.paymentStatus === "Paid"
                       ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 print:border-black print:text-black"
+                      : currentReq.paymentStatus?.toLowerCase().includes("within the day")
+                      ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30 print:border-black print:text-black"
                       : currentReq.paymentStatus === "Exempted / Free of Charge"
                       ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 print:border-black print:text-black"
                       : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 print:border-black print:text-black"
@@ -5937,21 +5960,6 @@ function EditReceiptModal({
               </select>
             </Field>
 
-            <Field label="Payment Status">
-              <select
-                value={paymentStatus}
-                onChange={(e) => setPaymentStatus(e.target.value)}
-                className="field font-medium"
-              >
-                <option value="Proceed to Registrar Staff">Proceed to Registrar Staff</option>
-                <option value="Paid">Paid</option>
-                <option value="Pending Payment">Pending Payment</option>
-                <option value="Exempted / Free of Charge">Exempted / Free of Charge</option>
-              </select>
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <Field label="Copies">
               <input
                 type="number"
@@ -5961,17 +5969,75 @@ function EditReceiptModal({
                 className="field"
               />
             </Field>
+          </div>
 
-            <Field label="Pickup Schedule / Window">
+          <Field label="When to Claim (Release Schedule)">
+            <div className="space-y-1.5">
               <input
                 type="text"
                 value={pickupDate}
                 onChange={(e) => setPickupDate(e.target.value)}
-                placeholder="e.g. Window 2 • Sep 29, 2026 (2:00 PM)"
+                placeholder="e.g. Within the day (Today) • Window 2 (1:00 PM)"
                 className="field"
               />
-            </Field>
-          </div>
+              <div className="flex flex-wrap gap-1.5 text-[11px]">
+                {[
+                  "Within the day (Today)",
+                  "Tomorrow • Window 2",
+                  "Ready for Claiming Now",
+                  "Standard Schedule",
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setPickupDate(preset)}
+                    className={`rounded border px-2 py-0.5 font-medium transition-colors cursor-pointer ${
+                      pickupDate === preset
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/40 hover:bg-muted text-muted-foreground border-border"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Field>
+
+          <Field label="Payment Requirement & Instruction">
+            <div className="space-y-1.5">
+              <input
+                type="text"
+                value={paymentStatus}
+                onChange={(e) => setPaymentStatus(e.target.value)}
+                placeholder="e.g. Prepare payment within the day"
+                className="field"
+              />
+              <div className="flex flex-wrap gap-1.5 text-[11px]">
+                {[
+                  "Prepare payment within the day",
+                  "Proceed to Registrar Staff",
+                  "Paid",
+                  "Pending Payment",
+                  "Pay upon claiming at Counter",
+                  "Exempted / Free of Charge",
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setPaymentStatus(preset)}
+                    className={`rounded border px-2 py-0.5 font-medium transition-colors cursor-pointer ${
+                      paymentStatus === preset
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted/40 hover:bg-muted text-muted-foreground border-border"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Field>
 
           <Field label="Registrar Remarks / Notes to Student">
             <textarea
