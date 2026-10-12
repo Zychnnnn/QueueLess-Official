@@ -764,70 +764,87 @@ function QueueLessApp() {
     if (currentRole === "staff") {
       const list: NotificationItem[] = [];
 
-      // Urgent requests
-      const urgentRequests = requests.filter(
-        (r) => r.priority === "Urgent" && r.status !== "Claimed"
-      );
-      urgentRequests.forEach((r) => {
-        list.push({
-          id: `staff-urgent-${r.id}`,
-          title: `⚡ Urgent Request: ${r.id}`,
-          text: `${r.student} requested ${r.document} (Line #${r.lineNumber ?? 1}). Requires express processing.`,
-          tone: "urgent",
-          time: r.date,
-          actionView: "requests",
-          requestId: r.id,
-        });
-      });
+      requests.forEach((request) => {
+        if (request.priority === "Urgent" && request.status !== "Claimed") {
+          list.push({
+            id: `staff-urgent-${request.id}`,
+            title: `⚡ Urgent Priority: Line #${request.lineNumber ?? 1}`,
+            text: `${request.student} (${request.studentId}) requested ${request.document}. Express processing flagged.`,
+            tone: "urgent",
+            time: request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Ready for Claiming") {
+          list.push({
+            id: `staff-ready-${request.id}`,
+            title: `Ready for Pickup: Line #${request.lineNumber ?? 1} (${request.document})`,
+            text: `${request.student} (${request.studentId}) is ready for collection at Counter. Scheduled: ${request.pickupDate || "Today"}. Payment: ${request.paymentStatus || "Prepare payment within the day"}.`,
+            tone: "success",
+            time: request.pickupDate || request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Needs Correction") {
+          list.push({
+            id: `staff-correction-${request.id}`,
+            title: `Action Required: Correction (${request.id})`,
+            text: `${request.student} - ${request.document}: ${request.remarks || "Registrar notes require follow-up."}`,
+            tone: "warning",
+            time: request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Processing") {
+          list.push({
+            id: `staff-processing-${request.id}`,
+            title: `Now Processing: Line #${request.lineNumber ?? 1} (${request.document})`,
+            text: `Actively preparing ${request.student}'s ${request.document} (${request.id}). Target release: ${request.pickupDate || "Scheduled soon"}.`,
+            tone: "info",
+            time: request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Pending") {
+          list.push({
+            id: `staff-pending-${request.id}`,
+            title: `In Queue: Line #${request.lineNumber ?? 1} (${request.document})`,
+            text: `New request from ${request.student} (${request.studentId}) for ${request.document} (${request.purpose}). Payment: ${request.paymentStatus || "Proceed to Registrar Staff"}.`,
+            tone: "info",
+            time: request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        } else if (request.status === "Claimed") {
+          list.push({
+            id: `staff-claimed-${request.id}`,
+            title: `Document Claimed & Released (${request.id})`,
+            text: `${request.student}'s ${request.document} was released on ${request.pickupDate || request.date}.`,
+            tone: "success",
+            time: request.pickupDate || request.date,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        }
 
-      // Pending requests in queue
-      const pendingRequests = requests.filter((r) => r.status === "Pending");
-      pendingRequests.slice(0, 5).forEach((r) => {
-        list.push({
-          id: `staff-pending-${r.id}`,
-          title: `New Request: ${r.id}`,
-          text: `${r.student} submitted ${r.document} (${r.purpose}).`,
-          tone: "info",
-          time: r.date,
-          actionView: "requests",
-          requestId: r.id,
-        });
+        // Calendar pickup reminder for scheduled requests
+        if (request.pickupDate && request.status !== "Claimed") {
+          list.push({
+            id: `staff-calendar-${request.id}`,
+            title: `📅 Scheduled Pickup: ${request.pickupDate}`,
+            text: `Calendar Reminder: ${request.student} - ${request.document} (${request.id}) scheduled for release on ${request.pickupDate}.`,
+            tone: "info",
+            time: request.pickupDate,
+            actionView: "requests",
+            requestId: request.id,
+          });
+        }
       });
-
-      // Requests needing correction
-      const correctionRequests = requests.filter(
-        (r) => r.status === "Needs Correction"
-      );
-      correctionRequests.slice(0, 3).forEach((r) => {
-        list.push({
-          id: `staff-correction-${r.id}`,
-          title: `Correction Flagged: ${r.id}`,
-          text: `${r.student} - ${r.document}: ${r.remarks || "Awaiting student response"}`,
-          tone: "warning",
-          time: r.date,
-          actionView: "requests",
-          requestId: r.id,
-        });
-      });
-
-      // Ready for claiming summary
-      const readyCount = requests.filter(
-        (r) => r.status === "Ready for Claiming"
-      ).length;
-      if (readyCount > 0) {
-        list.push({
-          id: "staff-ready-summary",
-          title: `Ready for Claiming (${readyCount})`,
-          text: `${readyCount} document(s) are prepared and waiting for student pickup at the window.`,
-          tone: "success",
-          time: "Today",
-          actionView: "requests",
-        });
-      }
 
       return list;
     }
 
+    // --- ADMIN NOTIFICATIONS ---
     if (currentRole === "admin") {
       const list: NotificationItem[] = [];
 
@@ -846,36 +863,81 @@ function QueueLessApp() {
         });
       }
 
-      // Urgent requests alert
-      const urgentRequests = requests.filter(
-        (r) => r.priority === "Urgent" && r.status !== "Claimed"
-      );
-      urgentRequests.slice(0, 3).forEach((r) => {
-        list.push({
-          id: `admin-urgent-${r.id}`,
-          title: `⚡ Urgent Priority: ${r.id}`,
-          text: `${r.student} - ${r.document} (${r.status}). Express processing flagged.`,
-          tone: "urgent",
-          time: r.date,
-          actionView: "dashboard",
-          requestId: r.id,
-        });
-      });
+      requests.forEach((request) => {
+        if (request.priority === "Urgent" && request.status !== "Claimed") {
+          list.push({
+            id: `admin-urgent-${request.id}`,
+            title: `⚡ Urgent Priority: Line #${request.lineNumber ?? 1}`,
+            text: `${request.student} (${request.studentId}) - ${request.document} (${request.status}). Express processing flagged.`,
+            tone: "urgent",
+            time: request.date,
+            actionView: "dashboard",
+            requestId: request.id,
+          });
+        } else if (request.status === "Ready for Claiming") {
+          list.push({
+            id: `admin-ready-${request.id}`,
+            title: `Ready for Pickup: Line #${request.lineNumber ?? 1} (${request.document})`,
+            text: `${request.student} (${request.studentId}) is ready for collection at Counter 2. Scheduled: ${request.pickupDate || "Today"}. Payment: ${request.paymentStatus || "Prepare payment within the day"}.`,
+            tone: "success",
+            time: request.pickupDate || request.date,
+            actionView: "dashboard",
+            requestId: request.id,
+          });
+        } else if (request.status === "Needs Correction") {
+          list.push({
+            id: `admin-correction-${request.id}`,
+            title: `Correction Flagged: Line #${request.lineNumber ?? 1} (${request.id})`,
+            text: `${request.student} - ${request.document}: ${request.remarks || "Registrar notes require follow-up."}`,
+            tone: "warning",
+            time: request.date,
+            actionView: "dashboard",
+            requestId: request.id,
+          });
+        } else if (request.status === "Processing") {
+          list.push({
+            id: `admin-processing-${request.id}`,
+            title: `Now Processing: Line #${request.lineNumber ?? 1} (${request.document})`,
+            text: `Registrar actively preparing ${request.student}'s ${request.document} (${request.id}). Target: ${request.pickupDate || "Scheduled soon"}.`,
+            tone: "info",
+            time: request.date,
+            actionView: "dashboard",
+            requestId: request.id,
+          });
+        } else if (request.status === "Pending") {
+          list.push({
+            id: `admin-pending-${request.id}`,
+            title: `In Queue: Line #${request.lineNumber ?? 1} (${request.document})`,
+            text: `New request from ${request.student} (${request.studentId}) for ${request.document}. Purpose: ${request.purpose}. Payment: ${request.paymentStatus || "Proceed to Registrar Staff"}.`,
+            tone: "info",
+            time: request.date,
+            actionView: "dashboard",
+            requestId: request.id,
+          });
+        } else if (request.status === "Claimed") {
+          list.push({
+            id: `admin-claimed-${request.id}`,
+            title: `Document Claimed & Released (${request.id})`,
+            text: `${request.student}'s ${request.document} was successfully released on ${request.pickupDate || request.date}.`,
+            tone: "success",
+            time: request.pickupDate || request.date,
+            actionView: "dashboard",
+            requestId: request.id,
+          });
+        }
 
-      // Active queue overview
-      const pendingRequestsCount = requests.filter(
-        (r) => r.status === "Pending"
-      ).length;
-      if (pendingRequestsCount > 0) {
-        list.push({
-          id: "admin-queue-overview",
-          title: `Registrar Queue: ${pendingRequestsCount} Pending`,
-          text: `${pendingRequestsCount} document requests currently queued for registrar action.`,
-          tone: "info",
-          time: "Live Queue",
-          actionView: "dashboard",
-        });
-      }
+        if (request.pickupDate && request.status !== "Claimed") {
+          list.push({
+            id: `admin-calendar-${request.id}`,
+            title: `📅 Scheduled Pickup: ${request.pickupDate}`,
+            text: `Calendar Reminder: ${request.student} - ${request.document} (${request.id}) is scheduled for release on ${request.pickupDate}.`,
+            tone: "info",
+            time: request.pickupDate,
+            actionView: "dashboard",
+            requestId: request.id,
+          });
+        }
+      });
 
       // System operational status
       list.push({
@@ -7250,20 +7312,20 @@ function ManageRequests({
 
       {/* Filter and search */}
       <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center">
-        <label className="relative flex-1">
-          <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
+        <label className="relative flex items-center flex-1">
+          <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
           <span className="sr-only">Search requests</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="field pl-9 pr-8"
+            className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-8 text-xs font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground"
             placeholder="Search line number, ID, student name, ID #, or document..."
           />
           {query && (
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+              className="absolute right-2.5 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
               title="Clear search"
             >
               <X className="size-4" />
@@ -8751,20 +8813,21 @@ function RequestList({
         </div>
 
         {requests.length > 2 && (
-          <div className="relative sm:w-64">
-            <Search className="absolute left-3 top-2.5 size-3.5 text-muted-foreground" />
+          <div className="relative flex items-center sm:w-64">
+            <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search requests..."
-              className="field pl-8.5 pr-7 py-1 text-xs"
+              className="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-8 text-xs font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 shadow-xs placeholder:text-muted-foreground"
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
-                className="absolute right-2 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                className="absolute right-2.5 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                title="Clear search"
               >
                 <X className="size-3.5" />
               </button>
@@ -8779,14 +8842,14 @@ function RequestList({
           requests={filtered}
           onSelect={setSelected}
           scrollable={true}
-          maxHeight="max-h-[500px]"
+          maxHeight="max-h-[315px] sm:max-h-[320px]"
         />
       </div>
 
       {filtered.length > 0 && (
         <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground px-1">
           <span>Showing {filtered.length} of {requests.length} request(s)</span>
-          {filtered.length > 3 && (
+          {filtered.length >= 4 && (
             <span className="font-semibold text-primary">
               Scroll inside the box to view all requests ↓
             </span>
