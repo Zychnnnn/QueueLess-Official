@@ -7371,7 +7371,7 @@ function ManageRequests({
           <span className="text-right">Actions</span>
         </div>
 
-        <div className="max-h-[540px] overflow-y-auto divide-y divide-border/60">
+        <div className="max-h-[360px] overflow-y-auto scrollbar-thin divide-y divide-border/60">
           {shown.map((r) => {
             const isUrgent = r.priority === "Urgent";
             const isPriority = r.priority === "Priority";
