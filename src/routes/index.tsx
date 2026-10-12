@@ -1284,13 +1284,13 @@ function QueueLessApp() {
             <button
               type="button"
               onClick={() => {
-                if (role === "student" || role === "guest") {
+                if (role === "student" || role === "guest" || role === "staff") {
                   navigate("profile");
                 }
               }}
-              title={role === "student" || role === "guest" ? "Click to open My Profile & Password" : undefined}
+              title={role === "student" || role === "guest" || role === "staff" ? "Click to open My Profile & Password" : undefined}
               className={`ml-2 hidden items-center gap-3 border-l border-border pl-4 md:flex text-left transition rounded-xl py-1 px-2 -mr-2 ${
-                role === "student" || role === "guest"
+                role === "student" || role === "guest" || role === "staff"
                   ? "hover:bg-accent/60 cursor-pointer group"
                   : ""
               }`}
@@ -1392,16 +1392,28 @@ function QueueLessApp() {
             )}
 
             {role === "staff" && (
-              <NavButton
-                active={
-                  view === "requests"
-                }
-                icon={<ClipboardCheck />}
-                label="Manage requests"
-                onClick={() =>
-                  navigate("requests")
-                }
-              />
+              <>
+                <NavButton
+                  active={
+                    view === "requests"
+                  }
+                  icon={<ClipboardCheck />}
+                  label="Manage requests"
+                  onClick={() =>
+                    navigate("requests")
+                  }
+                />
+                <NavButton
+                  active={
+                    view === "profile"
+                  }
+                  icon={<UserRound />}
+                  label="My profile"
+                  onClick={() =>
+                    navigate("profile")
+                  }
+                />
+              </>
             )}
 
             {role === "admin" && (
@@ -1482,6 +1494,8 @@ function QueueLessApp() {
               requests={requests}
               setRequests={setRequests}
               setFlash={setFlash}
+              currentUser={currentUser}
+              setCurrentUser={setCurrentUser}
               onOpenCalendar={() => setCalendarOpen(true)}
             />
           ) : (
@@ -3135,10 +3149,18 @@ function StudentProfileView({
 
   const handleSaveProfile = async () => {
     const cleanDigits = editPhone.replace(/\D/g, "");
-    if (!cleanDigits || cleanDigits.length < 10) {
+    if (currentUser.role === "student" || currentUser.role === "guest") {
+      if (!cleanDigits || cleanDigits.length < 10) {
+        setFlash({
+          tone: "error",
+          text: "Enter your valid phone number",
+        });
+        return;
+      }
+    } else if (cleanDigits && cleanDigits.length < 10) {
       setFlash({
         tone: "error",
-        text: "Enter your valid phone number",
+        text: "Please enter a valid 11-digit phone number or leave blank.",
       });
       return;
     }
@@ -3240,7 +3262,11 @@ function StudentProfileView({
           <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
             <UserRound className="size-4 text-primary" /> Profile Information
           </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Update your personal details. Staff can view your phone number.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {currentUser.role === "staff"
+              ? "Update your staff profile details and contact number."
+              : "Update your personal details. Staff can view your phone number."}
+          </p>
 
           <div className="mt-5 space-y-4">
             {/* Avatar with Image Upload */}
@@ -3309,13 +3335,15 @@ function StudentProfileView({
                   const numbersOnly = e.target.value.replace(/\D/g, "");
                   setEditPhone(numbersOnly.slice(0, 11));
                 }}
-                placeholder="Enter your valid phone number"
+                placeholder={currentUser.role === "staff" ? "Optional contact number (e.g. 09123456789)" : "Enter your valid phone number"}
                 className="field"
                 maxLength={11}
-                required
+                required={currentUser.role === "student" || currentUser.role === "guest"}
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Enter your valid phone number
+                {currentUser.role === "staff"
+                  ? "Campus or personal contact number"
+                  : "Enter your valid phone number"}
               </p>
             </Field>
 
@@ -3324,8 +3352,6 @@ function StudentProfileView({
               <input type="email" value={currentUser.email} className="field bg-muted/50" readOnly />
             </Field>
 
-
-
             <div className="flex items-center justify-between rounded-lg bg-muted/50 border border-border px-4 py-3">
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Last Login</p>
@@ -3333,7 +3359,15 @@ function StudentProfileView({
               </div>
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Role</p>
-                <p className="text-sm font-bold text-foreground mt-0.5 capitalize">{isGuestUser ? "Guest" : currentUser.role}</p>
+                <p className="text-sm font-bold text-foreground mt-0.5 capitalize">
+                  {currentUser.role === "staff"
+                    ? "Registrar Staff"
+                    : currentUser.role === "admin"
+                    ? "Administrator"
+                    : isGuestUser
+                    ? "Guest"
+                    : "Student"}
+                </p>
               </div>
             </div>
 
@@ -4450,6 +4484,8 @@ function StaffView({
   requests,
   setRequests,
   setFlash,
+  currentUser,
+  setCurrentUser,
   onOpenCalendar,
 }: {
   view: View;
@@ -4459,6 +4495,8 @@ function StaffView({
     r: RequestItem[]
   ) => void;
   setFlash: (f: Flash) => void;
+  currentUser?: AuthUser | null;
+  setCurrentUser?: (u: AuthUser | null) => void;
   onOpenCalendar?: () => void;
 }) {
   const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
@@ -4478,6 +4516,17 @@ function StaffView({
         requests={requests}
         setRequests={setRequests}
         setFlash={setFlash}
+      />
+    );
+  }
+
+  if (view === "profile" && currentUser && setCurrentUser) {
+    return (
+      <StudentProfileView
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
+        setFlash={setFlash}
+        onBack={() => navigate("dashboard")}
       />
     );
   }
@@ -4616,112 +4665,55 @@ function StaffView({
         </>
       ) : (
         /* CLAIMED DOCUMENTS BACKUP VAULT TAB */
-        <div className="mt-6 space-y-6">
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-md bg-primary/20 px-2 py-0.5 text-xs font-bold text-primary">
-                    Permanent Records Ledger
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    • 100% Backed Up & Verified
-                  </span>
-                </div>
-                <h3 className="mt-1 font-display text-lg font-bold text-foreground">
-                  Claimed Documents Backup Archive
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Safely stores completed and received student credentials. Used for accreditation audits, re-verifications, and records ledger.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => exportClaimedBackupCsv(filteredBackup)}
-                  disabled={filteredBackup.length === 0}
-                  className="gap-1.5 text-xs h-9 cursor-pointer"
-                >
-                  <Printer className="size-3.5" /> Export Backup (.CSV)
-                </Button>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => {
-                    setBackupRecords(getClaimedBackupRecords(requests));
-                    setFlash({
-                      tone: "success",
-                      text: "Claimed documents ledger synchronized successfully.",
-                    });
-                  }}
-                  className="gap-1.5 text-xs h-9 cursor-pointer"
-                >
-                  <CheckCircle2 className="size-3.5" /> Sync Ledger
-                </Button>
-              </div>
-            </div>
-
-            {/* Archive Metrics */}
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 border-t border-primary/10 pt-4">
-              <div>
-                <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">
-                  Total Archived Releases
-                </p>
-                <p className="text-xl font-black text-foreground mt-0.5">
-                  {backupRecords.length}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">
-                  Transcripts (TOR)
-                </p>
-                <p className="text-xl font-black text-foreground mt-0.5">
-                  {backupRecords.filter((b) => b.document.includes("Transcript")).length}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">
-                  Certificates / Diplomas
-                </p>
-                <p className="text-xl font-black text-foreground mt-0.5">
-                  {backupRecords.filter((b) => !b.document.includes("Transcript")).length}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">
-                  Vault Integrity
-                </p>
-                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
-                  <CheckCircle2 className="size-4" /> Active & Ledger Synced
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Search Filter */}
-          <div className="flex items-center gap-3">
+        <div className="mt-6 space-y-4">
+          {/* Search Filter & Export Actions Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search archive by student name, ID number, document type, or reference ID..."
                 value={backupSearch}
-                onChange={(e) => setSearchBackup(e.target.value)}
-                className="field pl-9 h-10 text-xs"
+                onChange={(e) => setBackupSearch(e.target.value)}
+                className="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-8 text-xs font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground"
               />
+              {backupSearch && (
+                <button
+                  type="button"
+                  onClick={() => setBackupSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
             </div>
-            {backupSearch && (
+
+            <div className="flex items-center gap-2 shrink-0">
               <Button
-                variant="ghost"
                 size="sm"
-                onClick={() => setSearchBackup("")}
-                className="text-xs h-10"
+                variant="outline"
+                onClick={() => exportClaimedBackupCsv(filteredBackup)}
+                disabled={filteredBackup.length === 0}
+                className="gap-1.5 text-xs h-9 cursor-pointer font-medium"
               >
-                Clear
+                <Printer className="size-3.5" /> Export (.CSV)
               </Button>
-            )}
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => {
+                  setBackupRecords(getClaimedBackupRecords(requests));
+                  setFlash({
+                    tone: "success",
+                    text: "Claimed documents ledger synchronized successfully.",
+                  });
+                }}
+                className="gap-1.5 text-xs h-9 cursor-pointer font-medium shadow-xs"
+              >
+                <CheckCircle2 className="size-3.5" /> Sync Ledger
+              </Button>
+            </div>
           </div>
 
           {/* Claimed Documents Table / Cards */}
@@ -4736,7 +4728,7 @@ function StaffView({
             </div>
 
             {filteredBackup.length > 0 ? (
-              <div className="divide-y divide-border">
+              <div className="max-h-[360px] overflow-y-auto scrollbar-thin divide-y divide-border">
                 {filteredBackup.map((rec) => {
                   // Find full request object if available to render receipt
                   const fullReq = requests.find((r) => r.id === rec.id) || {
