@@ -3543,6 +3543,9 @@ function NewRequest({
   const [copies, setCopies] =
     useState<number>(1);
 
+  const [email, setEmail] =
+    useState(currentUser.email || "");
+
   const [phone, setPhone] =
     useState(currentUser.phone || "");
 
@@ -3571,10 +3574,18 @@ function NewRequest({
       return;
     }
 
-    const cleanDigits = phone.replace(/\D/g, "");
-    if (!cleanDigits || cleanDigits.length < 10) {
-      setError("Enter your valid phone number");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email.trim())) {
+      setError("Please provide a valid email address (e.g. student@phinmaed.com).");
       return;
+    }
+
+    if (phone.trim()) {
+      const cleanDigits = phone.replace(/\D/g, "");
+      if (cleanDigits.length > 0 && cleanDigits.length < 7) {
+        setError("Please enter a valid phone number.");
+        return;
+      }
     }
 
     setShowConfirmModal(true);
@@ -3632,6 +3643,7 @@ function NewRequest({
                 currentUser.name,
               studentId:
                 currentUser.studentId,
+              email: email.trim(),
               document: doc,
               purpose:
                 purpose.trim(),
@@ -3809,23 +3821,31 @@ function NewRequest({
             </Field>
           </div>
 
-          <div className="mt-4">
-            <Field label="Phone Number">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Notification Email Address *">
               <input
-                type="tel"
-                inputMode="numeric"
-                value={phone}
-                onChange={(e) => {
-                  const numbersOnly = e.target.value.replace(/\D/g, "");
-                  setPhone(numbersOnly.slice(0, 11));
-                }}
-                placeholder="Enter your valid phone number"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="e.g. student@phinmaed.com"
                 className="field"
-                maxLength={11}
                 required
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Enter your valid phone number
+                We will email you status updates and claiming notices.
+              </p>
+            </Field>
+
+            <Field label="Contact Phone Number">
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="e.g. 09123456789"
+                className="field"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Mobile number for SMS or registrar call follow-ups
               </p>
             </Field>
           </div>
@@ -5845,9 +5865,12 @@ function DigitalReceiptModal({
                       : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 print:border-black print:text-black"
                   }`}
                 >
-                  {currentReq.paymentStatus || "Proceed to Registrar Staff"}
+                  {currentReq.paymentStatus || "Awaiting Staff Assessment"}
                 </span>
               </div>
+              <p className="mt-1 text-[10px] text-muted-foreground print:hidden">
+                * Assessed and specified by the Registrar Staff
+              </p>
             </div>
           </div>
         </div>
@@ -6115,10 +6138,6 @@ function EditReceiptModal({
             </Field>
           </div>
 
-          <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5 text-[11px] text-muted-foreground">
-            ℹ <strong>Line-by-line priority:</strong> This line number appears directly on the student&apos;s digital receipt so they can track who is next in line.
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <Field label="Request Status">
               <select
@@ -6313,10 +6332,6 @@ function LogoutConfirmModal({
           </div>
         </div>
 
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          You will be logged out of your QueueLess account. Any unsaved changes will be discarded.
-        </p>
-
         <div className="mt-5 flex items-center justify-end gap-2.5">
           <Button
             type="button"
@@ -6462,6 +6477,7 @@ function ManageRequests({
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Active");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "priority-only">("all");
 
   // Receipt view and edit modals
   const [viewingReceipt, setViewingReceipt] = useState<RequestItem | null>(null);
@@ -6473,11 +6489,33 @@ function ManageRequests({
   } | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
 
+  const stats = useMemo(() => {
+    let pending = 0;
+    let processing = 0;
+    let ready = 0;
+    let urgentPriority = 0;
+    let claimed = 0;
+    let active = 0;
+
+    requests.forEach((r) => {
+      if (r.status === "Claimed") {
+        claimed++;
+      } else {
+        active++;
+        if (r.status === "Pending") pending++;
+        if (r.status === "Processing") processing++;
+        if (r.status === "Ready for Claiming") ready++;
+        if (r.priority === "Urgent" || r.priority === "Priority") urgentPriority++;
+      }
+    });
+
+    return { total: requests.length, active, pending, processing, ready, urgentPriority, claimed };
+  }, [requests]);
+
   const shown = useMemo(
     () =>
       requests
         .filter((r) => {
-          // If status is "Active", remove Claimed/Done items so new requests come there!
           const statusMatch =
             status === "Active"
               ? r.status !== "Claimed"
@@ -6485,11 +6523,16 @@ function ManageRequests({
               ? true
               : r.status === status;
 
-          const queryMatch = `${r.id} ${r.student} ${r.document} line #${r.lineNumber ?? 1}`
+          const priorityMatch =
+            priorityFilter === "priority-only"
+              ? r.priority === "Urgent" || r.priority === "Priority"
+              : true;
+
+          const queryMatch = `${r.id} ${r.student} ${r.studentId} ${r.document} line #${r.lineNumber ?? 1}`
             .toLowerCase()
             .includes(query.toLowerCase());
 
-          return statusMatch && queryMatch;
+          return statusMatch && priorityMatch && queryMatch;
         })
         .sort((a, b) => {
           const pWeight = { Urgent: 3, Priority: 2, Regular: 1 };
@@ -6498,7 +6541,7 @@ function ManageRequests({
           if (wA !== wB) return wB - wA;
           return (a.lineNumber ?? 0) - (b.lineNumber ?? 0);
         }),
-    [requests, query, status]
+    [requests, query, status, priorityFilter]
   );
 
   const update = async (id: string, next: Status) => {
@@ -6648,180 +6691,319 @@ function ManageRequests({
         text="Manage line-by-line queue priority, review details, and update student digital receipts."
       />
 
+      {/* Quick Queue Stats / Filter Pills */}
+      <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("Active");
+            setPriorityFilter("all");
+          }}
+          className={`flex flex-col items-start rounded-xl border p-3 text-left transition cursor-pointer ${
+            status === "Active" && priorityFilter === "all"
+              ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/30"
+              : "border-border bg-card hover:bg-muted/40"
+          }`}
+        >
+          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Active Queue</span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-xl font-black text-foreground">{stats.active}</span>
+            <span className="text-[10px] text-muted-foreground">in line</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("Pending");
+            setPriorityFilter("all");
+          }}
+          className={`flex flex-col items-start rounded-xl border p-3 text-left transition cursor-pointer ${
+            status === "Pending" && priorityFilter === "all"
+              ? "border-amber-500 bg-amber-500/10 shadow-xs ring-1 ring-amber-500/30"
+              : "border-border bg-card hover:bg-muted/40"
+          }`}
+        >
+          <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">● Pending</span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-xl font-black text-amber-700 dark:text-amber-400">{stats.pending}</span>
+            <span className="text-[10px] text-muted-foreground">needs review</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("Processing");
+            setPriorityFilter("all");
+          }}
+          className={`flex flex-col items-start rounded-xl border p-3 text-left transition cursor-pointer ${
+            status === "Processing" && priorityFilter === "all"
+              ? "border-sky-500 bg-sky-500/10 shadow-xs ring-1 ring-sky-500/30"
+              : "border-border bg-card hover:bg-muted/40"
+          }`}
+        >
+          <span className="text-[11px] font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wider">● In Process</span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-xl font-black text-sky-700 dark:text-sky-400">{stats.processing}</span>
+            <span className="text-[10px] text-muted-foreground">preparing</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("Ready for Claiming");
+            setPriorityFilter("all");
+          }}
+          className={`flex flex-col items-start rounded-xl border p-3 text-left transition cursor-pointer ${
+            status === "Ready for Claiming" && priorityFilter === "all"
+              ? "border-emerald-500 bg-emerald-500/10 shadow-xs ring-1 ring-emerald-500/30"
+              : "border-border bg-card hover:bg-muted/40"
+          }`}
+        >
+          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">● Ready to Claim</span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-xl font-black text-emerald-700 dark:text-emerald-400">{stats.ready}</span>
+            <span className="text-[10px] text-muted-foreground">at window</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("Active");
+            setPriorityFilter(priorityFilter === "priority-only" ? "all" : "priority-only");
+          }}
+          className={`flex flex-col items-start rounded-xl border p-3 text-left transition cursor-pointer ${
+            priorityFilter === "priority-only"
+              ? "border-rose-500 bg-rose-500/10 shadow-xs ring-1 ring-rose-500/30"
+              : "border-border bg-card hover:bg-muted/40"
+          }`}
+        >
+          <span className="text-[11px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider">⚡ Priority Lane</span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-xl font-black text-rose-700 dark:text-rose-400">{stats.urgentPriority}</span>
+            <span className="text-[10px] text-muted-foreground">urgent/prior</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setStatus("Claimed");
+            setPriorityFilter("all");
+          }}
+          className={`flex flex-col items-start rounded-xl border p-3 text-left transition cursor-pointer ${
+            status === "Claimed" && priorityFilter === "all"
+              ? "border-slate-500 bg-slate-500/10 shadow-xs ring-1 ring-slate-500/30"
+              : "border-border bg-card hover:bg-muted/40"
+          }`}
+        >
+          <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">✓ Claimed</span>
+          <div className="mt-1 flex items-baseline gap-1.5">
+            <span className="text-xl font-black text-muted-foreground">{stats.claimed}</span>
+            <span className="text-[10px] text-muted-foreground">released</span>
+          </div>
+        </button>
+      </div>
+
       {/* Filter and search */}
-      <div className="mt-7 flex flex-col gap-3 rounded-md border border-border bg-card p-3 sm:flex-row">
+      <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center">
         <label className="relative flex-1">
           <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
           <span className="sr-only">Search requests</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="field pl-9"
-            placeholder="Search line number, ID, student, or document..."
+            className="field pl-9 pr-8"
+            placeholder="Search line number, ID, student name, ID #, or document..."
           />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+              title="Clear search"
+            >
+              <X className="size-4" />
+            </button>
+          )}
         </label>
 
-        <select
-          aria-label="Filter by status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="field sm:w-56 font-medium"
-        >
-          <option value="Active">Active Queue (Excludes Claimed)</option>
-          <option value="All">All Requests (Including Claimed)</option>
-          <option value="Pending">Pending</option>
-          <option value="Processing">Processing</option>
-          <option value="Ready for Claiming">Ready for Claiming</option>
-          <option value="Needs Correction">Needs Correction</option>
-          <option value="Claimed">Claimed / Done (Archived)</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Filter by status"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPriorityFilter("all");
+            }}
+            className="field sm:w-52 font-medium text-xs cursor-pointer"
+          >
+            <option value="Active">Active Queue ({stats.active})</option>
+            <option value="All">All Records ({stats.total})</option>
+            <option value="Pending">Pending ({stats.pending})</option>
+            <option value="Processing">Processing ({stats.processing})</option>
+            <option value="Ready for Claiming">Ready for Claiming ({stats.ready})</option>
+            <option value="Needs Correction">Needs Correction</option>
+            <option value="Claimed">Claimed / Released ({stats.claimed})</option>
+          </select>
+
+          <span className="text-xs text-muted-foreground whitespace-nowrap pl-1 font-semibold">
+            {shown.length} in view
+          </span>
+        </div>
       </div>
 
-      {/* Claimed Archival Notice */}
-      {status === "Active" && requests.some((r) => r.status === "Claimed") && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
-            <span>
-              {requests.filter((r) => r.status === "Claimed").length} completed/claimed document(s) have been removed from the active queue and stored in the <strong>Claimed Documents Backup Vault</strong>.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setStatus("Claimed")}
-            className="text-primary hover:underline font-semibold shrink-0 cursor-pointer"
-          >
-            Show Claimed
-          </button>
-        </div>
-      )}
-
-      {/* Requests table */}
-      <div className="mt-4 overflow-x-auto rounded-md border border-border bg-card">
-        <table className="w-full min-w-[950px] text-left text-sm">
-          <thead className="bg-muted text-xs uppercase text-muted-foreground">
+      {/* High-Visibility Requests Table */}
+      <div className="mt-3 overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
+        <table className="w-full text-left text-xs sm:text-sm">
+          <thead className="border-b border-border bg-muted/60 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             <tr>
-              {[
-                "Line #",
-                "Request ID",
-                "Student",
-                "Document",
-                "Submitted",
-                "Status",
-                "Actions",
-              ].map((h) => (
-                <th key={h} className="px-5 py-4">
-                  {h}
-                </th>
-              ))}
+              <th className="py-3 pl-4 pr-2 w-28">Queue Line</th>
+              <th className="py-3 px-3 w-32">Request ID</th>
+              <th className="py-3 px-3 min-w-[170px]">Student</th>
+              <th className="py-3 px-3 min-w-[170px]">Document</th>
+              <th className="py-3 px-3 w-28 whitespace-nowrap">Submitted</th>
+              <th className="py-3 px-3 w-36">Status</th>
+              <th className="py-3 pr-4 pl-3 w-56 text-right">Actions</th>
             </tr>
           </thead>
 
           <tbody>
-            {shown.map((r) => (
-              <tr
-                key={r.id}
-                className="border-t border-border transition-colors hover:bg-muted/20"
-              >
-                {/* Line number and priority badge */}
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-flex items-center justify-center rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary border border-primary/20">
-                      Line #{r.lineNumber ?? 1}
-                    </span>
-                    {r.priority === "Urgent" && (
-                      <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-bold text-destructive">
-                        Urgent
+            {shown.map((r) => {
+              const isUrgent = r.priority === "Urgent";
+              const isPriority = r.priority === "Priority";
+              const isReady = r.status === "Ready for Claiming";
+              const isProcessing = r.status === "Processing";
+              const isCorrection = r.status === "Needs Correction";
+
+              const borderAccent = isUrgent
+                ? "border-l-4 border-l-rose-500 bg-rose-500/[0.04]"
+                : isPriority
+                ? "border-l-4 border-l-amber-500 bg-amber-500/[0.03]"
+                : isReady
+                ? "border-l-4 border-l-emerald-500 bg-emerald-500/[0.02]"
+                : isProcessing
+                ? "border-l-4 border-l-sky-500 bg-sky-500/[0.02]"
+                : isCorrection
+                ? "border-l-4 border-l-amber-600 bg-amber-600/[0.04]"
+                : "border-l-4 border-l-border/40";
+
+              return (
+                <tr
+                  key={r.id}
+                  className={`border-b border-border/70 transition-colors hover:bg-muted/30 ${borderAccent}`}
+                >
+                  {/* Line number and priority badge */}
+                  <td className="py-3 pl-4 pr-2">
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-black text-primary border border-primary/20">
+                        Line #{r.lineNumber ?? 1}
                       </span>
+                      {isUrgent && (
+                        <span className="inline-flex items-center rounded bg-rose-500/15 px-1.5 py-0.2 text-[10px] font-black text-rose-700 dark:text-rose-400 border border-rose-500/30">
+                          ⚡ Urgent
+                        </span>
+                      )}
+                      {isPriority && (
+                        <span className="inline-flex items-center rounded bg-amber-500/15 px-1.5 py-0.2 text-[10px] font-bold text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                          ★ Priority
+                        </span>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Request ID */}
+                  <td className="py-3 px-3 font-mono font-bold text-primary text-xs">
+                    {r.id}
+                  </td>
+
+                  {/* Student */}
+                  <td className="py-3 px-3">
+                    <p className="font-bold text-foreground text-xs sm:text-sm leading-tight">{r.student}</p>
+                    <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{r.studentId}</p>
+                    {r.phone ? (
+                      <a
+                        href={`tel:${r.phone}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline mt-0.5 cursor-pointer"
+                        title="Call student"
+                      >
+                        <Phone className="size-2.5" /> {r.phone}
+                      </a>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground/60 italic">No phone</span>
                     )}
-                    {r.priority === "Priority" && (
-                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                        Priority
-                      </span>
-                    )}
-                  </div>
-                </td>
+                  </td>
 
-                <td className="px-5 py-4 font-bold text-primary">{r.id}</td>
+                  {/* Document */}
+                  <td className="py-3 px-3">
+                    <p className="font-semibold text-foreground text-xs leading-tight">{r.document}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {r.copies || 1} {(r.copies || 1) === 1 ? "copy" : "copies"} · {r.purpose}
+                    </p>
+                  </td>
 
-                <td className="px-5 py-4">
-                  <p className="font-semibold text-foreground">{r.student}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{r.studentId}</p>
-                  {r.phone ? (
-                    <a
-                      href={`tel:${r.phone}`}
-                      className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
-                      title="Click to call student"
-                    >
-                      <Phone className="size-3" />
-                      {r.phone}
-                    </a>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground/60 italic">No phone</span>
-                  )}
-                </td>
+                  {/* Submitted Date */}
+                  <td className="py-3 px-3 text-xs text-muted-foreground whitespace-nowrap">
+                    {r.date}
+                  </td>
 
-                <td className="max-w-64 px-5 py-4">
-                  <p className="font-medium text-foreground">{r.document}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {r.copies || 1} {(r.copies || 1) === 1 ? "copy" : "copies"} · {r.purpose}
-                  </p>
-                </td>
+                  {/* Status Badge */}
+                  <td className="py-3 px-3">
+                    <StatusBadge status={r.status} />
+                  </td>
 
-                <td className="px-5 py-4 text-muted-foreground">{r.date}</td>
+                  {/* Actions (Grouped cleanly, no clipping) */}
+                  <td className="py-3 pr-4 pl-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewingReceipt(r)}
+                        className="h-7 px-2 text-xs cursor-pointer font-medium"
+                        title="View Receipt"
+                      >
+                        <Eye className="size-3" /> Receipt
+                      </Button>
 
-                <td className="px-5 py-4">
-                  <StatusBadge status={r.status} />
-                </td>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingReceipt(r)}
+                        className="h-7 px-2 text-xs cursor-pointer font-medium"
+                        title="Edit Receipt & Line Number"
+                      >
+                        <Edit3 className="size-3" /> Edit
+                      </Button>
 
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-1.5">
-                    {/* View Digital Receipt */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setViewingReceipt(r)}
-                      title="View Digital Receipt"
-                    >
-                      <Eye className="size-3.5" /> Receipt
-                    </Button>
-
-                    {/* Edit Receipt */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setEditingReceipt(r)}
-                      title="Edit Receipt & Line Number"
-                    >
-                      <Edit3 className="size-3.5" /> Edit
-                    </Button>
-
-                    {/* Quick status dropdown */}
-                    <select
-                      aria-label={`Update ${r.id} status`}
-                      value={r.status}
-                      onChange={(e) => {
-                        const next = e.target.value as Status;
-                        if (next !== r.status) {
-                          setPendingStatusChange({ request: r, nextStatus: next });
-                        }
-                      }}
-                      className="h-8 rounded-md border border-input bg-background px-2 text-xs cursor-pointer font-medium"
-                    >
-                      {[
-                        "Pending",
-                        "Processing",
-                        "Ready for Claiming",
-                        "Claimed",
-                        "Needs Correction",
-                      ].map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      <select
+                        aria-label={`Update ${r.id} status`}
+                        value={r.status}
+                        onChange={(e) => {
+                          const next = e.target.value as Status;
+                          if (next !== r.status) {
+                            setPendingStatusChange({ request: r, nextStatus: next });
+                          }
+                        }}
+                        className="h-7 rounded-md border border-input bg-background px-1.5 text-xs font-semibold cursor-pointer"
+                      >
+                        {[
+                          "Pending",
+                          "Processing",
+                          "Ready for Claiming",
+                          "Claimed",
+                          "Needs Correction",
+                        ].map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 

@@ -344,7 +344,6 @@ export const sendRequestUpdateNotification = async ({
         </div>
 
         <p style="color: #9ca3af; font-size: 11px; margin: 20px 0 0; text-align: center; border-top: 1px solid #f3f4f6; pt-3;">
-          This is an automated notification from QueueLess Registrar System.<br />
           PHINMA University of Pangasinan • College Building Ground Floor
         </p>
       </div>
