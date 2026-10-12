@@ -25,6 +25,7 @@ import {
   Clock3,
   Edit3,
   Eye,
+  EyeOff,
   FileCheck2,
   FilePlus2,
   FileText,
@@ -2210,6 +2211,8 @@ function Registration({
   error: string;
   loading: boolean;
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   return (
     <>
       <Button
@@ -2273,17 +2276,65 @@ function Registration({
           </Field>
         </div>
 
+        
         <div className="sm:col-span-2">
           <Field label="Password">
-            <input
-              name="password"
-              type="password"
-              required
-              className="field"
-              placeholder="At least 8 characters"
-            />
+            <div className="relative">
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                required
+                className="field pr-10"
+                placeholder="At least 8 characters"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
+              </button>
+            </div>
           </Field>
         </div>
+
+        <div className="sm:col-span-2">
+          <Field label="Confirm Password">
+            <div className="relative">
+              <input
+                name="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                required
+                className="field pr-10"
+                placeholder="Re-enter your password"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setShowConfirmPassword(!showConfirmPassword)
+                }
+                aria-label={
+                  showConfirmPassword
+                    ? "Hide confirm password"
+                    : "Show confirm password"
+                }
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
+              </button>
+            </div>
+          </Field>
+        </div>
+
 
         <div className="sm:col-span-2">
           <Field label="Confirm Password">
