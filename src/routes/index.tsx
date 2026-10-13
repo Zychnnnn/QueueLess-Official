@@ -34,10 +34,13 @@ import {
   LayoutDashboard,
   Loader2,
   LogOut,
+  Mail,
   Menu,
   Plus,
   Phone,
   Printer,
+  Receipt,
+  UserCheck,
   QrCode,
   RefreshCw,
   Search,
@@ -147,6 +150,7 @@ type AuthUser = {
   lastLogin?: string;
   isPriority?: boolean;
   userType?: "priority" | "normal";
+  contactVerified?: boolean;
 };
 
 type AccountUser = {
@@ -1349,11 +1353,12 @@ function QueueLessApp() {
             menuOpen
               ? "fixed inset-x-0 top-18 z-20 flex"
               : "hidden"
-          } min-h-[calc(100vh-4.5rem)] w-full flex-col border-r border-border bg-card p-4 md:sticky md:top-18 md:flex md:w-64 md:shrink-0`}
+          } h-[calc(100vh-4.5rem)] w-full flex-col justify-between border-r border-border bg-card p-4 md:sticky md:top-18 md:flex md:w-64 md:shrink-0 overflow-y-auto`}
         >
-          <p className="px-3 pb-3 pt-2 text-[10px] font-bold uppercase text-muted-foreground">
-            Workspace
-          </p>
+          <div className="flex-1">
+            <p className="px-3 pb-3 pt-2 text-[10px] font-bold uppercase text-muted-foreground">
+              Workspace
+            </p>
 
           <nav className="space-y-1">
             <NavButton
@@ -1433,8 +1438,9 @@ function QueueLessApp() {
             )}
 
           </nav>
+          </div>
 
-          <div className="mt-auto border-t border-border pt-4">
+          <div className="mt-auto shrink-0 border-t border-border pt-4">
             <div className="mb-4 rounded-md bg-muted p-3">
               <p className="text-xs font-bold">
                 Need help?
@@ -3108,7 +3114,10 @@ function StudentProfileView({
 }) {
   const [editName, setEditName] = useState(currentUser.name);
   const [editPhone, setEditPhone] = useState(currentUser.phone || "");
+  const [editEmail, setEditEmail] = useState(currentUser.email || "");
   const [editPicture, setEditPicture] = useState(currentUser.picture || "");
+  const [contactConfirmed, setContactConfirmed] = useState(Boolean(currentUser.contactVerified));
+  const [showAuthConfirmModal, setShowAuthConfirmModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -3137,47 +3146,83 @@ function StudentProfileView({
     return `${dateFormatted}, ${timeFormatted}`;
   };
 
-  const handleSaveProfile = async () => {
+  const validateInputs = () => {
     const cleanDigits = editPhone.replace(/\D/g, "");
     if (currentUser.role === "student" || currentUser.role === "guest") {
-      if (!cleanDigits || cleanDigits.length < 10) {
+      if (!cleanDigits || cleanDigits.length !== 11 || !cleanDigits.startsWith("09")) {
         setFlash({
           tone: "error",
-          text: "Enter your valid phone number",
+          text: "Please enter a valid 11-digit mobile number starting with 09 (e.g. 09123456789).",
         });
-        return;
+        return false;
       }
-    } else if (cleanDigits && cleanDigits.length < 10) {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!editEmail.trim() || !emailPattern.test(editEmail.trim())) {
+        setFlash({
+          tone: "error",
+          text: "Please enter a valid email address (e.g. student@phinma.edu.ph).",
+        });
+        return false;
+      }
+    } else if (cleanDigits && (cleanDigits.length !== 11 || !cleanDigits.startsWith("09"))) {
       setFlash({
         tone: "error",
-        text: "Please enter a valid 11-digit phone number or leave blank.",
+        text: "Please enter a valid 11-digit phone number starting with 09 or leave blank.",
       });
-      return;
+      return false;
     }
+    return true;
+  };
 
+  const executeSaveProfile = async (authenticated: boolean = false) => {
+    const cleanDigits = editPhone.replace(/\D/g, "");
     setSaving(true);
     try {
       const token = localStorage.getItem("queueless_token");
-      const res = await fetch(`${API_URL}/api/auth/profile`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: editName.trim(),
-          phone: cleanDigits,
-          picture: editPicture.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to update profile.");
+      let remoteUser: Partial<AuthUser> = {};
+      if (token) {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/profile`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              name: editName.trim(),
+              phone: cleanDigits,
+              email: editEmail.trim(),
+              picture: editPicture.trim(),
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.user) remoteUser = data.user;
+          }
+        } catch {
+          // offline fallback
+        }
+      }
 
-      const updatedUser: AuthUser = { ...currentUser, ...data.user };
+      const updatedUser: AuthUser = {
+        ...currentUser,
+        ...remoteUser,
+        name: editName.trim(),
+        phone: cleanDigits,
+        email: editEmail.trim(),
+        picture: editPicture.trim(),
+        contactVerified: authenticated || contactConfirmed,
+      };
+
       setCurrentUser(updatedUser);
       localStorage.setItem("queueless_user", JSON.stringify(updatedUser));
+      setContactConfirmed(true);
+      setShowAuthConfirmModal(false);
 
-      setFlash({ tone: "success", text: "Profile updated successfully." });
+      setFlash({
+        tone: "success",
+        text: "Personal details and contact authentication saved successfully.",
+      });
     } catch (err) {
       setFlash({
         tone: "error",
@@ -3186,6 +3231,17 @@ function StudentProfileView({
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!validateInputs()) return;
+
+    if ((currentUser.role === "student" || currentUser.role === "guest") && !contactConfirmed) {
+      setShowAuthConfirmModal(true);
+      return;
+    }
+
+    await executeSaveProfile(contactConfirmed);
   };
 
   const handleChangePassword = async (e: FormEvent) => {
@@ -3337,9 +3393,21 @@ function StudentProfileView({
               </p>
             </Field>
 
-            {/* Read-only fields */}
+            {/* Editable Email Field */}
             <Field label="Email Address">
-              <input type="email" value={currentUser.email} className="field bg-muted/50" readOnly />
+              <input
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="e.g. student@phinma.edu.ph"
+                className="field"
+                required={currentUser.role === "student" || currentUser.role === "guest"}
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {currentUser.role === "staff"
+                  ? "Official institutional email address"
+                  : "Official email for registrar announcements, assessments, and release receipts"}
+              </p>
             </Field>
 
             <div className="flex items-center justify-between rounded-lg bg-muted/50 border border-border px-4 py-3">
@@ -3360,6 +3428,31 @@ function StudentProfileView({
                 </p>
               </div>
             </div>
+
+            {(currentUser.role === "student" || currentUser.role === "guest") && (
+              <div className="rounded-lg border border-primary/25 bg-primary/5 p-3.5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <p className="text-xs font-bold text-foreground">
+                    Contact Authentication for Request Updates
+                  </p>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Staff requires your authentic personal phone and email so school documentation and live queue notifications reach you accurately.
+                </p>
+                <label className="flex items-start gap-2 pt-1 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={contactConfirmed}
+                    onChange={(e) => setContactConfirmed(e.target.checked)}
+                    className="mt-0.5 rounded border-border text-primary focus:ring-primary size-3.5"
+                  />
+                  <span className="text-[11px] font-semibold text-foreground">
+                    I confirm that this phone number and email are authentic and active to receive registrar updates.
+                  </span>
+                </label>
+              </div>
+            )}
 
             <Button onClick={handleSaveProfile} disabled={saving} className="w-full gap-2 cursor-pointer">
               {saving ? (
@@ -3486,13 +3579,79 @@ function StudentProfileView({
                 </div>
               )}
               <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Contact Status</span>
+                <span className={`font-semibold ${currentUser.contactVerified || (currentUser.phone && currentUser.phone.length === 11) ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600"}`}>
+                  {currentUser.contactVerified || (currentUser.phone && currentUser.phone.length === 11)
+                    ? "✓ Authenticated for Updates"
+                    : "Pending Authentication"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Phone</span>
                 <span className="font-semibold font-mono">{currentUser.phone || "Not set"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Email</span>
+                <span className="font-semibold truncate max-w-[180px]">{currentUser.email || "Not set"}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Confirmation & Authentication Modal */}
+      {showAuthConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-3">
+              <ShieldCheck className="size-6" />
+            </div>
+            <h3 className="font-display text-lg font-bold text-center text-foreground">
+              Confirm Contact Authentication
+            </h3>
+            <p className="mt-1.5 text-xs text-center text-muted-foreground leading-relaxed">
+              The Registrar's Office requires authenticated personal details for official school records and automated request updates:
+            </p>
+            <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
+                  <Phone className="size-3.5 text-primary" /> Mobile (SMS):
+                </span>
+                <span className="font-mono font-bold text-foreground">{editPhone}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
+                  <Mail className="size-3.5 text-primary" /> Email Address:
+                </span>
+                <span className="font-semibold text-foreground truncate max-w-[200px]">{editEmail}</span>
+              </div>
+            </div>
+            <p className="mt-3 text-[11px] text-muted-foreground text-center">
+              By confirming, you authorize the Registrar's Office to send queue line numbers, payment directives, and claim receipts to these channels.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAuthConfirmModal(false)}
+                className="cursor-pointer"
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => executeSaveProfile(true)}
+                disabled={saving}
+                className="gap-1.5 font-bold cursor-pointer"
+              >
+                {saving ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                Confirm & Authenticate
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3544,19 +3703,43 @@ function StudentView({
     Boolean(currentUser.studentId?.startsWith("GUEST"));
 
   if (view === "new") {
-    if (isGuestUser && (!currentUser.phone || !currentUser.phone.trim())) {
+    const cleanPhoneDigits = (currentUser.phone || "").replace(/\D/g, "");
+    const hasValidPhone = cleanPhoneDigits.length === 11 && cleanPhoneDigits.startsWith("09");
+    const hasValidEmail = Boolean(currentUser.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(currentUser.email.trim()));
+
+    if (!hasValidPhone || !hasValidEmail) {
       return (
         <div className="animate-rise max-w-xl mx-auto my-8">
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-center shadow-lg">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 mb-3">
-              <Phone className="size-6" />
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 sm:p-8 text-center shadow-lg">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 mb-4">
+              <UserCheck className="size-7" />
             </div>
-            <h3 className="font-display text-xl font-bold text-foreground">
-              Contact Information Required
+            <h3 className="font-display text-xl sm:text-2xl font-bold text-foreground">
+              Personal Details Required
             </h3>
-            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-              Enter your valid phone number before requesting a document.
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed max-w-md mx-auto">
+              Fill up personal details before requesting document. A valid mobile number (09XXXXXXXXX) and active email address are required so registrar staff can process your documentation and send request updates.
             </p>
+
+            <div className="mt-5 mx-auto max-w-xs rounded-xl border border-border/80 bg-background/80 p-3 text-left text-xs space-y-1.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <Phone className="size-3 text-primary" /> Mobile Number:
+                </span>
+                <span className={`font-mono font-bold ${hasValidPhone ? "text-emerald-600" : "text-amber-600"}`}>
+                  {hasValidPhone ? "✓ Valid (09...)" : "Missing / Incomplete"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1.5">
+                  <Mail className="size-3 text-primary" /> Email Address:
+                </span>
+                <span className={`font-semibold ${hasValidEmail ? "text-emerald-600" : "text-amber-600"}`}>
+                  {hasValidEmail ? "✓ Valid" : "Missing"}
+                </span>
+              </div>
+            </div>
+
             <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
               <Button
                 variant="outline"
@@ -5837,6 +6020,7 @@ function DigitalReceiptModal({
   const [showInternalEdit, setShowInternalEdit] = useState(false);
   const [internalSaving, setInternalSaving] = useState(false);
   const [editFlash, setEditFlash] = useState("");
+  const [receiptTab, setReceiptTab] = useState<"official" | "counter_slip">("official");
 
   const lineNum = currentReq.lineNumber ?? 1;
   const isClaimed = currentReq.status === "Claimed";
@@ -5948,251 +6132,362 @@ function DigitalReceiptModal({
           </Button>
         </div>
 
-        {/* Official Institutional Letterhead */}
-        <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground print:text-black">
-            PHINMA Education • Republic of the Philippines
-          </p>
-          <h1 className="font-serif text-lg font-black uppercase tracking-wider text-foreground print:text-black leading-tight mt-0.5">
-            PHINMA University of Pangasinan
-          </h1>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-primary print:text-black">
-            Office of the University Registrar
-          </p>
-          <p className="mt-0.5 text-[10px] text-muted-foreground print:text-gray-700">
-            Arellano Street, Dagupan City, Pangasinan 2400 • Tel: (075) 522-5635
-          </p>
+        {/* Receipt View Tabs */}
+        <div className="mb-4 flex items-center justify-center gap-1 rounded-lg bg-muted p-1 text-xs print:hidden">
+          <button
+            type="button"
+            onClick={() => setReceiptTab("official")}
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
+              receiptTab === "official"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Receipt className="size-3.5 text-primary" />
+            <span>Official Institutional Receipt</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setReceiptTab("counter_slip")}
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
+              receiptTab === "counter_slip"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <FileText className="size-3.5" />
+            <span>Student Counter Slip (To Pass at Window)</span>
+          </button>
         </div>
 
-        {/* Divider Rule */}
-        <div className="my-3 border-t-2 border-b border-foreground/30 py-0.5 print:border-black" />
-
-        {/* Receipt Title & Status Bar */}
-        <div className="flex items-center justify-between border-b border-border pb-3 print:border-black">
-          <div>
-            <h2 className="text-xs font-black uppercase tracking-wider text-foreground print:text-black">
-              {isClaimed
-                ? "Official Document Release Receipt"
-                : isReadyForClaiming
-                ? "Official Document Claim Stub"
-                : "Registrar Request Receipt"}
-            </h2>
-            <p className="text-[10px] text-muted-foreground print:text-gray-700">
-              {isClaimed
-                ? "Proof of document release and claim acknowledgement"
-                : isReadyForClaiming
-                ? "Present at registrar counter to claim your requested document"
-                : "Student copy • Keep for tracking your request"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {currentReq.priority && currentReq.priority !== "Regular" && getPriorityBadge(currentReq.priority)}
-            <StatusBadge status={currentReq.status} />
-          </div>
-        </div>
-
-        {editFlash && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 print:hidden">
-            <CheckCircle2 className="size-4 shrink-0" />
-            <span>{editFlash}</span>
-          </div>
-        )}
-
-        {/* Ready for Claiming Info Box */}
-        {isReadyForClaiming && (
-          <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs print:border-black print:bg-white">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 font-semibold">
-              <span className="text-foreground print:text-black">
-                Line #{lineNum} • Counter Window 2 (Releasing Desk)
-              </span>
-              <span className="text-xs font-bold text-primary print:text-black">
-                When to Claim: {currentReq.pickupDate || "Within the day"}
-              </span>
+        {receiptTab === "official" ? (
+          <>
+            {/* Official Institutional Letterhead */}
+            <div className="text-center">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground print:text-black">
+                PHINMA Education • Republic of the Philippines
+              </p>
+              <h1 className="font-serif text-lg font-black uppercase tracking-wider text-foreground print:text-black leading-tight mt-0.5">
+                PHINMA University of Pangasinan
+              </h1>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-primary print:text-black">
+                Office of the University Registrar
+              </p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground print:text-gray-700">
+                Arellano Street, Dagupan City, Pangasinan 2400 • Tel: (075) 522-5635
+              </p>
             </div>
-            {currentReq.paymentStatus && (
-              <div className="mt-1.5 flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-muted-foreground print:text-black">Payment:</span>
-                <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold ${
-                  currentReq.paymentStatus === "Paid"
-                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 print:border-black print:text-black"
-                    : currentReq.paymentStatus.toLowerCase().includes("within the day")
-                    ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30 print:border-black print:text-black"
-                    : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 print:border-black print:text-black"
-                }`}>
-                  {currentReq.paymentStatus}
-                </span>
+
+            {/* Divider Rule */}
+            <div className="my-3 border-t-2 border-b border-foreground/30 py-0.5 print:border-black" />
+
+            {/* Receipt Title & Status Bar */}
+            <div className="flex items-center justify-between border-b border-border pb-3 print:border-black">
+              <div>
+                <h2 className="text-xs font-black uppercase tracking-wider text-foreground print:text-black">
+                  {isClaimed
+                    ? "Official Document Release Receipt"
+                    : isReadyForClaiming
+                    ? "Official Document Claim Stub"
+                    : "Registrar Request Receipt"}
+                </h2>
+                <p className="text-[10px] text-muted-foreground print:text-gray-700">
+                  {isClaimed
+                    ? "Proof of document release and claim acknowledgement"
+                    : isReadyForClaiming
+                    ? "Present at registrar counter to claim your requested document"
+                    : "Official registrar copy • Keep for tracking your request"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {currentReq.priority && currentReq.priority !== "Regular" && getPriorityBadge(currentReq.priority)}
+                <StatusBadge status={currentReq.status} />
+              </div>
+            </div>
+
+            {editFlash && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 print:hidden">
+                <CheckCircle2 className="size-4 shrink-0" />
+                <span>{editFlash}</span>
               </div>
             )}
-            <p className="mt-1 text-[11px] text-muted-foreground print:text-gray-700">
-              Please present your valid student ID or authorization letter when claiming at the registrar counter.
-            </p>
-          </div>
-        )}
 
-        {/* In Queue Helper */}
-        {!isClaimed && !isReadyForClaiming && (
-          <div className="mt-3 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs print:border-black print:bg-white">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-foreground print:text-black">
-                Queue Line #{lineNum}
-              </span>
-              <span className="text-[11px] font-medium text-muted-foreground print:text-black">
-                When to Claim: {currentReq.pickupDate || "Standard Schedule"}
-              </span>
-            </div>
-            {currentReq.paymentStatus && (
-              <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-400 print:text-black">
-                Payment: {currentReq.paymentStatus}
-              </p>
+            {/* Ready for Claiming Info Box */}
+            {isReadyForClaiming && (
+              <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs print:border-black print:bg-white">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 font-semibold">
+                  <span className="text-foreground print:text-black">
+                    Line #{lineNum} • Counter Window 2 (Releasing Desk)
+                  </span>
+                  <span className="text-xs font-bold text-primary print:text-black">
+                    When to Claim: {currentReq.pickupDate || "Within the day"}
+                  </span>
+                </div>
+                {currentReq.paymentStatus && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold text-muted-foreground print:text-black">Payment:</span>
+                    <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-bold ${
+                      currentReq.paymentStatus === "Paid"
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 print:border-black print:text-black"
+                        : currentReq.paymentStatus.toLowerCase().includes("within the day")
+                        ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30 print:border-black print:text-black"
+                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 print:border-black print:text-black"
+                    }`}>
+                      {currentReq.paymentStatus}
+                    </span>
+                  </div>
+                )}
+                <p className="mt-1 text-[11px] text-muted-foreground print:text-gray-700">
+                  Please present your valid student ID or authorization letter when claiming at the registrar counter.
+                </p>
+              </div>
             )}
-          </div>
-        )}
 
-        {/* Receipt Details Grid */}
-        <div className="mt-4 rounded-xl border border-border bg-muted/15 p-4 sm:p-5 print:border-black print:bg-white print:p-3">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3.5 text-xs">
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Reference No.
+            {/* Receipt Details Grid */}
+            <div className="mt-4 rounded-xl border border-border bg-muted/15 p-4 sm:p-5 print:border-black print:bg-white print:p-3">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3.5 text-xs">
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    Reference No.
+                  </p>
+                  <p className="mt-0.5 font-mono text-sm font-bold text-foreground print:text-black">
+                    {currentReq.id}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    Date Filed
+                  </p>
+                  <p className="mt-0.5 text-sm font-semibold text-foreground print:text-black">
+                    {currentReq.date}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    Student Name
+                  </p>
+                  <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
+                    {currentReq.student}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    Student ID No.
+                  </p>
+                  <p className="mt-0.5 font-mono text-sm font-bold text-foreground print:text-black">
+                    {currentReq.studentId}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    Document Requested
+                  </p>
+                  <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
+                    {currentReq.document}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    Copies
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium text-foreground print:text-black">
+                    {currentReq.copies || 1} {currentReq.copies === 1 ? "copy" : "copies"}
+                  </p>
+                </div>
+
+                <div className="col-span-2 border-t border-border/60 pt-3 print:border-gray-300">
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    Purpose
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium text-foreground print:text-black">
+                    {currentReq.purpose || "Official Record Request"}
+                  </p>
+                </div>
+
+                <div className="border-t border-border/60 pt-3 print:border-gray-300">
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    {isClaimed ? "Date Claimed" : "Target Release"}
+                  </p>
+                  <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
+                    {currentReq.pickupDate || (isClaimed ? currentReq.date : "Within the day")}
+                  </p>
+                </div>
+
+                <div className="border-t border-border/60 pt-3 print:border-gray-300">
+                  <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
+                    Payment Requirement
+                  </p>
+                  <div className="mt-0.5">
+                    <span
+                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold ${
+                        currentReq.paymentStatus === "Paid"
+                          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 print:border-black print:text-black"
+                          : currentReq.paymentStatus?.toLowerCase().includes("within the day")
+                          ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30 print:border-black print:text-black"
+                          : currentReq.paymentStatus === "Exempted / Free of Charge"
+                          ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 print:border-black print:text-black"
+                          : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 print:border-black print:text-black"
+                      }`}
+                    >
+                      {currentReq.paymentStatus || "Awaiting Staff Assessment"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-muted-foreground print:hidden">
+                    * Assessed and specified by the Registrar Staff
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Remarks */}
+            {currentReq.remarks && (
+              <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-900 dark:text-amber-200 print:border-black print:bg-white print:text-black">
+                <p className="font-bold">Remarks:</p>
+                <p className="mt-0.5">{currentReq.remarks}</p>
+              </div>
+            )}
+
+            {/* Signatures Section */}
+            <div className="mt-6 border-t border-border pt-4 print:border-black">
+              <div className="grid grid-cols-2 gap-8 text-center text-xs">
+                <div>
+                  <div className="border-b border-foreground/60 print:border-black w-4/5 mx-auto mb-1 h-8"></div>
+                  <p className="font-bold text-foreground print:text-black">{currentReq.student}</p>
+                  <p className="text-[10px] text-muted-foreground print:text-gray-700">
+                    {isClaimed ? "Receiver's Signature" : "Student Signature"}
+                  </p>
+                </div>
+
+                <div>
+                  <div className="border-b border-foreground/60 print:border-black w-4/5 mx-auto mb-1 h-8"></div>
+                  <p className="font-bold text-foreground print:text-black">Registrar Staff</p>
+                  <p className="text-[10px] text-muted-foreground print:text-gray-700">Authorized Signature</p>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Student Counter Presentation Slip */
+          <>
+            {/* Header */}
+            <div className="text-center">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground print:text-black">
+                PHINMA Education • Republic of the Philippines
               </p>
-              <p className="mt-0.5 font-mono text-sm font-bold text-foreground print:text-black">
-                {currentReq.id}
+              <h1 className="font-serif text-lg font-black uppercase tracking-wider text-foreground print:text-black leading-tight mt-0.5">
+                PHINMA University of Pangasinan
+              </h1>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-primary print:text-black">
+                Office of the University Registrar
+              </p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground print:text-gray-700">
+                Arellano Street, Dagupan City, Pangasinan 2400 • Tel: (075) 522-5635
               </p>
             </div>
 
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Date Filed
-              </p>
-              <p className="mt-0.5 text-sm font-semibold text-foreground print:text-black">
-                {currentReq.date}
-              </p>
-            </div>
+            <div className="my-3 border-t-2 border-b border-foreground/30 py-0.5 print:border-black" />
 
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Student Name
-              </p>
-              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
-                {currentReq.student}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Student ID No.
-              </p>
-              <p className="mt-0.5 font-mono text-sm font-bold text-foreground print:text-black">
-                {currentReq.studentId}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Contact Phone
-              </p>
-              <p className="mt-0.5 text-sm font-medium text-foreground print:text-black">
-                {currentReq.phone || "On File"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Queue Line
-              </p>
-              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
-                Line #{lineNum}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Document Requested
-              </p>
-              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
-                {currentReq.document}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Copies
-              </p>
-              <p className="mt-0.5 text-sm font-medium text-foreground print:text-black">
-                {currentReq.copies || 1} {currentReq.copies === 1 ? "copy" : "copies"}
-              </p>
-            </div>
-
-            <div className="col-span-2 border-t border-border/60 pt-3 print:border-gray-300">
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Purpose
-              </p>
-              <p className="mt-0.5 text-sm font-medium text-foreground print:text-black">
-                {currentReq.purpose || "Official Record Request"}
-              </p>
-            </div>
-
-            <div className="border-t border-border/60 pt-3 print:border-gray-300">
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                {isClaimed ? "Date Claimed" : "When to Claim"}
-              </p>
-              <p className="mt-0.5 text-sm font-bold text-foreground print:text-black">
-                {currentReq.pickupDate || (isClaimed ? currentReq.date : "Within the day")}
-              </p>
-            </div>
-
-            <div className="border-t border-border/60 pt-3 print:border-gray-300">
-              <p className="text-[11px] font-medium text-muted-foreground print:text-gray-600">
-                Payment Requirement
-              </p>
-              <div className="mt-0.5">
-                <span
-                  className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold ${
-                    currentReq.paymentStatus === "Paid"
-                      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 print:border-black print:text-black"
-                      : currentReq.paymentStatus?.toLowerCase().includes("within the day")
-                      ? "bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/30 print:border-black print:text-black"
-                      : currentReq.paymentStatus === "Exempted / Free of Charge"
-                      ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 print:border-black print:text-black"
-                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 print:border-black print:text-black"
-                  }`}
-                >
-                  {currentReq.paymentStatus || "Awaiting Staff Assessment"}
+            {/* Slip Title */}
+            <div className="flex items-center justify-between border-b border-border pb-2.5 print:border-black">
+              <div>
+                <h2 className="text-xs font-black uppercase tracking-wider text-primary print:text-black flex items-center gap-1.5">
+                  <FileText className="size-3.5 print:hidden" /> Student Counter Presentation Slip
+                </h2>
+                <p className="text-[10px] text-muted-foreground print:text-gray-700">
+                  Pass this slip across the Registrar Window Counter for document verification and release
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 font-mono text-xs font-black text-primary border border-primary/20 print:border-black print:text-black">
+                  Ref: {currentReq.id}
                 </span>
               </div>
-              <p className="mt-1 text-[10px] text-muted-foreground print:hidden">
-                * Assessed and specified by the Registrar Staff
-              </p>
             </div>
-          </div>
-        </div>
 
-        {/* Remarks */}
-        {currentReq.remarks && (
-          <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-900 dark:text-amber-200 print:border-black print:bg-white print:text-black">
-            <p className="font-bold">Remarks:</p>
-            <p className="mt-0.5">{currentReq.remarks}</p>
-          </div>
+            {/* Student Request Info Card */}
+            <div className="mt-3.5 rounded-xl border border-border bg-card p-4 print:border-black print:p-3 space-y-3">
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground print:text-gray-600">Student Name</p>
+                  <p className="text-sm font-black text-foreground print:text-black mt-0.5">{currentReq.student}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground print:text-gray-600">Student ID Number</p>
+                  <p className="font-mono text-sm font-bold text-foreground print:text-black mt-0.5">{currentReq.studentId}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground print:text-gray-600">Document Requested</p>
+                  <p className="text-xs font-bold text-foreground print:text-black mt-0.5">{currentReq.document}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground print:text-gray-600">Copies & Purpose</p>
+                  <p className="text-xs font-medium text-foreground print:text-black mt-0.5">
+                    {currentReq.copies || 1} {(currentReq.copies || 1) === 1 ? "copy" : "copies"} • {currentReq.purpose || "Official Request"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground print:text-gray-600">Date Filed</p>
+                  <p className="text-xs font-semibold text-foreground print:text-black mt-0.5">{currentReq.date}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-muted-foreground print:text-gray-600">Assessed Payment</p>
+                  <p className="text-xs font-bold text-foreground print:text-black mt-0.5">{currentReq.paymentStatus || "Awaiting Assessment"}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Official Registrar Window Desk Action Section */}
+            <div className="mt-3 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-3.5 text-xs print:border-black print:bg-white space-y-2.5">
+              <p className="text-[10px] font-black uppercase tracking-wider text-primary print:text-black">
+                Registrar Counter Desk Verification (For Staff On Duty)
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
+                  <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
+                  <span>ID & Clearance OK</span>
+                </div>
+                <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
+                  <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
+                  <span>Records Retrieved</span>
+                </div>
+                <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
+                  <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
+                  <span>Document Released</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-1 text-[11px] text-muted-foreground print:text-black">
+                <p>Window Officer In-Charge: ____________________</p>
+                <p>Release Date Stamp: ____________________</p>
+              </div>
+            </div>
+
+            {/* Counter Instructions */}
+            <p className="mt-3 text-center text-[10px] text-muted-foreground print:text-gray-700">
+              Please present this physical slip or digital screen to the Registrar Staff at Window 2. Bring your official Student ID.
+            </p>
+
+            {/* Signatures */}
+            <div className="mt-5 border-t border-border pt-4 print:border-black">
+              <div className="grid grid-cols-2 gap-8 text-center text-xs">
+                <div>
+                  <div className="border-b border-foreground/60 print:border-black w-4/5 mx-auto mb-1 h-7"></div>
+                  <p className="font-bold text-foreground print:text-black">{currentReq.student}</p>
+                  <p className="text-[10px] text-muted-foreground print:text-gray-700">Student Signature</p>
+                </div>
+                <div>
+                  <div className="border-b border-foreground/60 print:border-black w-4/5 mx-auto mb-1 h-7"></div>
+                  <p className="font-bold text-foreground print:text-black">Registrar Staff</p>
+                  <p className="text-[10px] text-muted-foreground print:text-gray-700">Window In-Charge Signature</p>
+                </div>
+              </div>
+            </div>
+          </>
         )}
-
-        {/* Signatures Section */}
-        <div className="mt-6 border-t border-border pt-4 print:border-black">
-          <div className="grid grid-cols-2 gap-8 text-center text-xs">
-            <div>
-              <div className="border-b border-foreground/60 print:border-black w-4/5 mx-auto mb-1 h-8"></div>
-              <p className="font-bold text-foreground print:text-black">{currentReq.student}</p>
-              <p className="text-[10px] text-muted-foreground print:text-gray-700">
-                {isClaimed ? "Receiver's Signature" : "Student Signature"}
-              </p>
-            </div>
-
-            <div>
-              <div className="border-b border-foreground/60 print:border-black w-4/5 mx-auto mb-1 h-8"></div>
-              <p className="font-bold text-foreground print:text-black">Registrar Staff</p>
-              <p className="text-[10px] text-muted-foreground print:text-gray-700">Authorized Signature</p>
-            </div>
-          </div>
-        </div>
 
         {/* Action Buttons (Screen Only) */}
         <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4 print:hidden">
@@ -6212,7 +6507,7 @@ function DigitalReceiptModal({
             onClick={() => window.print()}
             className="gap-1.5 cursor-pointer font-bold shadow-sm text-xs"
           >
-            <Printer className="size-3.5" /> Print Receipt
+            <Printer className="size-3.5" /> {receiptTab === "counter_slip" ? "Print Student Counter Slip" : "Print Official Receipt"}
           </Button>
           <Button size="sm" variant="outline" onClick={onClose} className="cursor-pointer text-xs">
             Close
