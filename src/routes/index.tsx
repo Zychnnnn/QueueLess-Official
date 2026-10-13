@@ -35,6 +35,7 @@ import {
   Loader2,
   LogOut,
   Mail,
+  MapPin,
   Menu,
   Plus,
   Phone,
