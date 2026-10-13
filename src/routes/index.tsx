@@ -158,6 +158,23 @@ type AuthUser = {
   birthDate?: string;
   address?: string;
   emergencyContact?: string;
+  // Personal Details
+  gender?: string;
+  nationality?: string;
+  religion?: string;
+  civilStatus?: string;
+  // Family Details
+  fatherName?: string;
+  motherName?: string;
+  guardianName?: string;
+  guardianRelationship?: string;
+  // Emergency Contact
+  emergencyContactName?: string;
+  emergencyContactRelationship?: string;
+  emergencyContactPhone?: string;
+  emergencyContactAddress?: string;
+  // Name change tracking
+  nameLastChanged?: string;
 };
 
 type AccountUser = {
@@ -1404,7 +1421,7 @@ function QueueLessApp() {
                 <NavButton
                   active={view === "personal_details"}
                   icon={<ClipboardList />}
-                  label="My personal details"
+                  label="Personal details"
                   onClick={() =>
                     navigate("personal_details")
                   }
@@ -3169,26 +3186,18 @@ function StudentProfileView({
 
   const validateInputs = () => {
     const cleanDigits = editPhone.replace(/\D/g, "");
-    if (currentUser.role === "student" || currentUser.role === "guest") {
-      if (!cleanDigits || cleanDigits.length !== 11 || !cleanDigits.startsWith("09")) {
-        setFlash({
-          tone: "error",
-          text: "Please enter a valid 11-digit mobile number starting with 09 (e.g. 09123456789).",
-        });
-        return false;
-      }
-      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!editEmail.trim() || !emailPattern.test(editEmail.trim())) {
-        setFlash({
-          tone: "error",
-          text: "Please enter a valid email address (e.g. student@phinma.edu.ph).",
-        });
-        return false;
-      }
-    } else if (cleanDigits && (cleanDigits.length !== 11 || !cleanDigits.startsWith("09"))) {
+    if (cleanDigits && (cleanDigits.length !== 11 || !cleanDigits.startsWith("09"))) {
       setFlash({
         tone: "error",
         text: "Please enter a valid 11-digit phone number starting with 09 or leave blank.",
+      });
+      return false;
+    }
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (editEmail.trim() && !emailPattern.test(editEmail.trim())) {
+      setFlash({
+        tone: "error",
+        text: "Please enter a valid email address or leave blank.",
       });
       return false;
     }
@@ -3340,53 +3349,6 @@ function StudentProfileView({
           </p>
 
           <div className="mt-5 space-y-4">
-            {/* Avatar with Image Upload */}
-            <div className="flex items-center gap-4">
-              <div className="relative flex size-18 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden border border-border">
-                {editPicture ? (
-                  <img src={editPicture} alt="Profile" className="size-full object-cover" />
-                ) : (
-                  <UserRound className="size-9" />
-                )}
-              </div>
-              <div className="flex-1 space-y-2">
-                <p className="text-xs font-semibold text-foreground">Profile Photo</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-accent/80 text-xs font-bold hover:bg-accent cursor-pointer transition shadow-xs">
-                    <span>Upload Image</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            if (typeof reader.result === "string") {
-                              setEditPicture(reader.result);
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
-                  {editPicture && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs text-muted-foreground hover:text-destructive cursor-pointer"
-                      onClick={() => setEditPicture("")}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-
             <Field label="Full Name">
               <input
                 type="text"
@@ -3409,7 +3371,6 @@ function StudentProfileView({
                 placeholder={currentUser.role === "staff" ? "Optional contact number (e.g. 09123456789)" : "Enter your valid phone number"}
                 className="field"
                 maxLength={11}
-                required={currentUser.role === "student" || currentUser.role === "guest"}
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {currentUser.role === "staff"
@@ -3426,7 +3387,6 @@ function StudentProfileView({
                 onChange={(e) => setEditEmail(e.target.value)}
                 placeholder="e.g. student@phinma.edu.ph"
                 className="field"
-                required={currentUser.role === "student" || currentUser.role === "guest"}
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {currentUser.role === "staff"
@@ -3453,31 +3413,6 @@ function StudentProfileView({
                 </p>
               </div>
             </div>
-
-            {(currentUser.role === "student" || currentUser.role === "guest") && (
-              <div className="rounded-lg border border-primary/25 bg-primary/5 p-3.5 space-y-2">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <p className="text-xs font-bold text-foreground">
-                    Contact Authentication for Request Updates
-                  </p>
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Staff requires your authentic personal phone and email so school documentation and live queue notifications reach you accurately.
-                </p>
-                <label className="flex items-start gap-2 pt-1 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={contactConfirmed}
-                    onChange={(e) => setContactConfirmed(e.target.checked)}
-                    className="mt-0.5 rounded border-border text-primary focus:ring-primary size-3.5"
-                  />
-                  <span className="text-[11px] font-semibold text-foreground">
-                    I confirm that this phone number and email are authentic and active to receive registrar updates.
-                  </span>
-                </label>
-              </div>
-            )}
 
             <Button onClick={handleSaveProfile} disabled={saving} className="w-full gap-2 cursor-pointer">
               {saving ? (
@@ -3633,41 +3568,35 @@ function StudentProfileView({
               <ShieldCheck className="size-6" />
             </div>
             <h3 className="font-display text-lg font-bold text-center text-foreground">
-              Confirm Profile & Documentation Details
+              Confirm Profile Details
             </h3>
             <p className="mt-1.5 text-xs text-center text-muted-foreground leading-relaxed">
-              Please review and confirm your details before saving. The Registrar's Office will use this information for official student documentation and live updates:
+              Please review your details before saving:
             </p>
             <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground font-medium">Student Name:</span>
+                <span className="text-muted-foreground font-medium">Name:</span>
                 <span className="font-bold text-foreground">{editName}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground flex items-center gap-1 font-medium">
-                  <Phone className="size-3 text-primary" /> Mobile (SMS):
-                </span>
-                <span className="font-mono font-bold text-foreground">{editPhone}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground flex items-center gap-1 font-medium">
-                  <Mail className="size-3 text-primary" /> Email:
-                </span>
-                <span className="font-semibold text-foreground truncate max-w-[200px]">{editEmail}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground font-medium">Program / Year:</span>
-                <span className="font-semibold text-foreground">{editCourse} • {editYearLevel}</span>
-              </div>
-              {editAddress && (
+              {editPhone && (
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-medium">Address:</span>
-                  <span className="font-semibold text-foreground truncate max-w-[180px]">{editAddress}</span>
+                  <span className="text-muted-foreground flex items-center gap-1 font-medium">
+                    <Phone className="size-3 text-primary" /> Mobile:
+                  </span>
+                  <span className="font-mono font-bold text-foreground">{editPhone}</span>
+                </div>
+              )}
+              {editEmail && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1 font-medium">
+                    <Mail className="size-3 text-primary" /> Email:
+                  </span>
+                  <span className="font-semibold text-foreground truncate max-w-[200px]">{editEmail}</span>
                 </div>
               )}
             </div>
             <p className="mt-3 text-[11px] text-muted-foreground text-center">
-              Are you sure you want to save these details and authenticate this contact information for all registrar transactions?
+              Are you sure you want to save these profile changes?
             </p>
             <div className="mt-5 flex items-center justify-end gap-2.5">
               <Button
@@ -3707,19 +3636,120 @@ function StudentPersonalDetailsView({
   setFlash: (f: Flash) => void;
   onBack: () => void;
 }) {
-  const [editCourse, setEditCourse] = useState(currentUser.course || "BS Information Technology");
-  const [editYearLevel, setEditYearLevel] = useState(currentUser.yearLevel || "3rd Year");
+  // Personal Details
+  const [editName, setEditName] = useState(currentUser.name || "");
+  const [editPicture, setEditPicture] = useState(currentUser.picture || "");
+  const [editPhone, setEditPhone] = useState(currentUser.phone || "");
+  const [editEmail, setEditEmail] = useState(currentUser.email || "");
+  const [editGender, setEditGender] = useState(currentUser.gender || "");
   const [editBirthDate, setEditBirthDate] = useState(currentUser.birthDate || "");
+  const [editNationality, setEditNationality] = useState(currentUser.nationality || "Filipino");
+  const [editReligion, setEditReligion] = useState(currentUser.religion || "");
+  const [editCivilStatus, setEditCivilStatus] = useState(currentUser.civilStatus || "Single");
   const [editAddress, setEditAddress] = useState(currentUser.address || "");
-  const [editEmergencyContact, setEditEmergencyContact] = useState(currentUser.emergencyContact || "");
+
+  // Family Details
+  const [editFatherName, setEditFatherName] = useState(currentUser.fatherName || "");
+  const [editMotherName, setEditMotherName] = useState(currentUser.motherName || "");
+  const [editGuardianName, setEditGuardianName] = useState(currentUser.guardianName || "");
+  const [editGuardianRelationship, setEditGuardianRelationship] = useState(currentUser.guardianRelationship || "");
+
+  // Emergency Contact
+  const [editEcName, setEditEcName] = useState(currentUser.emergencyContactName || "");
+  const [editEcRelationship, setEditEcRelationship] = useState(currentUser.emergencyContactRelationship || "");
+  const [editEcPhone, setEditEcPhone] = useState(currentUser.emergencyContactPhone || "");
+  const [editEcAddress, setEditEcAddress] = useState(currentUser.emergencyContactAddress || "");
+
+  // Educational Details
+  const [editCourse, setEditCourse] = useState(currentUser.course || "BS Information Technology");
+  const [editYearLevel, setEditYearLevel] = useState(currentUser.yearLevel || "1st Year");
+
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const isGuestUser =
+    currentUser.role === "guest" ||
+    currentUser.userType === "normal" ||
+    Boolean(currentUser.studentId?.startsWith("GUEST"));
+
+  const isStudent = currentUser.role === "student" && !isGuestUser;
+
+  // Name change cooldown: 90 days
+  const nameChangeAllowed = (() => {
+    if (!currentUser.nameLastChanged) return true;
+    const lastChanged = new Date(currentUser.nameLastChanged);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - lastChanged.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays >= 90;
+  })();
+
+  const daysUntilNameChange = (() => {
+    if (!currentUser.nameLastChanged) return 0;
+    const lastChanged = new Date(currentUser.nameLastChanged);
+    const now = new Date();
+    const diffDays = Math.floor((now.getTime() - lastChanged.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, 90 - diffDays);
+  })();
+
+  const validateInputs = () => {
+    if (!editName.trim()) {
+      setFlash({ tone: "error", text: "Full name is required." });
+      return false;
+    }
+    if (editPhone) {
+      const cleanDigits = editPhone.replace(/\D/g, "");
+      if (cleanDigits.length !== 11 || !cleanDigits.startsWith("09")) {
+        setFlash({ tone: "error", text: "Phone number must be a valid 11-digit number starting with 09." });
+        return false;
+      }
+    }
+    if (editEmail) {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailPattern.test(editEmail.trim())) {
+        setFlash({ tone: "error", text: "Please enter a valid email address." });
+        return false;
+      }
+    }
+    if (editEcPhone) {
+      const cleanDigits = editEcPhone.replace(/\D/g, "");
+      if (cleanDigits.length !== 11 || !cleanDigits.startsWith("09")) {
+        setFlash({ tone: "error", text: "Emergency contact phone must be a valid 11-digit number starting with 09." });
+        return false;
+      }
+    }
+    return true;
+  };
 
   const executeSave = async () => {
     setSaving(true);
     try {
       const token = localStorage.getItem("queueless_token");
+      const nameChanged = editName.trim() !== currentUser.name;
       let remoteUser: Partial<AuthUser> = {};
+
+      const payload: Record<string, string> = {
+        name: editName.trim(),
+        phone: editPhone.replace(/\D/g, ""),
+        email: editEmail.trim(),
+        picture: editPicture.trim(),
+        gender: editGender,
+        birthDate: editBirthDate,
+        nationality: editNationality,
+        religion: editReligion,
+        civilStatus: editCivilStatus,
+        address: editAddress.trim(),
+        fatherName: editFatherName.trim(),
+        motherName: editMotherName.trim(),
+        guardianName: editGuardianName.trim(),
+        guardianRelationship: editGuardianRelationship.trim(),
+        emergencyContactName: editEcName.trim(),
+        emergencyContactRelationship: editEcRelationship.trim(),
+        emergencyContactPhone: editEcPhone.replace(/\D/g, ""),
+        emergencyContactAddress: editEcAddress.trim(),
+        course: editCourse,
+        yearLevel: editYearLevel,
+      };
+
       if (token) {
         try {
           const res = await fetch(`${API_URL}/api/auth/profile`, {
@@ -3728,13 +3758,7 @@ function StudentPersonalDetailsView({
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({
-              course: editCourse.trim(),
-              yearLevel: editYearLevel.trim(),
-              birthDate: editBirthDate.trim(),
-              address: editAddress.trim(),
-              emergencyContact: editEmergencyContact.trim(),
-            }),
+            body: JSON.stringify(payload),
           });
           if (res.ok) {
             const data = await res.json();
@@ -3748,11 +3772,8 @@ function StudentPersonalDetailsView({
       const updatedUser: AuthUser = {
         ...currentUser,
         ...remoteUser,
-        course: editCourse.trim(),
-        yearLevel: editYearLevel.trim(),
-        birthDate: editBirthDate.trim(),
-        address: editAddress.trim(),
-        emergencyContact: editEmergencyContact.trim(),
+        ...payload,
+        nameLastChanged: nameChanged ? new Date().toISOString() : currentUser.nameLastChanged,
       };
 
       setCurrentUser(updatedUser);
@@ -3761,7 +3782,7 @@ function StudentPersonalDetailsView({
 
       setFlash({
         tone: "success",
-        text: "Personal details for registrar records saved successfully.",
+        text: "Personal details saved successfully.",
       });
     } catch (err) {
       setFlash({
@@ -3774,8 +3795,18 @@ function StudentPersonalDetailsView({
   };
 
   const handleSave = () => {
+    if (!validateInputs()) return;
     setShowConfirmModal(true);
   };
+
+  const SectionHeading = ({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) => (
+    <div className="mb-4">
+      <h3 className="font-display text-sm font-bold text-foreground flex items-center gap-2">
+        {icon} {title}
+      </h3>
+      <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
+    </div>
+  );
 
   return (
     <div className="animate-rise">
@@ -3785,42 +3816,306 @@ function StudentPersonalDetailsView({
         </Button>
         <PageHeading
           eyebrow="Registrar documentation"
-          title="My Personal Details"
-          text="Fill up your official academic and personal details used by the Registrar's Office for your documentation."
+          title="Personal Details"
+          text="Fill up your official personal information used by the Registrar's Office for documentation."
         />
       </div>
 
-      <div className="max-w-2xl">
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
-            <ClipboardList className="size-4 text-primary" /> Personal Details for Registrar Records
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Official academic and personal details used by the Registrar's Office to generate your documentation.
-          </p>
+      <div className="max-w-3xl space-y-5">
+        {/* Section 1: Personal Details */}
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <SectionHeading
+            icon={<UserRound className="size-4 text-primary" />}
+            title="Personal Details"
+            subtitle="Your basic personal information for official records."
+          />
+          <div className="space-y-4 text-xs">
+            {/* Profile Photo */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex size-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden border border-border">
+                {editPicture ? (
+                  <img src={editPicture} alt="Profile" className="size-full object-cover" />
+                ) : (
+                  <UserRound className="size-8" />
+                )}
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <p className="text-xs font-semibold text-foreground">Profile Photo</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-accent/80 text-xs font-bold hover:bg-accent cursor-pointer transition shadow-xs">
+                    <span>Upload Image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            if (typeof reader.result === "string") {
+                              setEditPicture(reader.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                  {editPicture && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-muted-foreground hover:text-destructive cursor-pointer"
+                      onClick={() => setEditPicture("")}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
 
-          <div className="mt-5 space-y-4 text-xs">
-            <Field label="Degree / Academic Program">
-              <select
-                value={editCourse}
-                onChange={(e) => setEditCourse(e.target.value)}
-                className="field cursor-pointer"
-              >
-                <option value="BS Information Technology">BS Information Technology (BSIT)</option>
-                <option value="BS Computer Science">BS Computer Science (BSCS)</option>
-                <option value="BS Nursing">BS Nursing (BSN)</option>
-                <option value="BS Criminology">BS Criminology (BSCrim)</option>
-                <option value="BS Accountancy">BS Accountancy (BSA)</option>
-                <option value="BS Business Administration">BS Business Administration (BSBA)</option>
-                <option value="BS Hospitality Management">BS Hospitality Management (BSHM)</option>
-                <option value="BS Civil Engineering">BS Civil Engineering (BSCE)</option>
-                <option value="BS Education">Bachelor of Secondary Education (BSED)</option>
-                <option value="Senior High School">Senior High School (SHS)</option>
-                <option value="Other Program">Other Program</option>
-              </select>
+            {/* Full Name */}
+            <Field label="Full Name">
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="field"
+                required
+                disabled={!nameChangeAllowed}
+              />
+              {!nameChangeAllowed && (
+                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                  Name change available in {daysUntilNameChange} day{daysUntilNameChange !== 1 ? "s" : ""}. You can only update your name once every 90 days.
+                </p>
+              )}
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
+              <Field label="Phone Number">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={editPhone}
+                  onChange={(e) => {
+                    const numbersOnly = e.target.value.replace(/\D/g, "");
+                    setEditPhone(numbersOnly.slice(0, 11));
+                  }}
+                  placeholder="09XXXXXXXXX"
+                  className="field"
+                  maxLength={11}
+                />
+              </Field>
+              <Field label="Email Address">
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="student@phinma.edu.ph"
+                  className="field"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Gender">
+                <select value={editGender} onChange={(e) => setEditGender(e.target.value)} className="field cursor-pointer">
+                  <option value="">— Select —</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                </select>
+              </Field>
+              <Field label="Date of Birth">
+                <input
+                  type="date"
+                  value={editBirthDate}
+                  onChange={(e) => setEditBirthDate(e.target.value)}
+                  className="field"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Nationality">
+                <input
+                  type="text"
+                  value={editNationality}
+                  onChange={(e) => setEditNationality(e.target.value)}
+                  placeholder="Filipino"
+                  className="field"
+                />
+              </Field>
+              <Field label="Religion">
+                <input
+                  type="text"
+                  value={editReligion}
+                  onChange={(e) => setEditReligion(e.target.value)}
+                  placeholder="e.g. Roman Catholic"
+                  className="field"
+                />
+              </Field>
+              <Field label="Civil Status">
+                <select value={editCivilStatus} onChange={(e) => setEditCivilStatus(e.target.value)} className="field cursor-pointer">
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Widowed">Widowed</option>
+                  <option value="Separated">Separated</option>
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Complete Permanent Address">
+              <input
+                type="text"
+                value={editAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                placeholder="e.g. 123 Arellano St., Dagupan City, Pangasinan"
+                className="field"
+              />
+            </Field>
+          </div>
+        </div>
+
+        {/* Section 2: Family Details (Students Only) */}
+        {isStudent && (
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <SectionHeading
+              icon={<UsersRound className="size-4 text-primary" />}
+              title="Family Details"
+              subtitle="Parent and guardian information for school records."
+            />
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Father's Full Name">
+                  <input
+                    type="text"
+                    value={editFatherName}
+                    onChange={(e) => setEditFatherName(e.target.value)}
+                    placeholder="e.g. Juan A. Dela Cruz"
+                    className="field"
+                  />
+                </Field>
+                <Field label="Mother's Full Name (Maiden Name)">
+                  <input
+                    type="text"
+                    value={editMotherName}
+                    onChange={(e) => setEditMotherName(e.target.value)}
+                    placeholder="e.g. Maria B. Santos"
+                    className="field"
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Guardian's Full Name">
+                  <input
+                    type="text"
+                    value={editGuardianName}
+                    onChange={(e) => setEditGuardianName(e.target.value)}
+                    placeholder="If different from parents"
+                    className="field"
+                  />
+                </Field>
+                <Field label="Relationship to Guardian">
+                  <input
+                    type="text"
+                    value={editGuardianRelationship}
+                    onChange={(e) => setEditGuardianRelationship(e.target.value)}
+                    placeholder="e.g. Uncle, Aunt, Grandparent"
+                    className="field"
+                  />
+                </Field>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Section 3: Emergency Contact Details */}
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <SectionHeading
+            icon={<Phone className="size-4 text-primary" />}
+            title="Emergency Contact Details"
+            subtitle="Person to contact in case of emergencies."
+          />
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Contact Person Full Name">
+                <input
+                  type="text"
+                  value={editEcName}
+                  onChange={(e) => setEditEcName(e.target.value)}
+                  placeholder="e.g. Maria Dela Cruz"
+                  className="field"
+                />
+              </Field>
+              <Field label="Relationship">
+                <input
+                  type="text"
+                  value={editEcRelationship}
+                  onChange={(e) => setEditEcRelationship(e.target.value)}
+                  placeholder="e.g. Mother, Father, Sibling"
+                  className="field"
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Contact Phone Number">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={editEcPhone}
+                  onChange={(e) => {
+                    const numbersOnly = e.target.value.replace(/\D/g, "");
+                    setEditEcPhone(numbersOnly.slice(0, 11));
+                  }}
+                  placeholder="09XXXXXXXXX"
+                  className="field"
+                  maxLength={11}
+                />
+              </Field>
+              <Field label="Contact Address">
+                <input
+                  type="text"
+                  value={editEcAddress}
+                  onChange={(e) => setEditEcAddress(e.target.value)}
+                  placeholder="e.g. Dagupan City, Pangasinan"
+                  className="field"
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Educational / Course Details (Students Only) */}
+        {isStudent && (
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <SectionHeading
+              icon={<FileText className="size-4 text-primary" />}
+              title="Educational Details"
+              subtitle="Your current academic program and enrollment status."
+            />
+            <div className="space-y-4 text-xs">
+              <Field label="Degree / Academic Program">
+                <select
+                  value={editCourse}
+                  onChange={(e) => setEditCourse(e.target.value)}
+                  className="field cursor-pointer"
+                >
+                  <option value="BS Information Technology">BS Information Technology (BSIT)</option>
+                  <option value="BS Computer Science">BS Computer Science (BSCS)</option>
+                  <option value="BS Nursing">BS Nursing (BSN)</option>
+                  <option value="BS Criminology">BS Criminology (BSCrim)</option>
+                  <option value="BS Accountancy">BS Accountancy (BSA)</option>
+                  <option value="BS Business Administration">BS Business Administration (BSBA)</option>
+                  <option value="BS Hospitality Management">BS Hospitality Management (BSHM)</option>
+                  <option value="BS Civil Engineering">BS Civil Engineering (BSCE)</option>
+                  <option value="BS Education">Bachelor of Secondary Education (BSED)</option>
+                  <option value="Senior High School">Senior High School (SHS)</option>
+                  <option value="Other Program">Other Program</option>
+                </select>
+              </Field>
               <Field label="Year Level / Status">
                 <select
                   value={editYearLevel}
@@ -3834,83 +4129,38 @@ function StudentPersonalDetailsView({
                   <option value="Graduated / Alumnus">Graduated / Alumnus</option>
                 </select>
               </Field>
-
-              <Field label="Date of Birth">
-                <input
-                  type="date"
-                  value={editBirthDate}
-                  onChange={(e) => setEditBirthDate(e.target.value)}
-                  className="field"
-                />
-              </Field>
-            </div>
-
-            <Field label="Complete Permanent Address">
-              <input
-                type="text"
-                value={editAddress}
-                onChange={(e) => setEditAddress(e.target.value)}
-                placeholder="e.g. Arellano St., Dagupan City, Pangasinan"
-                className="field"
-              />
-            </Field>
-
-            <Field label="Emergency Contact (Name & Phone)">
-              <input
-                type="text"
-                value={editEmergencyContact}
-                onChange={(e) => setEditEmergencyContact(e.target.value)}
-                placeholder="e.g. Guardian Name - 09181234567"
-                className="field"
-              />
-            </Field>
-
-            <p className="text-[11px] text-muted-foreground">
-              * These details are encoded onto official school certifications, receipts, and transcripts.
-            </p>
-
-            <Button onClick={handleSave} disabled={saving} className="w-full gap-2 cursor-pointer">
-              {saving ? (
-                <><Loader2 className="size-4 animate-spin" /> Saving...</>
-              ) : (
-                <><CheckCircle2 className="size-4" /> Save Personal Details</>
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Current Saved Summary */}
-        <div className="mt-4 rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Currently Saved Details</h4>
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Program</span>
-              <span className="font-semibold">{currentUser.course || "Not set"}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Year Level</span>
-              <span className="font-semibold">{currentUser.yearLevel || "Not set"}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Date of Birth</span>
-              <span className="font-semibold">{currentUser.birthDate || "Not set"}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Address</span>
-              <span className="font-semibold truncate max-w-[220px]">{currentUser.address || "Not set"}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Emergency Contact</span>
-              <span className="font-semibold truncate max-w-[220px]">{currentUser.emergencyContact || "Not set"}</span>
+              <div className="flex items-center justify-between rounded-lg bg-muted/50 border border-border px-4 py-3">
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Student ID</p>
+                  <p className="text-sm font-bold font-mono text-foreground mt-0.5">{currentUser.studentId}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Program / Year</p>
+                  <p className="text-sm font-bold text-foreground mt-0.5">{editCourse} • {editYearLevel}</p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Save Button */}
+        <Button onClick={handleSave} disabled={saving} className="w-full gap-2 cursor-pointer shadow-sm">
+          {saving ? (
+            <><Loader2 className="size-4 animate-spin" /> Saving...</>
+          ) : (
+            <><CheckCircle2 className="size-4" /> Save Personal Details</>
+          )}
+        </Button>
+
+        <p className="text-[11px] text-muted-foreground text-center pb-2">
+          * These details are encoded onto official school certifications, receipts, and transcripts.
+        </p>
       </div>
 
       {/* Confirm Save Modal */}
       {showConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-3">
               <ShieldCheck className="size-6" />
             </div>
@@ -3918,33 +4168,53 @@ function StudentPersonalDetailsView({
               Confirm Personal Details
             </h3>
             <p className="mt-1.5 text-xs text-center text-muted-foreground leading-relaxed">
-              Please review your details before saving. These will be used for official registrar documentation:
+              Please review your details before saving. These will be used for official registrar documentation.
             </p>
             <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground font-medium">Program:</span>
-                <span className="font-bold text-foreground">{editCourse}</span>
+                <span className="text-muted-foreground font-medium">Name:</span>
+                <span className="font-bold text-foreground">{editName}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground font-medium">Year Level:</span>
-                <span className="font-bold text-foreground">{editYearLevel}</span>
-              </div>
+              {editPhone && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Phone:</span>
+                  <span className="font-mono font-bold text-foreground">{editPhone}</span>
+                </div>
+              )}
+              {editEmail && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Email:</span>
+                  <span className="font-semibold text-foreground truncate max-w-[200px]">{editEmail}</span>
+                </div>
+              )}
+              {editGender && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Gender:</span>
+                  <span className="font-semibold text-foreground">{editGender}</span>
+                </div>
+              )}
               {editBirthDate && (
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground font-medium">Date of Birth:</span>
-                  <span className="font-bold text-foreground">{editBirthDate}</span>
+                  <span className="font-semibold text-foreground">{editBirthDate}</span>
                 </div>
               )}
               {editAddress && (
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground font-medium">Address:</span>
-                  <span className="font-bold text-foreground truncate max-w-[200px]">{editAddress}</span>
+                  <span className="font-semibold text-foreground truncate max-w-[200px]">{editAddress}</span>
                 </div>
               )}
-              {editEmergencyContact && (
+              {isStudent && (
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-medium">Emergency Contact:</span>
-                  <span className="font-bold text-foreground truncate max-w-[200px]">{editEmergencyContact}</span>
+                  <span className="text-muted-foreground font-medium">Program / Year:</span>
+                  <span className="font-semibold text-foreground">{editCourse} • {editYearLevel}</span>
+                </div>
+              )}
+              {editEcName && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Emergency:</span>
+                  <span className="font-semibold text-foreground">{editEcName} ({editEcRelationship})</span>
                 </div>
               )}
             </div>
@@ -6463,34 +6733,36 @@ function DigitalReceiptModal({
         </div>
 
         {/* Receipt View Tabs */}
-        <div className="mb-4 flex items-center justify-center gap-1 rounded-lg bg-muted p-1 text-xs print:hidden">
-          <button
-            type="button"
-            onClick={() => setReceiptTab("official")}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
-              receiptTab === "official"
-                ? "bg-card text-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Receipt className="size-3.5 text-primary" />
-            <span>Official Institutional Receipt</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setReceiptTab("counter_slip")}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
-              receiptTab === "counter_slip"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <FileText className="size-3.5" />
-            <span>Student Counter Slip (To Pass at Window)</span>
-          </button>
-        </div>
+        {isStaff && (
+          <div className="mb-4 flex items-center justify-center gap-1 rounded-lg bg-muted p-1 text-xs print:hidden">
+            <button
+              type="button"
+              onClick={() => setReceiptTab("official")}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
+                receiptTab === "official"
+                  ? "bg-card text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Receipt className="size-3.5 text-primary" />
+              <span>Official Institutional Receipt</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setReceiptTab("counter_slip")}
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
+                receiptTab === "counter_slip"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <FileText className="size-3.5" />
+              <span>Student Counter Slip (To Pass at Window)</span>
+            </button>
+          </div>
+        )}
 
-        {receiptTab === "official" ? (
+        {(receiptTab === "official" || !isStaff) ? (
           <>
             {/* Official Institutional Letterhead */}
             <div className="text-center">
@@ -6772,34 +7044,38 @@ function DigitalReceiptModal({
             </div>
 
             {/* Official Registrar Window Desk Action Section */}
-            <div className="mt-3 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-3.5 text-xs print:border-black print:bg-white space-y-2.5">
-              <p className="text-[10px] font-black uppercase tracking-wider text-primary print:text-black">
-                Registrar Counter Desk Verification (For Staff On Duty)
-              </p>
-              <div className="grid grid-cols-3 gap-2 text-[11px]">
-                <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
-                  <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
-                  <span>ID & Clearance OK</span>
+            {isStaff && (
+              <div className="mt-3 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-3.5 text-xs print:border-black print:bg-white space-y-2.5">
+                <p className="text-[10px] font-black uppercase tracking-wider text-primary print:text-black">
+                  Registrar Counter Desk Verification (For Staff On Duty)
+                </p>
+                <div className="grid grid-cols-3 gap-2 text-[11px]">
+                  <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
+                    <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
+                    <span>ID & Clearance OK</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
+                    <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
+                    <span>Records Retrieved</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
+                    <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
+                    <span>Document Released</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
-                  <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
-                  <span>Records Retrieved</span>
-                </div>
-                <div className="flex items-center gap-1.5 border border-border/80 bg-background/80 rounded p-1.5 print:border-black">
-                  <span className="inline-block size-3.5 border border-foreground/60 rounded-xs print:border-black"></span>
-                  <span>Document Released</span>
+                <div className="grid grid-cols-2 gap-4 pt-1 text-[11px] text-muted-foreground print:text-black">
+                  <p>Window Officer In-Charge: ____________________</p>
+                  <p>Release Date Stamp: ____________________</p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 pt-1 text-[11px] text-muted-foreground print:text-black">
-                <p>Window Officer In-Charge: ____________________</p>
-                <p>Release Date Stamp: ____________________</p>
-              </div>
-            </div>
+            )}
 
             {/* Counter Instructions */}
-            <p className="mt-3 text-center text-[10px] text-muted-foreground print:text-gray-700">
-              Please present this physical slip or digital screen to the Registrar Staff at Window 2. Bring your official Student ID.
-            </p>
+            {isStaff && (
+              <p className="mt-3 text-center text-[10px] text-muted-foreground print:text-gray-700">
+                Please present this physical slip or digital screen to the Registrar Staff at Window 2. Bring your official Student ID.
+              </p>
+            )}
 
             {/* Signatures */}
             <div className="mt-5 border-t border-border pt-4 print:border-black">
