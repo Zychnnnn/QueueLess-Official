@@ -106,7 +106,8 @@ type View =
   | "requests"
   | "users"
   | "documents"
-  | "profile";
+  | "profile"
+  | "personal_details";
 
 type Status =
   | "Pending"
@@ -132,6 +133,7 @@ type RequestItem = {
   copies?: number;
   pickupDate?: string;
   paymentStatus?: string;
+  requirementsToBring?: string;
 };
 
 type Flash = {
@@ -151,6 +153,11 @@ type AuthUser = {
   isPriority?: boolean;
   userType?: "priority" | "normal";
   contactVerified?: boolean;
+  course?: string;
+  yearLevel?: string;
+  birthDate?: string;
+  address?: string;
+  emergencyContact?: string;
 };
 
 type AccountUser = {
@@ -1391,6 +1398,15 @@ function QueueLessApp() {
                   label="My requests"
                   onClick={() =>
                     navigate("requests")
+                  }
+                />
+
+                <NavButton
+                  active={view === "personal_details"}
+                  icon={<ClipboardList />}
+                  label="My personal details"
+                  onClick={() =>
+                    navigate("personal_details")
                   }
                 />
               </>
@@ -3116,6 +3132,11 @@ function StudentProfileView({
   const [editPhone, setEditPhone] = useState(currentUser.phone || "");
   const [editEmail, setEditEmail] = useState(currentUser.email || "");
   const [editPicture, setEditPicture] = useState(currentUser.picture || "");
+  const [editCourse, setEditCourse] = useState(currentUser.course || "BS Information Technology");
+  const [editYearLevel, setEditYearLevel] = useState(currentUser.yearLevel || "3rd Year");
+  const [editBirthDate, setEditBirthDate] = useState(currentUser.birthDate || "");
+  const [editAddress, setEditAddress] = useState(currentUser.address || "");
+  const [editEmergencyContact, setEditEmergencyContact] = useState(currentUser.emergencyContact || "");
   const [contactConfirmed, setContactConfirmed] = useState(Boolean(currentUser.contactVerified));
   const [showAuthConfirmModal, setShowAuthConfirmModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -3193,6 +3214,11 @@ function StudentProfileView({
               phone: cleanDigits,
               email: editEmail.trim(),
               picture: editPicture.trim(),
+              course: editCourse.trim(),
+              yearLevel: editYearLevel.trim(),
+              birthDate: editBirthDate.trim(),
+              address: editAddress.trim(),
+              emergencyContact: editEmergencyContact.trim(),
             }),
           });
           if (res.ok) {
@@ -3212,6 +3238,11 @@ function StudentProfileView({
         email: editEmail.trim(),
         picture: editPicture.trim(),
         contactVerified: authenticated || contactConfirmed,
+        course: editCourse.trim(),
+        yearLevel: editYearLevel.trim(),
+        birthDate: editBirthDate.trim(),
+        address: editAddress.trim(),
+        emergencyContact: editEmergencyContact.trim(),
       };
 
       setCurrentUser(updatedUser);
@@ -3221,7 +3252,7 @@ function StudentProfileView({
 
       setFlash({
         tone: "success",
-        text: "Personal details and contact authentication saved successfully.",
+        text: "Profile and official registrar documentation details saved successfully.",
       });
     } catch (err) {
       setFlash({
@@ -3235,13 +3266,7 @@ function StudentProfileView({
 
   const handleSaveProfile = async () => {
     if (!validateInputs()) return;
-
-    if ((currentUser.role === "student" || currentUser.role === "guest") && !contactConfirmed) {
-      setShowAuthConfirmModal(true);
-      return;
-    }
-
-    await executeSaveProfile(contactConfirmed);
+    setShowAuthConfirmModal(true);
   };
 
   const handleChangePassword = async (e: FormEvent) => {
@@ -3464,142 +3489,143 @@ function StudentProfileView({
           </div>
         </div>
 
-        {/* Right: Change Password */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
-            <Shield className="size-4 text-primary" /> Change Password
-          </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Update your password to keep your account secure.</p>
+        {/* Right: Account Security */}
+        <div className="space-y-6">
 
-          <form onSubmit={handleChangePassword} className="mt-5 space-y-4">
-            <Field label="Current Password">
-              <div className="relative">
-                <input
-                  type={showCurrentPw ? "text" : "password"}
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current password"
-                  className="field pr-10"
-                  required
-                />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowCurrentPw(!showCurrentPw)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  {showCurrentPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-            </Field>
+          {/* Change Password Card */}
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+            <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+              <Shield className="size-4 text-primary" /> Change Password
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Update your password to keep your account secure.</p>
 
-            <Field label="New Password">
-              <div className="relative">
+            <form onSubmit={handleChangePassword} className="mt-5 space-y-4">
+              <Field label="Current Password">
+                <div className="relative">
+                  <input
+                    type={showCurrentPw ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    className="field pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowCurrentPw(!showCurrentPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    {showCurrentPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </Field>
+
+              <Field label="New Password">
+                <div className="relative">
+                  <input
+                    type={showNewPw ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="At least 6 characters"
+                    className="field pr-10"
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowNewPw(!showNewPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    {showNewPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </Field>
+
+              <Field label="Confirm New Password">
                 <input
-                  type={showNewPw ? "text" : "password"}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                  className="field pr-10"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="field"
                   required
                   minLength={6}
                 />
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  onClick={() => setShowNewPw(!showNewPw)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  {showNewPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-            </Field>
+              </Field>
 
-            <Field label="Confirm New Password">
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new password"
-                className="field"
-                required
-                minLength={6}
-              />
-            </Field>
-
-            {pwError && (
-              <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-2.5 text-xs font-semibold text-red-600 dark:text-red-400">
-                {pwError}
-              </div>
-            )}
-
-            {pwSuccess && (
-              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 className="size-4 shrink-0" /> {pwSuccess}
-              </div>
-            )}
-
-            <Button type="submit" variant="outline" disabled={changingPassword} className="w-full gap-2 cursor-pointer">
-              {changingPassword ? (
-                <><Loader2 className="size-4 animate-spin" /> Changing...</>
-              ) : (
-                "Change Password"
+              {pwError && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-2.5 text-xs font-semibold text-red-600 dark:text-red-400">
+                  {pwError}
+                </div>
               )}
-            </Button>
-          </form>
 
-          {/* Account Info */}
-          <div className="mt-6 border-t border-border pt-4">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Account Details</h4>
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Account Type</span>
-                <span className="font-semibold">
-                  {currentUser.role === "staff"
-                    ? "Registrar Staff"
-                    : currentUser.role === "admin"
-                    ? "Administrator"
-                    : isGuestUser
-                    ? "Guest"
-                    : "Student"}
-                </span>
-              </div>
-              {(currentUser.role === "student" || currentUser.role === "guest" || isGuestUser) && (
+              {pwSuccess && (
+                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                  <CheckCircle2 className="size-4 shrink-0" /> {pwSuccess}
+                </div>
+              )}
+
+              <Button type="submit" variant="outline" disabled={changingPassword} className="w-full gap-2 cursor-pointer">
+                {changingPassword ? (
+                  <><Loader2 className="size-4 animate-spin" /> Changing...</>
+                ) : (
+                  "Change Password"
+                )}
+              </Button>
+            </form>
+
+            {/* Account Info */}
+            <div className="mt-6 border-t border-border pt-4">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Account Details</h4>
+              <div className="space-y-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Priority Status</span>
+                  <span className="text-muted-foreground">Account Type</span>
                   <span className="font-semibold">
-                    {currentUser.isPriority ? "⭐ Priority Student" : "Regular Queue"}
+                    {currentUser.role === "staff"
+                      ? "Registrar Staff"
+                      : currentUser.role === "admin"
+                      ? "Administrator"
+                      : isGuestUser
+                      ? "Guest"
+                      : "Student"}
                   </span>
                 </div>
-              )}
-              {(currentUser.role === "staff" || currentUser.role === "admin") && (
+                {(currentUser.role === "student" || currentUser.role === "guest" || isGuestUser) && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Priority Status</span>
+                    <span className="font-semibold">
+                      {currentUser.isPriority ? "⭐ Priority Student" : "Regular Queue"}
+                    </span>
+                  </div>
+                )}
+                {(currentUser.role === "staff" || currentUser.role === "admin") && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Office</span>
+                    <span className="font-semibold">Registrar's Office</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Office</span>
-                  <span className="font-semibold">Registrar's Office</span>
+                  <span className="text-muted-foreground">Program / Year</span>
+                  <span className="font-semibold">{editCourse} ({editYearLevel})</span>
                 </div>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Contact Status</span>
-                <span className={`font-semibold ${currentUser.contactVerified || (currentUser.phone && currentUser.phone.length === 11) ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600"}`}>
-                  {currentUser.contactVerified || (currentUser.phone && currentUser.phone.length === 11)
-                    ? "✓ Authenticated for Updates"
-                    : "Pending Authentication"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Phone</span>
-                <span className="font-semibold font-mono">{currentUser.phone || "Not set"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Email</span>
-                <span className="font-semibold truncate max-w-[180px]">{currentUser.email || "Not set"}</span>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Phone</span>
+                  <span className="font-semibold font-mono">{currentUser.phone || "Not set"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Email</span>
+                  <span className="font-semibold truncate max-w-[180px]">{currentUser.email || "Not set"}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Confirmation & Authentication Modal */}
+      {/* Confirmation & Authentication Modal When Saving Profile */}
       {showAuthConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
           <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
@@ -3607,27 +3633,41 @@ function StudentProfileView({
               <ShieldCheck className="size-6" />
             </div>
             <h3 className="font-display text-lg font-bold text-center text-foreground">
-              Confirm Contact Authentication
+              Confirm Profile & Documentation Details
             </h3>
             <p className="mt-1.5 text-xs text-center text-muted-foreground leading-relaxed">
-              The Registrar's Office requires authenticated personal details for official school records and automated request updates:
+              Please review and confirm your details before saving. The Registrar's Office will use this information for official student documentation and live updates:
             </p>
             <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
-                  <Phone className="size-3.5 text-primary" /> Mobile (SMS):
+                <span className="text-muted-foreground font-medium">Student Name:</span>
+                <span className="font-bold text-foreground">{editName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground flex items-center gap-1 font-medium">
+                  <Phone className="size-3 text-primary" /> Mobile (SMS):
                 </span>
                 <span className="font-mono font-bold text-foreground">{editPhone}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
-                  <Mail className="size-3.5 text-primary" /> Email Address:
+                <span className="text-muted-foreground flex items-center gap-1 font-medium">
+                  <Mail className="size-3 text-primary" /> Email:
                 </span>
                 <span className="font-semibold text-foreground truncate max-w-[200px]">{editEmail}</span>
               </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground font-medium">Program / Year:</span>
+                <span className="font-semibold text-foreground">{editCourse} • {editYearLevel}</span>
+              </div>
+              {editAddress && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Address:</span>
+                  <span className="font-semibold text-foreground truncate max-w-[180px]">{editAddress}</span>
+                </div>
+              )}
             </div>
             <p className="mt-3 text-[11px] text-muted-foreground text-center">
-              By confirming, you authorize the Registrar's Office to send queue line numbers, payment directives, and claim receipts to these channels.
+              Are you sure you want to save these details and authenticate this contact information for all registrar transactions?
             </p>
             <div className="mt-5 flex items-center justify-end gap-2.5">
               <Button
@@ -3646,7 +3686,286 @@ function StudentProfileView({
                 className="gap-1.5 font-bold cursor-pointer"
               >
                 {saving ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
-                Confirm & Authenticate
+                Confirm & Save Profile
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StudentPersonalDetailsView({
+  currentUser,
+  setCurrentUser,
+  setFlash,
+  onBack,
+}: {
+  currentUser: AuthUser;
+  setCurrentUser: (u: AuthUser | null) => void;
+  setFlash: (f: Flash) => void;
+  onBack: () => void;
+}) {
+  const [editCourse, setEditCourse] = useState(currentUser.course || "BS Information Technology");
+  const [editYearLevel, setEditYearLevel] = useState(currentUser.yearLevel || "3rd Year");
+  const [editBirthDate, setEditBirthDate] = useState(currentUser.birthDate || "");
+  const [editAddress, setEditAddress] = useState(currentUser.address || "");
+  const [editEmergencyContact, setEditEmergencyContact] = useState(currentUser.emergencyContact || "");
+  const [saving, setSaving] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const executeSave = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("queueless_token");
+      let remoteUser: Partial<AuthUser> = {};
+      if (token) {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/profile`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              course: editCourse.trim(),
+              yearLevel: editYearLevel.trim(),
+              birthDate: editBirthDate.trim(),
+              address: editAddress.trim(),
+              emergencyContact: editEmergencyContact.trim(),
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.user) remoteUser = data.user;
+          }
+        } catch {
+          // offline fallback
+        }
+      }
+
+      const updatedUser: AuthUser = {
+        ...currentUser,
+        ...remoteUser,
+        course: editCourse.trim(),
+        yearLevel: editYearLevel.trim(),
+        birthDate: editBirthDate.trim(),
+        address: editAddress.trim(),
+        emergencyContact: editEmergencyContact.trim(),
+      };
+
+      setCurrentUser(updatedUser);
+      localStorage.setItem("queueless_user", JSON.stringify(updatedUser));
+      setShowConfirmModal(false);
+
+      setFlash({
+        tone: "success",
+        text: "Personal details for registrar records saved successfully.",
+      });
+    } catch (err) {
+      setFlash({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Failed to save personal details.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSave = () => {
+    setShowConfirmModal(true);
+  };
+
+  return (
+    <div className="animate-rise">
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" size="icon" onClick={onBack} className="size-8 cursor-pointer">
+          <ChevronLeft className="size-4" />
+        </Button>
+        <PageHeading
+          eyebrow="Registrar documentation"
+          title="My Personal Details"
+          text="Fill up your official academic and personal details used by the Registrar's Office for your documentation."
+        />
+      </div>
+
+      <div className="max-w-2xl">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+            <ClipboardList className="size-4 text-primary" /> Personal Details for Registrar Records
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Official academic and personal details used by the Registrar's Office to generate your documentation.
+          </p>
+
+          <div className="mt-5 space-y-4 text-xs">
+            <Field label="Degree / Academic Program">
+              <select
+                value={editCourse}
+                onChange={(e) => setEditCourse(e.target.value)}
+                className="field cursor-pointer"
+              >
+                <option value="BS Information Technology">BS Information Technology (BSIT)</option>
+                <option value="BS Computer Science">BS Computer Science (BSCS)</option>
+                <option value="BS Nursing">BS Nursing (BSN)</option>
+                <option value="BS Criminology">BS Criminology (BSCrim)</option>
+                <option value="BS Accountancy">BS Accountancy (BSA)</option>
+                <option value="BS Business Administration">BS Business Administration (BSBA)</option>
+                <option value="BS Hospitality Management">BS Hospitality Management (BSHM)</option>
+                <option value="BS Civil Engineering">BS Civil Engineering (BSCE)</option>
+                <option value="BS Education">Bachelor of Secondary Education (BSED)</option>
+                <option value="Senior High School">Senior High School (SHS)</option>
+                <option value="Other Program">Other Program</option>
+              </select>
+            </Field>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Year Level / Status">
+                <select
+                  value={editYearLevel}
+                  onChange={(e) => setEditYearLevel(e.target.value)}
+                  className="field cursor-pointer"
+                >
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year">3rd Year</option>
+                  <option value="4th Year">4th Year</option>
+                  <option value="Graduated / Alumnus">Graduated / Alumnus</option>
+                </select>
+              </Field>
+
+              <Field label="Date of Birth">
+                <input
+                  type="date"
+                  value={editBirthDate}
+                  onChange={(e) => setEditBirthDate(e.target.value)}
+                  className="field"
+                />
+              </Field>
+            </div>
+
+            <Field label="Complete Permanent Address">
+              <input
+                type="text"
+                value={editAddress}
+                onChange={(e) => setEditAddress(e.target.value)}
+                placeholder="e.g. Arellano St., Dagupan City, Pangasinan"
+                className="field"
+              />
+            </Field>
+
+            <Field label="Emergency Contact (Name & Phone)">
+              <input
+                type="text"
+                value={editEmergencyContact}
+                onChange={(e) => setEditEmergencyContact(e.target.value)}
+                placeholder="e.g. Guardian Name - 09181234567"
+                className="field"
+              />
+            </Field>
+
+            <p className="text-[11px] text-muted-foreground">
+              * These details are encoded onto official school certifications, receipts, and transcripts.
+            </p>
+
+            <Button onClick={handleSave} disabled={saving} className="w-full gap-2 cursor-pointer">
+              {saving ? (
+                <><Loader2 className="size-4 animate-spin" /> Saving...</>
+              ) : (
+                <><CheckCircle2 className="size-4" /> Save Personal Details</>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Current Saved Summary */}
+        <div className="mt-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Currently Saved Details</h4>
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Program</span>
+              <span className="font-semibold">{currentUser.course || "Not set"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Year Level</span>
+              <span className="font-semibold">{currentUser.yearLevel || "Not set"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Date of Birth</span>
+              <span className="font-semibold">{currentUser.birthDate || "Not set"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Address</span>
+              <span className="font-semibold truncate max-w-[220px]">{currentUser.address || "Not set"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Emergency Contact</span>
+              <span className="font-semibold truncate max-w-[220px]">{currentUser.emergencyContact || "Not set"}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Confirm Save Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-3">
+              <ShieldCheck className="size-6" />
+            </div>
+            <h3 className="font-display text-lg font-bold text-center text-foreground">
+              Confirm Personal Details
+            </h3>
+            <p className="mt-1.5 text-xs text-center text-muted-foreground leading-relaxed">
+              Please review your details before saving. These will be used for official registrar documentation:
+            </p>
+            <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground font-medium">Program:</span>
+                <span className="font-bold text-foreground">{editCourse}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground font-medium">Year Level:</span>
+                <span className="font-bold text-foreground">{editYearLevel}</span>
+              </div>
+              {editBirthDate && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Date of Birth:</span>
+                  <span className="font-bold text-foreground">{editBirthDate}</span>
+                </div>
+              )}
+              {editAddress && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Address:</span>
+                  <span className="font-bold text-foreground truncate max-w-[200px]">{editAddress}</span>
+                </div>
+              )}
+              {editEmergencyContact && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-medium">Emergency Contact:</span>
+                  <span className="font-bold text-foreground truncate max-w-[200px]">{editEmergencyContact}</span>
+                </div>
+              )}
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowConfirmModal(false)}
+                className="cursor-pointer"
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={executeSave}
+                disabled={saving}
+                className="gap-1.5 font-bold cursor-pointer"
+              >
+                {saving ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                Confirm & Save
               </Button>
             </div>
           </div>
@@ -3799,6 +4118,17 @@ function StudentView({
   if (view === "profile") {
     return (
       <StudentProfileView
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
+        setFlash={setFlash}
+        onBack={() => navigate("dashboard")}
+      />
+    );
+  }
+
+  if (view === "personal_details") {
+    return (
+      <StudentPersonalDetailsView
         currentUser={currentUser}
         setCurrentUser={setCurrentUser}
         setFlash={setFlash}
