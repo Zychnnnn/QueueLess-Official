@@ -159,15 +159,42 @@ type AuthUser = {
   address?: string;
   emergencyContact?: string;
   // Personal Details
+  lastName?: string;
+  firstName?: string;
+  middleName?: string;
+  extensionName?: string;
   gender?: string;
   nationality?: string;
   religion?: string;
   civilStatus?: string;
   // Family Details
   fatherName?: string;
+  fatherOccupation?: string;
+  fatherMobile?: string;
   motherName?: string;
+  motherOccupation?: string;
+  motherMobile?: string;
+  spouseName?: string;
+  spouseOccupation?: string;
+  numberOfChildren?: string;
+  numberOfBrothers?: string;
+  numberOfSisters?: string;
   guardianName?: string;
   guardianRelationship?: string;
+  guardianMobile?: string;
+  // Address Details - Current Address
+  currentAddress?: string;
+  currentCountry?: string;
+  currentProvince?: string;
+  currentCity?: string;
+  currentPostalCode?: string;
+  // Address Details - Permanent Address
+  sameAsCurrentAddress?: boolean;
+  permanentAddress?: string;
+  permanentCountry?: string;
+  permanentProvince?: string;
+  permanentCity?: string;
+  permanentPostalCode?: string;
   // Emergency Contact
   emergencyContactName?: string;
   emergencyContactRelationship?: string;
@@ -3317,10 +3344,20 @@ function StudentProfileView({
     }
   };
 
-  const isGuestUser =
-    currentUser.role === "guest" ||
-    currentUser.userType === "normal" ||
-    Boolean(currentUser.studentId?.startsWith("GUEST"));
+  const isGuestUser = (() => {
+    const email = (currentUser.email || "").toLowerCase().trim();
+    if (email.endsWith("@phinmaed.com") || email.includes("phinmaed") || email.endsWith(".edu.ph")) {
+      return false;
+    }
+    if (email.endsWith("@gmail.com")) {
+      return true;
+    }
+    return (
+      currentUser.role === "guest" ||
+      currentUser.userType === "normal" ||
+      Boolean(currentUser.studentId?.startsWith("GUEST"))
+    );
+  })();
 
   return (
     <div className="animate-rise">
@@ -3349,6 +3386,53 @@ function StudentProfileView({
           </p>
 
           <div className="mt-5 space-y-4">
+            {/* Avatar with Image Upload */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex size-18 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden border border-border">
+                {editPicture ? (
+                  <img src={editPicture} alt="Profile" className="size-full object-cover" />
+                ) : (
+                  <UserRound className="size-9" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <p className="text-xs font-semibold text-foreground">Profile Photo</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-accent/80 text-xs font-bold hover:bg-accent cursor-pointer transition shadow-xs">
+                    <span>Upload Image</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            if (typeof reader.result === "string") {
+                              setEditPicture(reader.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
+                  {editPicture && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-muted-foreground hover:text-destructive cursor-pointer"
+                      onClick={() => setEditPicture("")}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <Field label="Full Name">
               <input
                 type="text"
@@ -3541,10 +3625,12 @@ function StudentProfileView({
                     <span className="font-semibold">Registrar's Office</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Program / Year</span>
-                  <span className="font-semibold">{editCourse} ({editYearLevel})</span>
-                </div>
+                {!isGuestUser && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Program / Year</span>
+                    <span className="font-semibold">{editCourse} ({editYearLevel})</span>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Phone</span>
@@ -3636,9 +3722,17 @@ function StudentPersonalDetailsView({
   setFlash: (f: Flash) => void;
   onBack: () => void;
 }) {
+  // Parse existing name into components if not explicitly saved yet
+  const nameParts = (currentUser.name || "").trim().split(/\s+/);
+  const initialFirstName = currentUser.firstName || (nameParts.length > 0 ? nameParts[0] : "");
+  const initialLastName = currentUser.lastName || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : "");
+  const initialMiddleName = currentUser.middleName || (nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : "");
+
   // Personal Details
-  const [editName, setEditName] = useState(currentUser.name || "");
-  const [editPicture, setEditPicture] = useState(currentUser.picture || "");
+  const [lastName, setLastName] = useState(initialLastName);
+  const [firstName, setFirstName] = useState(initialFirstName);
+  const [middleName, setMiddleName] = useState(initialMiddleName);
+  const [extensionName, setExtensionName] = useState(currentUser.extensionName || "");
   const [editPhone, setEditPhone] = useState(currentUser.phone || "");
   const [editEmail, setEditEmail] = useState(currentUser.email || "");
   const [editGender, setEditGender] = useState(currentUser.gender || "");
@@ -3646,33 +3740,64 @@ function StudentPersonalDetailsView({
   const [editNationality, setEditNationality] = useState(currentUser.nationality || "Filipino");
   const [editReligion, setEditReligion] = useState(currentUser.religion || "");
   const [editCivilStatus, setEditCivilStatus] = useState(currentUser.civilStatus || "Single");
-  const [editAddress, setEditAddress] = useState(currentUser.address || "");
 
   // Family Details
-  const [editFatherName, setEditFatherName] = useState(currentUser.fatherName || "");
-  const [editMotherName, setEditMotherName] = useState(currentUser.motherName || "");
-  const [editGuardianName, setEditGuardianName] = useState(currentUser.guardianName || "");
-  const [editGuardianRelationship, setEditGuardianRelationship] = useState(currentUser.guardianRelationship || "");
+  const [fatherName, setFatherName] = useState(currentUser.fatherName || "");
+  const [fatherOccupation, setFatherOccupation] = useState(currentUser.fatherOccupation || "");
+  const [fatherMobile, setFatherMobile] = useState(currentUser.fatherMobile || "");
+  const [motherName, setMotherName] = useState(currentUser.motherName || "");
+  const [motherOccupation, setMotherOccupation] = useState(currentUser.motherOccupation || "");
+  const [motherMobile, setMotherMobile] = useState(currentUser.motherMobile || "");
+  const [spouseName, setSpouseName] = useState(currentUser.spouseName || "");
+  const [spouseOccupation, setSpouseOccupation] = useState(currentUser.spouseOccupation || "");
+  const [numberOfChildren, setNumberOfChildren] = useState(currentUser.numberOfChildren || "0");
+  const [numberOfBrothers, setNumberOfBrothers] = useState(currentUser.numberOfBrothers || "0");
+  const [numberOfSisters, setNumberOfSisters] = useState(currentUser.numberOfSisters || "0");
+  const [guardianName, setGuardianName] = useState(currentUser.guardianName || "");
+  const [guardianRelationship, setGuardianRelationship] = useState(currentUser.guardianRelationship || "");
+  const [guardianMobile, setGuardianMobile] = useState(currentUser.guardianMobile || "");
 
-  // Emergency Contact
-  const [editEcName, setEditEcName] = useState(currentUser.emergencyContactName || "");
-  const [editEcRelationship, setEditEcRelationship] = useState(currentUser.emergencyContactRelationship || "");
-  const [editEcPhone, setEditEcPhone] = useState(currentUser.emergencyContactPhone || "");
-  const [editEcAddress, setEditEcAddress] = useState(currentUser.emergencyContactAddress || "");
+  // Address Details - Current Address
+  const [currentAddress, setCurrentAddress] = useState(currentUser.currentAddress || currentUser.address || "");
+  const [currentCountry, setCurrentCountry] = useState(currentUser.currentCountry || "Philippines");
+  const [currentProvince, setCurrentProvince] = useState(currentUser.currentProvince || "Pangasinan");
+  const [currentCity, setCurrentCity] = useState(currentUser.currentCity || "Dagupan City");
+  const [currentPostalCode, setCurrentPostalCode] = useState(currentUser.currentPostalCode || "2400");
 
-  // Educational Details
+  // Address Details - Permanent Address
+  const [sameAsCurrentAddress, setSameAsCurrentAddress] = useState(
+    currentUser.sameAsCurrentAddress !== undefined ? currentUser.sameAsCurrentAddress : true
+  );
+  const [permanentAddress, setPermanentAddress] = useState(currentUser.permanentAddress || currentUser.address || "");
+  const [permanentCountry, setPermanentCountry] = useState(currentUser.permanentCountry || "Philippines");
+  const [permanentProvince, setPermanentProvince] = useState(currentUser.permanentProvince || "Pangasinan");
+  const [permanentCity, setPermanentCity] = useState(currentUser.permanentCity || "Dagupan City");
+  const [permanentPostalCode, setPermanentPostalCode] = useState(currentUser.permanentPostalCode || "2400");
+
+  // Educational Details (students only)
   const [editCourse, setEditCourse] = useState(currentUser.course || "BS Information Technology");
   const [editYearLevel, setEditYearLevel] = useState(currentUser.yearLevel || "1st Year");
 
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  const isGuestUser =
-    currentUser.role === "guest" ||
-    currentUser.userType === "normal" ||
-    Boolean(currentUser.studentId?.startsWith("GUEST"));
+  // Email-based detection: @gmail.com = guest; @phinmaed.com or .edu.ph = student
+  const isGuestUser = (() => {
+    const email = (currentUser.email || "").toLowerCase().trim();
+    if (email.endsWith("@phinmaed.com") || email.includes("phinmaed") || email.endsWith(".edu.ph")) {
+      return false;
+    }
+    if (email.endsWith("@gmail.com")) {
+      return true;
+    }
+    return (
+      currentUser.role === "guest" ||
+      currentUser.userType === "normal" ||
+      Boolean(currentUser.studentId?.startsWith("GUEST"))
+    );
+  })();
 
-  const isStudent = currentUser.role === "student" && !isGuestUser;
+  const isStudent = !isGuestUser;
 
   // Name change cooldown: 90 days
   const nameChangeAllowed = (() => {
@@ -3692,8 +3817,12 @@ function StudentPersonalDetailsView({
   })();
 
   const validateInputs = () => {
-    if (!editName.trim()) {
-      setFlash({ tone: "error", text: "Full name is required." });
+    if (!lastName.trim()) {
+      setFlash({ tone: "error", text: "Last name is required." });
+      return false;
+    }
+    if (!firstName.trim()) {
+      setFlash({ tone: "error", text: "First name is required." });
       return false;
     }
     if (editPhone) {
@@ -3710,44 +3839,63 @@ function StudentPersonalDetailsView({
         return false;
       }
     }
-    if (editEcPhone) {
-      const cleanDigits = editEcPhone.replace(/\D/g, "");
-      if (cleanDigits.length !== 11 || !cleanDigits.startsWith("09")) {
-        setFlash({ tone: "error", text: "Emergency contact phone must be a valid 11-digit number starting with 09." });
-        return false;
-      }
-    }
     return true;
   };
+
+  const computedFullName = [firstName.trim(), middleName.trim(), lastName.trim(), extensionName.trim()]
+    .filter(Boolean)
+    .join(" ");
 
   const executeSave = async () => {
     setSaving(true);
     try {
       const token = localStorage.getItem("queueless_token");
-      const nameChanged = editName.trim() !== currentUser.name;
+      const nameChanged = computedFullName !== currentUser.name;
       let remoteUser: Partial<AuthUser> = {};
 
-      const payload: Record<string, string> = {
-        name: editName.trim(),
+      const payload = {
+        name: computedFullName,
+        lastName: lastName.trim(),
+        firstName: firstName.trim(),
+        middleName: middleName.trim(),
+        extensionName: extensionName.trim(),
         phone: editPhone.replace(/\D/g, ""),
         email: editEmail.trim(),
-        picture: editPicture.trim(),
         gender: editGender,
         birthDate: editBirthDate,
         nationality: editNationality,
         religion: editReligion,
         civilStatus: editCivilStatus,
-        address: editAddress.trim(),
-        fatherName: editFatherName.trim(),
-        motherName: editMotherName.trim(),
-        guardianName: editGuardianName.trim(),
-        guardianRelationship: editGuardianRelationship.trim(),
-        emergencyContactName: editEcName.trim(),
-        emergencyContactRelationship: editEcRelationship.trim(),
-        emergencyContactPhone: editEcPhone.replace(/\D/g, ""),
-        emergencyContactAddress: editEcAddress.trim(),
-        course: editCourse,
-        yearLevel: editYearLevel,
+        // Family Details
+        fatherName: fatherName.trim(),
+        fatherOccupation: fatherOccupation.trim(),
+        fatherMobile: fatherMobile.replace(/\D/g, ""),
+        motherName: motherName.trim(),
+        motherOccupation: motherOccupation.trim(),
+        motherMobile: motherMobile.replace(/\D/g, ""),
+        spouseName: spouseName.trim(),
+        spouseOccupation: spouseOccupation.trim(),
+        numberOfChildren,
+        numberOfBrothers,
+        numberOfSisters,
+        guardianName: guardianName.trim(),
+        guardianRelationship: guardianRelationship.trim(),
+        guardianMobile: guardianMobile.replace(/\D/g, ""),
+        // Address Details
+        currentAddress: currentAddress.trim(),
+        currentCountry: currentCountry.trim(),
+        currentProvince: currentProvince.trim(),
+        currentCity: currentCity.trim(),
+        currentPostalCode: currentPostalCode.trim(),
+        sameAsCurrentAddress,
+        permanentAddress: (sameAsCurrentAddress ? currentAddress : permanentAddress).trim(),
+        permanentCountry: (sameAsCurrentAddress ? currentCountry : permanentCountry).trim(),
+        permanentProvince: (sameAsCurrentAddress ? currentProvince : permanentProvince).trim(),
+        permanentCity: (sameAsCurrentAddress ? currentCity : permanentCity).trim(),
+        permanentPostalCode: (sameAsCurrentAddress ? currentPostalCode : permanentPostalCode).trim(),
+        address: currentAddress.trim(),
+        // Educational (students only)
+        ...(isStudent ? { course: editCourse, yearLevel: editYearLevel } : {}),
       };
 
       if (token) {
@@ -3782,7 +3930,7 @@ function StudentPersonalDetailsView({
 
       setFlash({
         tone: "success",
-        text: "Personal details saved successfully.",
+        text: "Personal details have been successfully applied and saved to your official records.",
       });
     } catch (err) {
       setFlash({
@@ -3827,75 +3975,72 @@ function StudentPersonalDetailsView({
           <SectionHeading
             icon={<UserRound className="size-4 text-primary" />}
             title="Personal Details"
-            subtitle="Your basic personal information for official records."
+            subtitle="Your basic personal information for official school records."
           />
           <div className="space-y-4 text-xs">
-            {/* Profile Photo */}
-            <div className="flex items-center gap-4">
-              <div className="relative flex size-16 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary overflow-hidden border border-border">
-                {editPicture ? (
-                  <img src={editPicture} alt="Profile" className="size-full object-cover" />
-                ) : (
-                  <UserRound className="size-8" />
-                )}
-              </div>
-              <div className="flex-1 space-y-1.5">
-                <p className="text-xs font-semibold text-foreground">Profile Photo</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-accent/80 text-xs font-bold hover:bg-accent cursor-pointer transition shadow-xs">
-                    <span>Upload Image</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            if (typeof reader.result === "string") {
-                              setEditPicture(reader.result);
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
-                  {editPicture && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-muted-foreground hover:text-destructive cursor-pointer"
-                      onClick={() => setEditPicture("")}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </div>
-              </div>
+            {/* Split Name Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Last Name *">
+                <input
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  placeholder="e.g. Dela Cruz"
+                  className="field"
+                  required
+                  disabled={!nameChangeAllowed}
+                />
+              </Field>
+              <Field label="First Name *">
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="e.g. Juan"
+                  className="field"
+                  required
+                  disabled={!nameChangeAllowed}
+                />
+              </Field>
             </div>
 
-            {/* Full Name */}
-            <Field label="Full Name">
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="field"
-                required
-                disabled={!nameChangeAllowed}
-              />
-              {!nameChangeAllowed && (
-                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                  Name change available in {daysUntilNameChange} day{daysUntilNameChange !== 1 ? "s" : ""}. You can only update your name once every 90 days.
-                </p>
-              )}
-            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Middle Name">
+                <input
+                  type="text"
+                  value={middleName}
+                  onChange={(e) => setMiddleName(e.target.value)}
+                  placeholder="e.g. Santos"
+                  className="field"
+                  disabled={!nameChangeAllowed}
+                />
+              </Field>
+              <Field label="Extension Name">
+                <select
+                  value={extensionName}
+                  onChange={(e) => setExtensionName(e.target.value)}
+                  className="field cursor-pointer"
+                  disabled={!nameChangeAllowed}
+                >
+                  <option value="">Please Select</option>
+                  <option value="Jr.">Jr.</option>
+                  <option value="Sr.">Sr.</option>
+                  <option value="I">I</option>
+                  <option value="II">II</option>
+                  <option value="III">III</option>
+                  <option value="IV">IV</option>
+                </select>
+              </Field>
+            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Phone Number">
+            {!nameChangeAllowed && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                Name change available in {daysUntilNameChange} day{daysUntilNameChange !== 1 ? "s" : ""}. You can only update your name once every 90 days.
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Mobile Number">
                 <input
                   type="tel"
                   inputMode="numeric"
@@ -3914,16 +4059,16 @@ function StudentPersonalDetailsView({
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="student@phinma.edu.ph"
+                  placeholder="e.g. user@phinmaed.com"
                   className="field"
                 />
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Gender">
                 <select value={editGender} onChange={(e) => setEditGender(e.target.value)} className="field cursor-pointer">
-                  <option value="">— Select —</option>
+                  <option value="">Please Select</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                 </select>
@@ -3938,7 +4083,7 @@ function StudentPersonalDetailsView({
               </Field>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Nationality">
                 <input
                   type="text"
@@ -3966,124 +4111,296 @@ function StudentPersonalDetailsView({
                 </select>
               </Field>
             </div>
-
-            <Field label="Complete Permanent Address">
-              <input
-                type="text"
-                value={editAddress}
-                onChange={(e) => setEditAddress(e.target.value)}
-                placeholder="e.g. 123 Arellano St., Dagupan City, Pangasinan"
-                className="field"
-              />
-            </Field>
           </div>
         </div>
 
-        {/* Section 2: Family Details (Students Only) */}
-        {isStudent && (
-          <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <SectionHeading
-              icon={<UsersRound className="size-4 text-primary" />}
-              title="Family Details"
-              subtitle="Parent and guardian information for school records."
-            />
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Father's Full Name">
-                  <input
-                    type="text"
-                    value={editFatherName}
-                    onChange={(e) => setEditFatherName(e.target.value)}
-                    placeholder="e.g. Juan A. Dela Cruz"
-                    className="field"
-                  />
-                </Field>
-                <Field label="Mother's Full Name (Maiden Name)">
-                  <input
-                    type="text"
-                    value={editMotherName}
-                    onChange={(e) => setEditMotherName(e.target.value)}
-                    placeholder="e.g. Maria B. Santos"
-                    className="field"
-                  />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Guardian's Full Name">
-                  <input
-                    type="text"
-                    value={editGuardianName}
-                    onChange={(e) => setEditGuardianName(e.target.value)}
-                    placeholder="If different from parents"
-                    className="field"
-                  />
-                </Field>
-                <Field label="Relationship to Guardian">
-                  <input
-                    type="text"
-                    value={editGuardianRelationship}
-                    onChange={(e) => setEditGuardianRelationship(e.target.value)}
-                    placeholder="e.g. Uncle, Aunt, Grandparent"
-                    className="field"
-                  />
-                </Field>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Section 3: Emergency Contact Details */}
+        {/* Section 2: Family Details */}
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <SectionHeading
-            icon={<Phone className="size-4 text-primary" />}
-            title="Emergency Contact Details"
-            subtitle="Person to contact in case of emergencies."
+            icon={<UsersRound className="size-4 text-primary" />}
+            title="Family Details"
+            subtitle="Parent, spouse, and guardian information for records."
           />
           <div className="space-y-4 text-xs">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Contact Person Full Name">
+            {/* Father */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Father's Full Name">
                 <input
                   type="text"
-                  value={editEcName}
-                  onChange={(e) => setEditEcName(e.target.value)}
-                  placeholder="e.g. Maria Dela Cruz"
+                  value={fatherName}
+                  onChange={(e) => setFatherName(e.target.value)}
+                  placeholder="e.g. Juan Dela Cruz Sr."
                   className="field"
                 />
               </Field>
-              <Field label="Relationship">
+              <Field label="Father's Occupation">
                 <input
                   type="text"
-                  value={editEcRelationship}
-                  onChange={(e) => setEditEcRelationship(e.target.value)}
-                  placeholder="e.g. Mother, Father, Sibling"
+                  value={fatherOccupation}
+                  onChange={(e) => setFatherOccupation(e.target.value)}
+                  placeholder="e.g. Engineer / Businessman"
                   className="field"
                 />
               </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Contact Phone Number">
+              <Field label="Father's Mobile No.">
                 <input
                   type="tel"
-                  inputMode="numeric"
-                  value={editEcPhone}
+                  value={fatherMobile}
                   onChange={(e) => {
-                    const numbersOnly = e.target.value.replace(/\D/g, "");
-                    setEditEcPhone(numbersOnly.slice(0, 11));
+                    const numbers = e.target.value.replace(/\D/g, "");
+                    setFatherMobile(numbers.slice(0, 11));
                   }}
                   placeholder="09XXXXXXXXX"
                   className="field"
                   maxLength={11}
                 />
               </Field>
-              <Field label="Contact Address">
+            </div>
+
+            {/* Mother */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="* Mother's Full Name (Maiden)">
                 <input
                   type="text"
-                  value={editEcAddress}
-                  onChange={(e) => setEditEcAddress(e.target.value)}
-                  placeholder="e.g. Dagupan City, Pangasinan"
+                  value={motherName}
+                  onChange={(e) => setMotherName(e.target.value)}
+                  placeholder="e.g. Maria B. Santos"
                   className="field"
                 />
               </Field>
+              <Field label="* Mother's Occupation">
+                <input
+                  type="text"
+                  value={motherOccupation}
+                  onChange={(e) => setMotherOccupation(e.target.value)}
+                  placeholder="e.g. Teacher / Homemaker"
+                  className="field"
+                />
+              </Field>
+              <Field label="* Mother's Mobile No.">
+                <input
+                  type="tel"
+                  value={motherMobile}
+                  onChange={(e) => {
+                    const numbers = e.target.value.replace(/\D/g, "");
+                    setMotherMobile(numbers.slice(0, 11));
+                  }}
+                  placeholder="09XXXXXXXXX"
+                  className="field"
+                  maxLength={11}
+                />
+              </Field>
+            </div>
+
+            {/* Spouse & Children */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Name of Spouse">
+                <input
+                  type="text"
+                  value={spouseName}
+                  onChange={(e) => setSpouseName(e.target.value)}
+                  placeholder="If married"
+                  className="field"
+                />
+              </Field>
+              <Field label="Spouse Occupation">
+                <input
+                  type="text"
+                  value={spouseOccupation}
+                  onChange={(e) => setSpouseOccupation(e.target.value)}
+                  placeholder="Spouse profession"
+                  className="field"
+                />
+              </Field>
+              <Field label="Number of Children">
+                <input
+                  type="number"
+                  min="0"
+                  value={numberOfChildren}
+                  onChange={(e) => setNumberOfChildren(e.target.value)}
+                  className="field"
+                />
+              </Field>
+            </div>
+
+            {/* Siblings */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Number of Brothers">
+                <input
+                  type="number"
+                  min="0"
+                  value={numberOfBrothers}
+                  onChange={(e) => setNumberOfBrothers(e.target.value)}
+                  className="field"
+                />
+              </Field>
+              <Field label="Number of Sisters">
+                <input
+                  type="number"
+                  min="0"
+                  value={numberOfSisters}
+                  onChange={(e) => setNumberOfSisters(e.target.value)}
+                  className="field"
+                />
+              </Field>
+            </div>
+
+            {/* Guardian */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Name of Guardian">
+                <input
+                  type="text"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  placeholder="If living with guardian"
+                  className="field"
+                />
+              </Field>
+              <Field label="Relationship with Guardian">
+                <input
+                  type="text"
+                  value={guardianRelationship}
+                  onChange={(e) => setGuardianRelationship(e.target.value)}
+                  placeholder="e.g. Aunt, Grandparent"
+                  className="field"
+                />
+              </Field>
+              <Field label="Guardian's Mobile No.">
+                <input
+                  type="tel"
+                  value={guardianMobile}
+                  onChange={(e) => {
+                    const numbers = e.target.value.replace(/\D/g, "");
+                    setGuardianMobile(numbers.slice(0, 11));
+                  }}
+                  placeholder="09XXXXXXXXX"
+                  className="field"
+                  maxLength={11}
+                />
+              </Field>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Address Details */}
+        <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <SectionHeading
+            icon={<MapPin className="size-4 text-primary" />}
+            title="Address Details"
+            subtitle="Your current and permanent residential addresses."
+          />
+          <div className="space-y-4 text-xs">
+            <div>
+              <p className="font-semibold text-foreground mb-2 text-xs">Current Address</p>
+              <Field label="* Address (House No., Street, Barangay)">
+                <input
+                  type="text"
+                  value={currentAddress}
+                  onChange={(e) => setCurrentAddress(e.target.value)}
+                  placeholder="e.g. 123 Arellano St., Barangay Pantal"
+                  className="field"
+                />
+              </Field>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                <Field label="* Country">
+                  <input
+                    type="text"
+                    value={currentCountry}
+                    onChange={(e) => setCurrentCountry(e.target.value)}
+                    className="field"
+                  />
+                </Field>
+                <Field label="* Province">
+                  <input
+                    type="text"
+                    value={currentProvince}
+                    onChange={(e) => setCurrentProvince(e.target.value)}
+                    placeholder="Pangasinan"
+                    className="field"
+                  />
+                </Field>
+                <Field label="* City / Municipality">
+                  <input
+                    type="text"
+                    value={currentCity}
+                    onChange={(e) => setCurrentCity(e.target.value)}
+                    placeholder="Dagupan City"
+                    className="field"
+                  />
+                </Field>
+                <Field label="* Postal Code">
+                  <input
+                    type="text"
+                    value={currentPostalCode}
+                    onChange={(e) => setCurrentPostalCode(e.target.value)}
+                    placeholder="2400"
+                    className="field"
+                  />
+                </Field>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-border">
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-semibold text-foreground text-xs">Permanent Address</p>
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground select-none">
+                  <input
+                    type="checkbox"
+                    checked={sameAsCurrentAddress}
+                    onChange={(e) => setSameAsCurrentAddress(e.target.checked)}
+                    className="rounded border-border size-3.5 text-primary"
+                  />
+                  <span>* Same as Current Address?</span>
+                </label>
+              </div>
+
+              {!sameAsCurrentAddress && (
+                <div className="space-y-3">
+                  <Field label="* Address">
+                    <input
+                      type="text"
+                      value={permanentAddress}
+                      onChange={(e) => setPermanentAddress(e.target.value)}
+                      placeholder="Permanent house and street address"
+                      className="field"
+                    />
+                  </Field>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <Field label="* Country">
+                      <input
+                        type="text"
+                        value={permanentCountry}
+                        onChange={(e) => setPermanentCountry(e.target.value)}
+                        className="field"
+                      />
+                    </Field>
+                    <Field label="* Province">
+                      <input
+                        type="text"
+                        value={permanentProvince}
+                        onChange={(e) => setPermanentProvince(e.target.value)}
+                        className="field"
+                      />
+                    </Field>
+                    <Field label="* City/Municipality">
+                      <input
+                        type="text"
+                        value={permanentCity}
+                        onChange={(e) => setPermanentCity(e.target.value)}
+                        className="field"
+                      />
+                    </Field>
+                    <Field label="* Postal Code">
+                      <input
+                        type="text"
+                        value={permanentPostalCode}
+                        onChange={(e) => setPermanentPostalCode(e.target.value)}
+                        className="field"
+                      />
+                    </Field>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -4093,8 +4410,8 @@ function StudentPersonalDetailsView({
           <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <SectionHeading
               icon={<FileText className="size-4 text-primary" />}
-              title="Educational Details"
-              subtitle="Your current academic program and enrollment status."
+              title="Course Details & Educational Details"
+              subtitle="Your academic degree program and current year level."
             />
             <div className="space-y-4 text-xs">
               <Field label="Degree / Academic Program">
@@ -4168,16 +4485,16 @@ function StudentPersonalDetailsView({
               Confirm Personal Details
             </h3>
             <p className="mt-1.5 text-xs text-center text-muted-foreground leading-relaxed">
-              Please review your details before saving. These will be used for official registrar documentation.
+              Please review your details before saving. These will be applied to your official registrar documentation:
             </p>
             <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3.5 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground font-medium">Name:</span>
-                <span className="font-bold text-foreground">{editName}</span>
+                <span className="text-muted-foreground font-medium">Full Name:</span>
+                <span className="font-bold text-foreground">{computedFullName}</span>
               </div>
               {editPhone && (
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-medium">Phone:</span>
+                  <span className="text-muted-foreground font-medium">Mobile:</span>
                   <span className="font-mono font-bold text-foreground">{editPhone}</span>
                 </div>
               )}
@@ -4187,34 +4504,18 @@ function StudentPersonalDetailsView({
                   <span className="font-semibold text-foreground truncate max-w-[200px]">{editEmail}</span>
                 </div>
               )}
-              {editGender && (
+              {currentAddress && (
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-medium">Gender:</span>
-                  <span className="font-semibold text-foreground">{editGender}</span>
-                </div>
-              )}
-              {editBirthDate && (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-medium">Date of Birth:</span>
-                  <span className="font-semibold text-foreground">{editBirthDate}</span>
-                </div>
-              )}
-              {editAddress && (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-medium">Address:</span>
-                  <span className="font-semibold text-foreground truncate max-w-[200px]">{editAddress}</span>
+                  <span className="text-muted-foreground font-medium">Current Address:</span>
+                  <span className="font-semibold text-foreground truncate max-w-[200px]">
+                    {currentAddress}, {currentCity}
+                  </span>
                 </div>
               )}
               {isStudent && (
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground font-medium">Program / Year:</span>
                   <span className="font-semibold text-foreground">{editCourse} • {editYearLevel}</span>
-                </div>
-              )}
-              {editEcName && (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-medium">Emergency:</span>
-                  <span className="font-semibold text-foreground">{editEcName} ({editEcRelationship})</span>
                 </div>
               )}
             </div>
@@ -4235,7 +4536,7 @@ function StudentPersonalDetailsView({
                 className="gap-1.5 font-bold cursor-pointer"
               >
                 {saving ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
-                Confirm & Save
+                Confirm & Apply
               </Button>
             </div>
           </div>
