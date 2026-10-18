@@ -1,6 +1,8 @@
 import express from "express";
 import {
   createStaff,
+  createStudentByAdmin,
+  createAdminByAdmin,
   register,
   registerGuest,
   login,
@@ -9,11 +11,15 @@ import {
   deleteUser,
   approveUser,
   rejectUser,
+  updateUserByAdmin,
   requestPasswordResetOtp,
   verifyPasswordResetOtp,
   resetPassword,
   updateProfile,
   changePassword,
+  sendSecurityOtp,
+  sendContactOtp,
+  verifyContactOtp,
 } from "../controllers/authController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 import roleMiddleware from "../middleware/roleMiddleware.js";
@@ -33,10 +39,22 @@ router.post(
   roleMiddleware("admin"),
   createStaff
 );
+router.post(
+  "/student",
+  authMiddleware,
+  roleMiddleware("admin"),
+  createStudentByAdmin
+);
+router.post(
+  "/admin",
+  authMiddleware,
+  roleMiddleware("admin"),
+  createAdminByAdmin
+);
 router.get(
   "/users",
   authMiddleware,
-  roleMiddleware("admin"),
+  roleMiddleware("admin", "staff"),
   getUsers
 );
 router.patch(
@@ -57,9 +75,18 @@ router.delete(
   roleMiddleware("admin"),
   deleteUser
 );
+router.patch(
+  "/users/:id",
+  authMiddleware,
+  roleMiddleware("admin"),
+  updateUserByAdmin
+);
 
-// Profile routes (any authenticated user)
+// Profile & verification routes (any authenticated user)
 router.patch("/profile", authMiddleware, updateProfile);
 router.post("/change-password", authMiddleware, changePassword);
+router.post("/send-security-otp", authMiddleware, sendSecurityOtp);
+router.post("/send-otp", authMiddleware, sendContactOtp);
+router.post("/verify-contact-otp", authMiddleware, verifyContactOtp);
 
 export default router;

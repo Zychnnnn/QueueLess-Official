@@ -114,11 +114,14 @@
     display: none !important;
   }
 
-  /* When the receipt modal is active, isolate the receipt and hide the underlying dashboard */
+  /* When the receipt modal is active, isolate the receipt and hide the underlying dashboard and other modals */
   body:has(.print-receipt-container) main,
   body:has(.print-receipt-container) [role="main"],
   body.modal-receipt-open main,
-  body.modal-receipt-open [role="main"] {
+  body.modal-receipt-open [role="main"],
+  .pickup-calendar-modal,
+  [data-calendar-modal],
+  body.modal-receipt-open .pickup-calendar-modal {
     display: none !important;
   }
 

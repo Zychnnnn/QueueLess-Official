@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
+import auditRoutes from "./routes/auditRoutes.js";
 import { ensureAdminAccount } from "./createAdmin.js";
 
 dotenv.config({
@@ -53,17 +54,21 @@ app.use(
   })
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 5000,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 app.use(limiter);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/requests", requestRoutes);
+app.use("/api/audit-logs", auditRoutes);
 
 const staticPath = path.resolve(process.cwd(), ".output", "public");
 if (fs.existsSync(staticPath)) {

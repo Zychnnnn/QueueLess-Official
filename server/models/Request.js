@@ -71,8 +71,43 @@ const requestSchema = new mongoose.Schema(
       type: String,
       default: "Proceed to Registrar Staff",
     },
+    picture: {
+      type: String,
+      default: "",
+    },
+    course: {
+      type: String,
+      default: "",
+    },
+    yearLevel: {
+      type: String,
+      default: "",
+    },
+    userDetails: {
+      type: Object,
+      default: {},
+    },
+    assignedStaffId: {
+      type: String,
+      default: "",
+    },
+    assignedStaffName: {
+      type: String,
+      default: "",
+    },
+    rating: {
+      type: Number,
+      default: 0,
+    },
+    feedback: {
+      type: String,
+      default: "",
+    },
+    feedbackAt: {
+      type: Date,
+    },
   },
-  { timestamps: true }
+  { timestamps: true, strict: false }
 );
 
 const Request = mongoose.model("Request", requestSchema);

@@ -207,11 +207,11 @@ function AdminForgotPasswordPage() {
         <div className="w-full max-w-[460px] rounded-2xl bg-white p-7 sm:p-9 shadow-2xl">
           {/* Back link */}
           <Link
-            to="/admin-login"
+            to="/"
             className="mb-5 inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 transition"
           >
             <ArrowLeft className="size-3.5" />
-            Back to Admin Login
+            Back to Sign in
           </Link>
 
           {/* Step 1: Request OTP */}
@@ -466,10 +466,10 @@ function AdminForgotPasswordPage() {
 
               <div className="mt-6 flex flex-col gap-2.5">
                 <Link
-                  to="/admin-login"
+                  to="/"
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#183d22] py-3 text-sm font-bold text-white shadow transition hover:bg-[#122e1a] cursor-pointer"
                 >
-                  Proceed to Admin Sign In
+                  Proceed to Sign In
                   <ArrowRight className="size-4" />
                 </Link>
               </div>

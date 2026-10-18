@@ -399,14 +399,8 @@ function ForgotPasswordPage() {
                   onClick={() => navigate({ to: "/" })}
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#183d22] py-3 text-sm font-bold text-white shadow transition hover:bg-[#122e1a] cursor-pointer"
                 >
-                  Sign in as Student <ArrowRight className="size-4 shrink-0" />
+                  Back to Sign in <ArrowRight className="size-4 shrink-0" />
                 </button>
-                <Link
-                  to="/staff-login"
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition cursor-pointer"
-                >
-                  Sign in as Registrar Staff
-                </Link>
               </div>
             </div>
           )}

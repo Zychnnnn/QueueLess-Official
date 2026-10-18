@@ -360,4 +360,75 @@ export const sendRequestUpdateNotification = async ({
   }
 };
 
+export const sendSecurityConfirmationEmail = async ({
+  toEmail,
+  userName,
+  actionType,
+  details,
+}) => {
+  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
+  const emailPass =
+    process.env.EMAIL_PASS ||
+    process.env.GMAIL_PASS ||
+    process.env.GMAIL_APP_PASSWORD;
+
+  if (!emailUser || !emailPass) {
+    console.log(
+      `[Email Service (Local/Mock)] Security notice for ${toEmail} [${actionType}]: ${details}`
+    );
+    return { sent: true, mock: true };
+  }
+
+  const transport = getTransporter();
+
+  const mailOptions = {
+    from: `"QueueLess Security" <${emailUser}>`,
+    to: toEmail,
+    subject: `QueueLess Security Notice: ${actionType}`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #183d22; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">QueueLess System</h2>
+          <p style="color: #6b7280; font-size: 12px; margin: 4px 0 0; text-transform: uppercase; letter-spacing: 1px;">Security & Account Verification</p>
+        </div>
+        
+        <div style="background-color: #f0fdf4; border-radius: 8px; padding: 20px; text-align: left; border: 1px solid #bbf7d0; margin-bottom: 20px;">
+          <p style="color: #166534; font-size: 15px; margin: 0 0 8px; font-weight: 700;">
+            Confirming that this is you
+          </p>
+          <p style="color: #374151; font-size: 13px; margin: 0; line-height: 1.5;">
+            Hello <strong>${userName || "QueueLess User"}</strong>, this is an automated confirmation regarding recent activity on your QueueLess account (<strong>${toEmail}</strong>):
+          </p>
+          <div style="margin-top: 12px; padding: 10px 14px; background: #ffffff; border-radius: 6px; border: 1px solid #dcfce7; font-size: 13px; color: #1e293b;">
+            <strong>Activity:</strong> ${actionType}<br/>
+            ${details ? `<strong>Details:</strong> ${details}` : ""}
+          </div>
+        </div>
+
+        <p style="color: #4b5563; font-size: 13px; line-height: 1.5; margin: 0 0 16px;">
+          If this was you, you can continue using the <strong>QueueLess System</strong> safely. No further action is required.
+        </p>
+
+        <p style="color: #dc2626; font-size: 12px; line-height: 1.5; margin: 0; padding: 12px; background-color: #fef2f2; border-radius: 6px; border: 1px solid #fee2e2;">
+          <strong>Didn't make this request?</strong> If you did not authorize this action, please secure your account immediately or contact the Registrar's Office.
+        </p>
+
+        <p style="color: #9ca3af; font-size: 11px; margin: 24px 0 0; text-align: center; border-top: 1px solid #f3f4f6; padding-top: 16px;">
+          PHINMA University of Pangasinan • QueueLess Automated Notification
+        </p>
+      </div>
+    `,
+  };
+
+  try {
+    const info = await transport.sendMail(mailOptions);
+    console.log(`[Email Service] Security confirmation email sent to ${toEmail}: ${info.messageId}`);
+    return { sent: true, messageId: info.messageId };
+  } catch (err) {
+    console.error(`[Email Service] Failed to send security email to ${toEmail}:`, err.message);
+    return { sent: false, error: err.message };
+  }
+};
+
+
 

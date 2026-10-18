@@ -5,6 +5,7 @@ import {
   getRequests,
   updateRequestStatus,
   updateRequest,
+  rateRequest,
 } from "../controllers/requestController.js";
 
 import authMiddleware from "../middleware/authMiddleware.js";
@@ -41,6 +42,13 @@ router.patch(
   authMiddleware,
   roleMiddleware("staff", "admin"),
   updateRequest
+);
+
+// Student rate and send thanks to staff
+router.post(
+  "/:requestNumber/rate",
+  authMiddleware,
+  rateRequest
 );
 
 export default router;
