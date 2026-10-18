@@ -5073,13 +5073,18 @@ function StudentProfileView({
       return;
     }
 
+    if (!currentPassword.trim()) {
+      setPwError("Current password is required. Please enter your accurate old password.");
+      return;
+    }
+
     if (currentPassword === newPassword) {
-      setPwError("New password cannot be the same as your current password.");
+      setPwError("New password cannot be the same as your old current password. Please choose a new password.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPwError("New passwords do not match.");
+      setPwError("New password and confirm password do not match.");
       return;
     }
 
@@ -5092,17 +5097,17 @@ function StudentProfileView({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: "change_password" }),
+        body: JSON.stringify({ action: "change_password", currentPassword }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to send password verification code.");
+      if (!res.ok) throw new Error(data.message || "Current password is incorrect. Please enter your accurate old password.");
 
       setPwOtpMaskedEmail(data.maskedEmail || currentUser.email || "");
       setPwOtpCode("");
       setPwOtpError("");
       setShowPwOtpModal(true);
     } catch (err) {
-      setPwError(err instanceof Error ? err.message : "Failed to initiate password change.");
+      setPwError(err instanceof Error ? err.message : "Failed to initiate password change. Please verify your current password.");
     } finally {
       setChangingPassword(false);
     }
@@ -5163,13 +5168,13 @@ function StudentProfileView({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: "change_password" }),
+        body: JSON.stringify({ action: "change_password", currentPassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to resend code.");
       setFlash({ tone: "success", text: "A fresh verification code has been sent to your email." });
     } catch (err) {
-      setPwOtpError(err instanceof Error ? err.message : "Failed to resend code.");
+      setPwOtpError(err instanceof Error ? err.message : "Failed to resend code. Please verify your current password.");
     } finally {
       setPwOtpLoading(false);
     }
@@ -12971,15 +12976,32 @@ function CampusRegistrarHelperModal({
   onClose: () => void;
   currentUser?: AuthUser | null;
 }) {
+  const CHAT_HISTORY_KEY = "queueless_chatbot_history";
+
+  const getWelcomeMessage = (): HelperChatMessage => ({
+    id: "welcome",
+    sender: "bot",
+    text: "Mabuhay! I am your **Campus Registrar Helper** at PHINMA University of Pangasinan.\n\nYou can ask me about:\n• Campus Facilities, learning spaces & labs (https://up.phinma.edu.ph/facilities/)\n• CSDL Announcements & student activities (https://www.facebook.com/up.csdl)\n• Document request procedures, credentials & claiming\n• General school information, office hours & directory\n• QueueLess Registrar project research & guidelines\n\nPlease type your question below to get started!",
+    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  });
+
+  const loadChatHistory = (): HelperChatMessage[] => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(CHAT_HISTORY_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved) as HelperChatMessage[];
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        console.warn("Failed to parse chat history:", e);
+      }
+    }
+    return [getWelcomeMessage()];
+  };
+
   const [inputQuery, setInputQuery] = useState("");
-  const [messages, setMessages] = useState<HelperChatMessage[]>([
-    {
-      id: "welcome",
-      sender: "bot",
-      text: "Mabuhay! I am your **Campus Registrar Helper** at PHINMA University of Pangasinan.\n\nYou can ask me about:\n• Campus Facilities, learning spaces & labs (https://up.phinma.edu.ph/facilities/)\n• CSDL Announcements & student activities (https://www.facebook.com/up.csdl)\n• Document request procedures, credentials & claiming\n• General school information, office hours & directory\n• QueueLess Registrar project research & guidelines\n\nPlease type your question below to get started!",
-      time: "Just now",
-    },
-  ]);
+  const [messages, setMessages] = useState<HelperChatMessage[]>(loadChatHistory);
   const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -12987,24 +13009,24 @@ function CampusRegistrarHelperModal({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isThinking]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages));
+    } catch {}
+  }, [messages]);
+
   // UPang Knowledge Base (trained on https://up.phinma.edu.ph, fb.com/phinmaupang, and fb.com/up.csdl)
   const getAiAnswer = (query: string): { text: string; chips?: string[] } => {
     const q = query.toLowerCase().trim();
 
     // 0. Safety & Moderation Filter: Refuse bad / abusive / inappropriate questions
     const badPatterns = [
-      /\b(gago|tarantado|tangina|tang\s*ina|putangina|putang\s*ina|puta|pota|bobo|tanga|ulol|inutil|pakshet|pakyu|leche|peste|kupal|hudas|yawa|puki|burat|bayag|kantot|kantutan|jakol|siraulo|tamod|pokpok|kingina|punyeta)\b/i,
+      /\b(gago|tarantado|tangina|tang\s*ina|putangina|putang\s*ina|puta|pota|bobo|tanga|ulol|inutil|pakshet|pakyu|leche|peste|kupal|hudas|yawa|puki|burat|bayag|kantot|kantutan|jakol|siraulo|tamod|pokpok|kingina|punyeta|ogag|ungas|bastos|buwisit|bwisit)\b/i,
       /\b(fuck|fucking|fucker|shit|bitch|asshole|bastard|cunt|dick|pussy|porn|porno|sex|nude|kill|murder|suicide|bomb|terrorist|hack|exploit|stupid|idiot|dumb|moron|shut\s*up)\b/i,
     ];
     if (badPatterns.some((pattern) => pattern.test(query))) {
       return {
-        text: "We can't answer that, we're sorry. Please ask questions related to PHINMA University of Pangasinan registrar services, document requests, or campus procedures.",
-        chips: [
-          "What are your office hours & location?",
-          "How do I request a Transcript of Records (TOR)?",
-          "What are the requirements to claim my document?",
-          "Center for Student Development & Leadership (CSDL) info",
-        ],
+        text: "we're sorry but we can't answer that at the moment",
       };
     }
 
@@ -13297,11 +13319,13 @@ function CampusRegistrarHelperModal({
     const query = textToSend.trim();
     if (!query) return;
 
+    const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
     const userMsg: HelperChatMessage = {
       id: "u_" + Date.now(),
       sender: "user",
       text: query,
-      time: "Just now",
+      time: nowTime,
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -13314,22 +13338,41 @@ function CampusRegistrarHelperModal({
         sender: "bot",
         text,
         chips,
-        time: "Just now",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, botMsg]);
       setIsThinking(false);
     }, 350);
   };
 
-  const handleClear = () => {
-    setMessages([
+  const handleNewConversation = () => {
+    const fresh: HelperChatMessage[] = [
       {
-        id: "welcome_reset",
+        id: "welcome_" + Date.now(),
         sender: "bot",
-        text: "Chat cleared. Please type your question below regarding PHINMA UPang facilities, CSDL announcements, or registrar procedures.",
-        time: "Just now",
+        text: "New conversation started! How can I assist you today with PHINMA UPang campus facilities, CSDL announcements, or registrar procedures?",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       },
-    ]);
+    ];
+    setMessages(fresh);
+    try {
+      localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(fresh));
+    } catch {}
+  };
+
+  const handleDeleteHistory = () => {
+    try {
+      localStorage.removeItem(CHAT_HISTORY_KEY);
+    } catch {}
+    const fresh: HelperChatMessage[] = [
+      {
+        id: "deleted_" + Date.now(),
+        sender: "bot",
+        text: "Chat history deleted. Start a new conversation by typing your question below.",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      },
+    ];
+    setMessages(fresh);
   };
 
   if (typeof document === "undefined") return null;
@@ -13365,22 +13408,29 @@ function CampusRegistrarHelperModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleClear}
-              title="Clear conversation"
-              className="size-8 cursor-pointer text-muted-foreground hover:text-foreground"
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleNewConversation}
+              title="Start new conversation"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted/60 transition cursor-pointer"
             >
-              <RotateCcw className="size-3.5" />
-            </Button>
+              <RotateCcw className="size-3" /> New convo
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteHistory}
+              title="Delete chat history"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-destructive px-2 py-1 rounded-md hover:bg-destructive/10 transition cursor-pointer"
+            >
+              <Trash2 className="size-3" /> Delete
+            </button>
             <Button
               size="icon"
               variant="ghost"
               onClick={onClose}
               title="Close helper"
-              className="size-8 cursor-pointer text-muted-foreground hover:text-foreground"
+              className="size-7 cursor-pointer text-muted-foreground hover:text-foreground shrink-0"
             >
               <X className="size-4" />
             </Button>
@@ -15109,6 +15159,16 @@ function AuditLogsPanel({
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
   const [selectedUserDetails, setSelectedUserDetails] = useState<{ account: AccountAuditGroup; user?: AccountUser } | null>(null);
 
+  useEffect(() => {
+    if (selectedAccountModal || selectedUserDetails || selectedLog) {
+      const orig = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = orig;
+      };
+    }
+  }, [selectedAccountModal, selectedUserDetails, selectedLog]);
+
   // Persistence helpers for audit log deletions so they stay deleted across logout & reload
   const getDeletedLogIds = (): Set<string> => {
     try {
@@ -15909,20 +15969,20 @@ function AuditLogsPanel({
           return matchesStatus && matchesSearch;
         });
 
-        return (
+        return typeof document !== "undefined" ? createPortal(
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
             onClick={() => setSelectedAccountModal(null)}
           >
             <div
               role="dialog"
               aria-modal="true"
-              className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden"
+              className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="flex items-start justify-between border-b border-border p-5 bg-muted/20">
-                <div className="flex items-center gap-3.5">
+              <div className="flex items-start justify-between border-b border-border p-3.5 bg-muted/20">
+                <div className="flex items-center gap-3">
                   <div className="relative shrink-0">
                     {selectedAccountModal.actorPicture ? (
                       <img
@@ -15933,12 +15993,12 @@ function AuditLogsPanel({
                           const fallback = (e.target as HTMLElement).nextElementSibling as HTMLElement;
                           if (fallback) fallback.style.display = "flex";
                         }}
-                        className="size-12 rounded-xl object-cover border border-border shadow-xs"
+                        className="size-10 rounded-xl object-cover border border-border shadow-xs"
                       />
                     ) : null}
                     <div
                       style={{ display: selectedAccountModal.actorPicture ? "none" : "flex" }}
-                      className="size-12 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-sm uppercase border border-primary/20 shadow-xs"
+                      className="size-10 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-xs uppercase border border-primary/20 shadow-xs"
                     >
                       {selectedAccountModal.actorName ? selectedAccountModal.actorName.slice(0, 2) : "SY"}
                     </div>
@@ -15946,16 +16006,16 @@ function AuditLogsPanel({
 
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-display text-base font-bold text-foreground">
+                      <h3 className="font-display text-sm font-bold text-foreground">
                         {selectedAccountModal.actorName}
                       </h3>
-                      <span className="rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
+                      <span className="rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase text-primary">
                         {selectedAccountModal.actorRole}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5">
+                    <p className="text-[11px] text-muted-foreground mt-0.5 flex flex-wrap items-center gap-1.5">
                       {selectedAccountModal.actorId && (
-                        <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">
+                        <span className="font-mono bg-muted px-1.5 py-0.2 rounded text-[10px]">
                           ID: {selectedAccountModal.actorId}
                         </span>
                       )}
@@ -15969,19 +16029,19 @@ function AuditLogsPanel({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={(e) => handleRemoveAccount(selectedAccountModal, e)}
-                    className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive hover:text-destructive cursor-pointer font-medium gap-1"
+                    className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive hover:text-destructive cursor-pointer font-medium gap-1 px-2.5"
                   >
-                    <Trash2 className="size-3.5" /> Remove All
+                    <Trash2 className="size-3" /> Remove All
                   </Button>
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="size-8 cursor-pointer text-muted-foreground hover:text-foreground"
+                    className="size-7 cursor-pointer text-muted-foreground hover:text-foreground shrink-0"
                     onClick={() => setSelectedAccountModal(null)}
                   >
                     <X className="size-4" />
@@ -15990,21 +16050,21 @@ function AuditLogsPanel({
               </div>
 
               {/* Search & Filter Bar */}
-              <div className="border-b border-border bg-muted/10 p-3 flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
+              <div className="border-b border-border bg-muted/10 p-2.5 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center justify-between">
                 <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                  <Search className="absolute left-2.5 top-2 size-3 text-muted-foreground" />
                   <input
                     type="text"
                     value={modalSearch}
                     onChange={(e) => setModalSearch(e.target.value)}
                     placeholder="Search actions, tickets, or details..."
-                    className="h-8 w-full rounded-lg border border-border bg-background pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="h-7.5 w-full rounded-lg border border-border bg-background pl-7.5 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                   {modalSearch && (
                     <button
                       type="button"
                       onClick={() => setModalSearch("")}
-                      className="absolute right-2.5 top-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                      className="absolute right-2 top-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       ×
                     </button>
@@ -16015,7 +16075,7 @@ function AuditLogsPanel({
                   <button
                     type="button"
                     onClick={() => setModalStatusFilter("all")}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer transition ${
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition ${
                       modalStatusFilter === "all"
                         ? "bg-primary text-primary-foreground shadow-xs"
                         : "bg-muted/60 text-muted-foreground hover:bg-muted"
@@ -16026,7 +16086,7 @@ function AuditLogsPanel({
                   <button
                     type="button"
                     onClick={() => setModalStatusFilter("Success")}
-                    className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer transition ${
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition ${
                       modalStatusFilter === "Success"
                         ? "bg-emerald-600 text-white shadow-xs"
                         : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
@@ -16038,7 +16098,7 @@ function AuditLogsPanel({
                     <button
                       type="button"
                       onClick={() => setModalStatusFilter("Warning")}
-                      className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer transition ${
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition ${
                         modalStatusFilter === "Warning"
                           ? "bg-amber-600 text-white shadow-xs"
                           : "bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20"
@@ -16051,7 +16111,7 @@ function AuditLogsPanel({
                     <button
                       type="button"
                       onClick={() => setModalStatusFilter("Failed")}
-                      className={`px-2.5 py-1 rounded-md text-xs font-semibold cursor-pointer transition ${
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer transition ${
                         modalStatusFilter === "Failed"
                           ? "bg-rose-600 text-white shadow-xs"
                           : "bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20"
@@ -16064,9 +16124,9 @@ function AuditLogsPanel({
               </div>
 
               {/* Modal Body: Scrollable list of activities */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
                 {filteredLogs.length === 0 ? (
-                  <div className="py-12 text-center text-muted-foreground">
+                  <div className="py-10 text-center text-muted-foreground">
                     <p className="text-sm font-semibold">No activity logs found</p>
                     <p className="text-xs mt-1">Try clearing your search query or status filter.</p>
                   </div>
@@ -16085,42 +16145,42 @@ function AuditLogsPanel({
                     return (
                       <div
                         key={log._id}
-                        className="rounded-xl border border-border bg-card p-4 transition shadow-xs hover:border-primary/40 space-y-2.5"
+                        className="rounded-xl border border-border bg-card p-3 transition shadow-xs hover:border-primary/40 space-y-2"
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-bold text-sm text-foreground">{log.action}</span>
-                              <span className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${statusBadge}`}>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-bold text-xs text-foreground">{log.action}</span>
+                              <span className={`rounded border px-1.5 py-0.2 text-[9px] font-semibold ${statusBadge}`}>
                                 {log.status}
                               </span>
                               {log.requestNumber && (
-                                <span className="rounded bg-primary/10 px-2 py-0.5 font-mono text-[10px] font-bold text-primary border border-primary/20">
+                                <span className="rounded bg-primary/10 px-1.5 py-0.2 font-mono text-[9px] font-bold text-primary border border-primary/20">
                                   Ticket #{log.requestNumber}
                                 </span>
                               )}
-                              <span className="rounded bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground capitalize">
+                              <span className="rounded bg-muted px-1.5 py-0.2 text-[9px] font-semibold text-muted-foreground capitalize">
                                 {log.targetCategory} category
                               </span>
                             </div>
 
                             {log.details && (
-                              <p className="mt-2 text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap rounded-lg bg-muted/30 p-2.5 border border-border/60">
+                              <p className="mt-1.5 text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap rounded-lg bg-muted/30 p-2 border border-border/60">
                                 {log.details}
                               </p>
                             )}
 
-                            <div className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground">
                               <span>📅 {new Date(log.createdAt).toLocaleString()}</span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-start">
+                          <div className="flex items-center gap-1 shrink-0 self-end sm:self-start">
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => setExpandedLogId(isExpanded ? null : log._id)}
-                              className={`h-7 text-xs cursor-pointer font-medium ${isExpanded ? "bg-muted" : ""}`}
+                              className={`h-6.5 text-[11px] cursor-pointer font-medium px-2 ${isExpanded ? "bg-muted" : ""}`}
                             >
                               {isExpanded ? "Hide Details" : "Raw Details"}
                             </Button>
@@ -16128,7 +16188,7 @@ function AuditLogsPanel({
                               variant="outline"
                               size="sm"
                               onClick={(e) => handleDeleteLog(log._id, e)}
-                              className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer gap-1"
+                              className="h-6.5 text-[11px] text-destructive hover:text-destructive hover:bg-destructive/10 cursor-pointer gap-1 px-2"
                               title="Delete log entry"
                             >
                               <Trash2 className="size-3" /> Delete
@@ -16138,9 +16198,9 @@ function AuditLogsPanel({
 
                         {/* Inline Expandable Raw Details */}
                         {isExpanded && (
-                          <div className="mt-2.5 pt-2.5 border-t border-border/80 text-xs space-y-2 animate-in fade-in duration-100">
+                          <div className="mt-2 pt-2 border-t border-border/80 text-xs space-y-1.5 animate-in fade-in duration-100">
                             <div className="flex items-center justify-between">
-                              <span className="font-semibold text-foreground text-[11px] uppercase tracking-wider">
+                              <span className="font-semibold text-foreground text-[10px] uppercase tracking-wider">
                                 Audit Log Record Metadata
                               </span>
                               <Button
@@ -16150,12 +16210,12 @@ function AuditLogsPanel({
                                   navigator.clipboard.writeText(JSON.stringify(log, null, 2));
                                   setFlash({ tone: "success", text: "Log JSON copied to clipboard." });
                                 }}
-                                className="h-6 text-[10px] gap-1 cursor-pointer"
+                                className="h-5 text-[9px] gap-1 cursor-pointer"
                               >
                                 Copy JSON
                               </Button>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-muted/40 p-2.5 rounded-lg border border-border/60">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px] bg-muted/40 p-2 rounded-lg border border-border/60">
                               <div><span className="text-muted-foreground">Record ID:</span> <span className="font-mono">{log._id}</span></div>
                               <div><span className="text-muted-foreground">Actor ID:</span> <span className="font-mono">{log.actorId || "N/A"}</span></div>
                               <div><span className="text-muted-foreground">Actor Role:</span> <span className="uppercase font-semibold">{log.actorRole}</span></div>
@@ -16172,7 +16232,7 @@ function AuditLogsPanel({
               </div>
 
               {/* Modal Footer */}
-              <div className="border-t border-border p-4 bg-muted/20 flex items-center justify-between">
+              <div className="border-t border-border p-3 bg-muted/20 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
                   Showing {filteredLogs.length} of {modalLogs.length} activities
                 </span>
@@ -16186,24 +16246,25 @@ function AuditLogsPanel({
                 </Button>
               </div>
             </div>
-          </div>
-        );
+          </div>,
+          document.body
+        ) : null;
       })()}
 
       {/* Selected Single Audit Log Modal */}
-      {selectedLog && (
+      {selectedLog && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
           onClick={() => setSelectedLog(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-4 shadow-2xl animate-in zoom-in-95 duration-150 text-xs"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-3">
+            <div className="flex items-start justify-between border-b border-border pb-2.5">
+              <div className="flex items-center gap-2.5">
                 <div className="relative shrink-0">
                   {getActorPfp(selectedLog) ? (
                     <img
@@ -16214,90 +16275,90 @@ function AuditLogsPanel({
                         const fallback = (e.target as HTMLElement).nextElementSibling as HTMLElement;
                         if (fallback) fallback.style.display = "flex";
                       }}
-                      className="size-10 rounded-xl object-cover border border-border"
+                      className="size-9 rounded-xl object-cover border border-border"
                     />
                   ) : null}
                   <div
                     style={{ display: getActorPfp(selectedLog) ? "none" : "flex" }}
-                    className="size-10 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-xs uppercase"
+                    className="size-9 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-xs uppercase"
                   >
                     {selectedLog.actorName ? selectedLog.actorName.slice(0, 2) : "SY"}
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="font-display text-base font-bold text-foreground">
+                  <h3 className="font-display text-sm font-bold text-foreground">
                     Audit Activity Details
                   </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Record ID: {selectedLog._id}
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    ID: {selectedLog._id}
                   </p>
                 </div>
               </div>
               <Button
                 size="icon"
                 variant="ghost"
-                className="size-7 cursor-pointer"
+                className="size-7 cursor-pointer shrink-0"
                 onClick={() => setSelectedLog(null)}
               >
                 <X className="size-4" />
               </Button>
             </div>
 
-            <div className="mt-4 space-y-3 rounded-lg border border-border bg-muted/30 p-4 text-xs">
-              <div className="flex justify-between border-b border-border/60 pb-2">
+            <div className="mt-3 space-y-2 rounded-xl border border-border bg-muted/20 p-3 text-xs">
+              <div className="flex justify-between border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">Action:</span>
                 <span className="font-bold text-foreground text-right">{selectedLog.action}</span>
               </div>
-              <div className="flex justify-between border-b border-border/60 pb-2">
+              <div className="flex justify-between border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">Actor Name:</span>
                 <span className="font-semibold text-foreground">{selectedLog.actorName}</span>
               </div>
-              <div className="flex justify-between border-b border-border/60 pb-2">
+              <div className="flex justify-between border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">Actor Role:</span>
                 <span className="font-semibold uppercase text-primary">{selectedLog.actorRole}</span>
               </div>
               {selectedLog.actorEmail && (
-                <div className="flex justify-between border-b border-border/60 pb-2">
+                <div className="flex justify-between border-b border-border/60 pb-1.5">
                   <span className="text-muted-foreground">Actor Email:</span>
                   <span className="font-semibold text-foreground">{selectedLog.actorEmail}</span>
                 </div>
               )}
               {selectedLog.actorId && (
-                <div className="flex justify-between border-b border-border/60 pb-2">
+                <div className="flex justify-between border-b border-border/60 pb-1.5">
                   <span className="text-muted-foreground">Actor ID / Student ID:</span>
                   <span className="font-mono font-semibold text-foreground">{selectedLog.actorId}</span>
                 </div>
               )}
-              <div className="flex justify-between border-b border-border/60 pb-2">
+              <div className="flex justify-between border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">Category:</span>
                 <span className="font-semibold capitalize text-foreground">{selectedLog.targetCategory}</span>
               </div>
               {selectedLog.requestNumber && (
-                <div className="flex justify-between border-b border-border/60 pb-2">
+                <div className="flex justify-between border-b border-border/60 pb-1.5">
                   <span className="text-muted-foreground">Associated Ticket:</span>
                   <span className="font-mono font-bold text-primary">#{selectedLog.requestNumber}</span>
                 </div>
               )}
-              <div className="flex justify-between border-b border-border/60 pb-2">
+              <div className="flex justify-between border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">Outcome Status:</span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">{selectedLog.status}</span>
               </div>
-              <div className="flex justify-between border-b border-border/60 pb-2">
+              <div className="flex justify-between border-b border-border/60 pb-1.5">
                 <span className="text-muted-foreground">Exact Timestamp:</span>
                 <span className="font-semibold text-foreground">{new Date(selectedLog.createdAt).toLocaleString()}</span>
               </div>
               {selectedLog.details && (
-                <div className="pt-2">
-                  <span className="text-muted-foreground block mb-1">Activity Log Description:</span>
-                  <p className="rounded border border-border bg-background p-2.5 text-xs text-foreground leading-relaxed whitespace-pre-wrap">
+                <div className="pt-1">
+                  <span className="text-muted-foreground block mb-1 text-[11px]">Activity Log Description:</span>
+                  <p className="rounded-lg border border-border bg-background p-2 text-xs text-foreground leading-relaxed whitespace-pre-wrap">
                     {selectedLog.details}
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="mt-5 flex items-center justify-between">
+            <div className="mt-3.5 flex items-center justify-between">
               <Button
                 type="button"
                 variant="destructive"
@@ -16306,39 +16367,40 @@ function AuditLogsPanel({
                   handleDeleteLog(selectedLog._id, e);
                   setSelectedLog(null);
                 }}
-                className="gap-1.5 cursor-pointer"
+                className="gap-1 cursor-pointer h-7 text-xs px-2.5"
               >
-                <Trash2 className="size-3.5" /> Delete Log
+                <Trash2 className="size-3" /> Delete Log
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setSelectedLog(null)}
-                className="cursor-pointer"
+                className="cursor-pointer h-7 text-xs px-3"
               >
                 Close
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Full User Details Modal (Triggered by 'Details' button) */}
-      {selectedUserDetails && (
+      {selectedUserDetails && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
           onClick={() => setSelectedUserDetails(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl text-xs space-y-4"
+            className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-4 shadow-2xl text-xs space-y-3 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-3.5">
-                <div className="relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary overflow-hidden border border-border shadow-2xs">
+            <div className="flex items-start justify-between border-b border-border pb-2.5">
+              <div className="flex items-center gap-3">
+                <div className="relative flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary overflow-hidden border border-border shadow-2xs">
                   {selectedUserDetails.user?.picture || selectedUserDetails.account.actorPicture ? (
                     <img
                       src={selectedUserDetails.user?.picture || selectedUserDetails.account.actorPicture!}
@@ -16346,24 +16408,32 @@ function AuditLogsPanel({
                       className="size-full object-cover"
                     />
                   ) : (
-                    <UserRound className="size-7" />
+                    <UserRound className="size-5.5" />
                   )}
                 </div>
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-display text-base font-bold text-foreground">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h3 className="font-display text-sm font-bold text-foreground">
                       {selectedUserDetails.user?.name || selectedUserDetails.account.actorName}
                     </h3>
-                    <span className="rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
+                    <span className="rounded border border-primary/20 bg-primary/10 px-1.5 py-0.2 text-[9px] font-bold uppercase text-primary">
                       {selectedUserDetails.user?.role || selectedUserDetails.account.actorRole}
                     </span>
-                    {(selectedUserDetails.account.actorEmail?.toLowerCase().endsWith("@gmail.com") || selectedUserDetails.user?.role === "guest" || selectedUserDetails.account.actorRole === "guest") && (
-                      <span className="rounded border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300">
-                        Guest
-                      </span>
-                    )}
+                    {(() => {
+                      const r = (selectedUserDetails.user?.role || selectedUserDetails.account.actorRole || "").toLowerCase();
+                      const isGuest = r !== "admin" && r !== "staff" && (
+                        selectedUserDetails.account.actorEmail?.toLowerCase().endsWith("@gmail.com") ||
+                        r === "guest" ||
+                        Boolean(selectedUserDetails.user?.studentId && selectedUserDetails.user.studentId.startsWith("GUEST"))
+                      );
+                      return isGuest ? (
+                        <span className="rounded border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.2 text-[9px] font-bold text-purple-700 dark:text-purple-300">
+                          Guest
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
-                  <p className="font-mono text-xs text-muted-foreground mt-0.5">
+                  <p className="font-mono text-[11px] text-muted-foreground mt-0.5">
                     {selectedUserDetails.user?.studentId || selectedUserDetails.account.actorId || "No ID assigned"}
                   </p>
                 </div>
@@ -16372,14 +16442,14 @@ function AuditLogsPanel({
                 size="icon"
                 variant="ghost"
                 onClick={() => setSelectedUserDetails(null)}
-                className="size-8 cursor-pointer"
+                className="size-7 cursor-pointer shrink-0"
               >
                 <X className="size-4" />
               </Button>
             </div>
 
             {/* Terms and Conditions status */}
-            <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+            <div className="rounded-xl border border-border bg-muted/20 p-2.5 space-y-1.5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
                 <ShieldCheck className="size-3.5" /> Terms & Privacy Status
               </p>
@@ -16398,7 +16468,7 @@ function AuditLogsPanel({
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[10px]">Accepted Date</span>
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-foreground text-[11px]">
                     {selectedUserDetails.user?.termsAcceptedAt
                       ? new Date(selectedUserDetails.user.termsAcceptedAt).toLocaleString()
                       : selectedUserDetails.user?.termsAccepted
@@ -16410,97 +16480,98 @@ function AuditLogsPanel({
             </div>
 
             {/* Profile & Contact Details */}
-            <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+            <div className="rounded-xl border border-border bg-muted/20 p-2.5 space-y-1.5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
                 <Mail className="size-3.5" /> Contact & Account Information
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                 <div>
                   <span className="text-muted-foreground block text-[10px]">Email Address</span>
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-foreground break-all text-[11px]">
                     {selectedUserDetails.user?.email || selectedUserDetails.account.actorEmail || "None"}
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[10px]">Phone Number</span>
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-foreground text-[11px]">
                     {selectedUserDetails.user?.phone || "None provided"}
                   </span>
                 </div>
                 {selectedUserDetails.user?.course && (
                   <div>
                     <span className="text-muted-foreground block text-[10px]">Degree / Program</span>
-                    <span className="font-medium text-foreground">{selectedUserDetails.user.course}</span>
+                    <span className="font-medium text-foreground text-[11px]">{selectedUserDetails.user.course}</span>
                   </div>
                 )}
                 {selectedUserDetails.user?.yearLevel && (
                   <div>
                     <span className="text-muted-foreground block text-[10px]">Year Level</span>
-                    <span className="font-medium text-foreground">{selectedUserDetails.user.yearLevel}</span>
+                    <span className="font-medium text-foreground text-[11px]">{selectedUserDetails.user.yearLevel}</span>
                   </div>
                 )}
                 {selectedUserDetails.user?.currentAddress && (
                   <div className="sm:col-span-2">
                     <span className="text-muted-foreground block text-[10px]">Address</span>
-                    <span className="font-medium text-foreground">{selectedUserDetails.user.currentAddress}</span>
+                    <span className="font-medium text-foreground text-[11px]">{selectedUserDetails.user.currentAddress}</span>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Audit Log Activity Summary */}
-            <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+            <div className="rounded-xl border border-border bg-muted/20 p-2.5 space-y-1.5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
                 <ClipboardList className="size-3.5" /> Audit Activity Summary
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
                   <span className="text-muted-foreground block text-[10px]">Total Logged Activities</span>
-                  <span className="font-bold text-foreground text-sm">
+                  <span className="font-bold text-foreground text-xs">
                     {selectedUserDetails.account.logs.length} actions
                   </span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[10px]">Most Recent Action</span>
-                  <span className="font-medium text-foreground line-clamp-1">
+                  <span className="font-medium text-foreground line-clamp-1 text-[11px]">
                     {selectedUserDetails.account.latestLog.action}
                   </span>
                 </div>
                 <div className="col-span-2">
                   <span className="text-muted-foreground block text-[10px]">Last Active Timestamp</span>
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-foreground text-[11px]">
                     {new Date(selectedUserDetails.account.latestLog.createdAt).toLocaleString()}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-4 flex items-center justify-between pt-2 border-t border-border">
+            <div className="mt-3 flex items-center justify-between pt-2 border-t border-border">
               <Button
                 type="button"
                 variant="default"
                 size="sm"
-                className="gap-1.5 font-bold cursor-pointer"
+                className="gap-1 font-bold cursor-pointer h-7 text-xs px-2.5"
                 onClick={() => {
                   const acct = selectedUserDetails.account;
                   setSelectedUserDetails(null);
                   setSelectedAccountModal(acct);
                 }}
               >
-                <ClipboardList className="size-3.5" /> View Activity Trail ({selectedUserDetails.account.logs.length})
+                <ClipboardList className="size-3" /> View Activity Trail ({selectedUserDetails.account.logs.length})
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setSelectedUserDetails(null)}
-                className="cursor-pointer"
+                className="cursor-pointer h-7 text-xs px-3"
               >
                 Close
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -16519,6 +16590,16 @@ function AdminOfficialRecordsPanel({
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "staff" | "guest">("all");
   const [editingUser, setEditingUser] = useState<AccountUser | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editingUser) {
+      const orig = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = orig;
+      };
+    }
+  }, [editingUser]);
 
   // Form states
   const [lastName, setLastName] = useState("");
@@ -16881,33 +16962,33 @@ function AdminOfficialRecordsPanel({
       )}
 
       {/* Edit Record Modal (Admin Override) */}
-      {editingUser && (
+      {editingUser && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
           onClick={() => !saving && setEditingUser(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden"
+            className="w-full max-w-xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-border p-5 bg-muted/20">
+            <div className="flex items-start justify-between border-b border-border p-3.5 bg-muted/20">
               <div className="flex items-center gap-3">
-                <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold">
-                  <UserCog className="size-5" />
+                <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold shrink-0">
+                  <UserCog className="size-4.5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-display text-base font-bold text-foreground">
+                    <h3 className="font-display text-sm font-bold text-foreground">
                       Edit Official Institutional Record
                     </h3>
-                    <span className="rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                    <span className="rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-400">
                       Admin Override
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
                     Modifying official record for <span className="font-semibold text-foreground">{editingUser.name}</span> ({editingUser.email})
                   </p>
                 </div>
@@ -16916,7 +16997,7 @@ function AdminOfficialRecordsPanel({
               <Button
                 size="icon"
                 variant="ghost"
-                className="size-8 cursor-pointer"
+                className="size-7 cursor-pointer shrink-0"
                 disabled={saving}
                 onClick={() => setEditingUser(null)}
               >
@@ -16925,7 +17006,7 @@ function AdminOfficialRecordsPanel({
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
               {/* Section: Legal Names */}
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
@@ -17152,7 +17233,7 @@ function AdminOfficialRecordsPanel({
             </div>
 
             {/* Modal Footer */}
-            <div className="border-t border-border p-4 bg-muted/20 flex items-center justify-end gap-2.5">
+            <div className="border-t border-border p-3 bg-muted/20 flex items-center justify-end gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -17180,7 +17261,8 @@ function AdminOfficialRecordsPanel({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -19212,6 +19294,16 @@ function DocumentsPanel({
   const [reqList, setReqList] = useState<string[]>([]);
   const [newReqInput, setNewReqInput] = useState("");
 
+  useEffect(() => {
+    if (selectedDocForRequirements || showAddConfirm || docToDelete) {
+      const orig = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = orig;
+      };
+    }
+  }, [selectedDocForRequirements, showAddConfirm, docToDelete]);
+
   const handleOpenRequirements = (doc: string) => {
     setSelectedDocForRequirements(doc);
     setReqList(getDocumentRequirements(doc));
@@ -19396,26 +19488,26 @@ function DocumentsPanel({
       </div>
 
       {/* Document Requirements Modal (Click to view/edit requirements) */}
-      {selectedDocForRequirements && (
+      {selectedDocForRequirements && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
           onClick={() => setSelectedDocForRequirements(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label={`Requirements for ${selectedDocForRequirements}`}
-            className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden flex flex-col max-h-[85vh]"
+            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden flex flex-col max-h-[80vh]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-start justify-between border-b border-border p-5 bg-muted/20">
-              <div className="flex items-start gap-3">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <ClipboardList className="size-5" />
+            <div className="flex items-start justify-between border-b border-border p-3.5 bg-muted/20">
+              <div className="flex items-start gap-2.5">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <ClipboardList className="size-4.5" />
                 </div>
                 <div>
-                  <h3 className="font-display text-base font-bold text-foreground">
+                  <h3 className="font-display text-sm font-bold text-foreground">
                     Document Requirements
                   </h3>
                   <p className="text-xs font-semibold text-primary mt-0.5">
@@ -19426,7 +19518,7 @@ function DocumentsPanel({
               <Button
                 size="icon"
                 variant="ghost"
-                className="size-8 cursor-pointer"
+                className="size-7 cursor-pointer shrink-0"
                 onClick={() => setSelectedDocForRequirements(null)}
               >
                 <X className="size-4" />
@@ -19434,7 +19526,7 @@ function DocumentsPanel({
             </div>
 
             {/* Sub-banner info */}
-            <div className="bg-primary/5 border-b border-primary/20 px-5 py-2.5 text-[11px] text-muted-foreground flex items-center justify-between">
+            <div className="bg-primary/5 border-b border-primary/20 px-3.5 py-2 text-[10px] text-muted-foreground flex items-center justify-between">
               <span>
                 {readOnly
                   ? "Present these required credentials at the Registrar counter window upon claiming."
@@ -19443,25 +19535,25 @@ function DocumentsPanel({
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-xs">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
                   Required Documents & Credentials ({reqList.length})
                 </p>
 
                 {reqList.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+                  <div className="rounded-lg border border-dashed border-border p-5 text-center text-xs text-muted-foreground">
                     No requirements specified for this document yet.
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {reqList.map((req, idx) => (
                       <div
                         key={idx}
-                        className="flex items-start justify-between gap-3 rounded-lg border border-border bg-muted/20 p-3 hover:bg-muted/40 transition"
+                        className="flex items-start justify-between gap-2.5 rounded-lg border border-border bg-muted/20 p-2.5 hover:bg-muted/40 transition"
                       >
-                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
+                          <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                           <span className="text-xs font-medium text-foreground leading-relaxed">
                             {req}
                           </span>
@@ -19471,7 +19563,7 @@ function DocumentsPanel({
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteRequirement(idx)}
-                            className="size-6 text-muted-foreground hover:text-destructive cursor-pointer shrink-0"
+                            className="size-5 text-muted-foreground hover:text-destructive cursor-pointer shrink-0"
                             title="Remove requirement"
                           >
                             <Trash2 className="size-3" />
@@ -19485,19 +19577,19 @@ function DocumentsPanel({
 
               {/* Add requirement form (Admin only) */}
               {!readOnly && (
-                <form onSubmit={handleAddRequirement} className="flex gap-2 pt-2">
+                <form onSubmit={handleAddRequirement} className="flex gap-2 pt-1.5">
                   <input
                     type="text"
                     value={newReqInput}
                     onChange={(e) => setNewReqInput(e.target.value)}
                     placeholder="Add a new requirement (e.g. Valid 2x2 Photo)..."
-                    className="field mt-0 h-9 flex-1 text-xs"
+                    className="field mt-0 h-8 flex-1 text-xs"
                   />
                   <Button
                     type="submit"
                     size="sm"
                     disabled={!newReqInput.trim()}
-                    className="h-9 gap-1 text-xs cursor-pointer shrink-0"
+                    className="h-8 gap-1 text-xs cursor-pointer shrink-0 px-2.5"
                   >
                     <Plus className="size-3.5" /> Add
                   </Button>
@@ -19506,7 +19598,7 @@ function DocumentsPanel({
             </div>
 
             {/* Footer */}
-            <div className="border-t border-border p-4 bg-muted/20 flex items-center justify-between">
+            <div className="border-t border-border p-3 bg-muted/20 flex items-center justify-between">
               {!readOnly ? (
                 <Button
                   variant="ghost"
@@ -19531,7 +19623,8 @@ function DocumentsPanel({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Modal: Add Document Type */}

@@ -1427,8 +1427,28 @@ export const sendSecurityOtp = async (req, res) => {
       return res.status(404).json({ message: "User account not found." });
     }
 
-    const { action, targetEmail } = req.body;
+    const { action, targetEmail, currentPassword } = req.body;
     let recipientEmail = user.email.toLowerCase().trim();
+
+    if (action === "change_password") {
+      if (!currentPassword) {
+        return res.status(400).json({
+          message: "Current password is required. Please enter your accurate old password.",
+        });
+      }
+      const userWithPw = await User.findById(userId).select("+password");
+      if (!userWithPw || !userWithPw.password) {
+        return res.status(400).json({
+          message: "Your account uses Google Sign-In and does not have a password configured.",
+        });
+      }
+      const isMatch = await bcrypt.compare(currentPassword, userWithPw.password);
+      if (!isMatch) {
+        return res.status(401).json({
+          message: "Current password is incorrect. Please enter your accurate old password.",
+        });
+      }
+    }
 
     if (action === "change_email") {
       if (!targetEmail || !targetEmail.includes("@")) {
@@ -1532,7 +1552,9 @@ export const changePassword = async (req, res) => {
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Current password is incorrect." });
+      return res.status(401).json({
+        message: "Current password is incorrect. Please enter your accurate old password.",
+      });
     }
 
     // Verify OTP code
