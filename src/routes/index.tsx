@@ -14630,21 +14630,25 @@ function AdminView({
     );
   }
 
-  const pendingCount = users.filter((u) => u.approvalStatus === "pending").length;
+  const safeUsers = Array.isArray(users) ? users : [];
+  const safeRequests = Array.isArray(requests) ? requests : [];
+  const safeDocs = Array.isArray(docTypes) ? docTypes : [];
 
-  const activeRequestsCount = requests.filter((r) =>
+  const pendingCount = safeUsers.filter((u) => u.approvalStatus === "pending").length;
+
+  const activeRequestsCount = safeRequests.filter((r) =>
     ["Pending", "Processing", "Ready for Claiming", "In Progress", "Needs Correction", "Submitted"].includes(r.status as string)
   ).length;
 
-  const completedRequestsCount = requests.filter((r) =>
+  const completedRequestsCount = safeRequests.filter((r) =>
     ["Claimed", "Completed"].includes(r.status as string)
   ).length;
 
   const handleExportSystemOverviewCSV = () => {
     const headers = ["Metric", "Value"];
     const rows = [
-      ["Total User Accounts", users.length],
-      ["Document Types Count", docTypes.length],
+      ["Total User Accounts", safeUsers.length],
+      ["Document Types Count", safeDocs.length],
       ["Active Requests", activeRequestsCount],
       ["Completed Requests", completedRequestsCount],
       ["Pending Review Applications", pendingCount],
@@ -14745,13 +14749,13 @@ function AdminView({
       <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Metric
           label="User accounts"
-          value={users.length}
+          value={safeUsers.length}
           icon={<UsersRound className="size-5 text-muted-foreground" />}
         />
 
         <Metric
           label="Document types"
-          value={docTypes.length}
+          value={safeDocs.length}
           icon={<Settings2 className="size-5 text-muted-foreground" />}
         />
 
@@ -15114,21 +15118,24 @@ function AuditLogsPanel({
     return "priority";
   };
 
+  const safeUsers = Array.isArray(users) ? users : [];
+
   // Helper to reliably find an actor's profile picture from log, localStorage, or users list
   const getActorPfp = (actor: { actorPicture?: string; actorEmail?: string; actorId?: string; actorName?: string }) => {
+    if (!actor) return null;
     if (actor.actorPicture) return actor.actorPicture;
     if (actor.actorEmail) {
       const local = localStorage.getItem(`queueless_custom_pfp_${actor.actorEmail}`);
       if (local) return local;
-      const match = users.find((u) => u.email?.toLowerCase() === actor.actorEmail?.toLowerCase());
+      const match = safeUsers.find((u) => u?.email?.toLowerCase() === actor.actorEmail?.toLowerCase());
       if (match?.picture) return match.picture;
     }
     if (actor.actorId) {
-      const match = users.find((u) => u.studentId === actor.actorId);
+      const match = safeUsers.find((u) => u?.studentId === actor.actorId);
       if (match?.picture) return match.picture;
     }
     if (actor.actorName) {
-      const match = users.find((u) => u.name?.toLowerCase() === actor.actorName?.toLowerCase());
+      const match = safeUsers.find((u) => u?.name?.toLowerCase() === actor.actorName?.toLowerCase());
       if (match?.picture) return match.picture;
     }
     return null;
@@ -15136,32 +15143,35 @@ function AuditLogsPanel({
 
   // Filter logs by active category tab and search query in memory
   const filteredLogs = useMemo(() => {
-    let result = logs;
+    let result = Array.isArray(logs) ? logs : [];
 
     if (activeTab === "staff") {
       result = result.filter((l) => {
-        const matched = users.find(
+        if (!l) return false;
+        const matched = safeUsers.find(
           (u) =>
-            (l.actorEmail && u.email?.toLowerCase() === l.actorEmail.toLowerCase()) ||
-            (l.actorId && u.studentId && u.studentId.toLowerCase() === l.actorId.toLowerCase())
+            (l.actorEmail && u?.email?.toLowerCase() === l.actorEmail.toLowerCase()) ||
+            (l.actorId && u?.studentId && u?.studentId.toLowerCase() === l.actorId.toLowerCase())
         );
         return getLogCategory(l, matched) === "staff";
       });
     } else if (activeTab === "priority") {
       result = result.filter((l) => {
-        const matched = users.find(
+        if (!l) return false;
+        const matched = safeUsers.find(
           (u) =>
-            (l.actorEmail && u.email?.toLowerCase() === l.actorEmail.toLowerCase()) ||
-            (l.actorId && u.studentId && u.studentId.toLowerCase() === l.actorId.toLowerCase())
+            (l.actorEmail && u?.email?.toLowerCase() === l.actorEmail.toLowerCase()) ||
+            (l.actorId && u?.studentId && u?.studentId.toLowerCase() === l.actorId.toLowerCase())
         );
         return getLogCategory(l, matched) === "priority";
       });
     } else if (activeTab === "guest") {
       result = result.filter((l) => {
-        const matched = users.find(
+        if (!l) return false;
+        const matched = safeUsers.find(
           (u) =>
-            (l.actorEmail && u.email?.toLowerCase() === l.actorEmail.toLowerCase()) ||
-            (l.actorId && u.studentId && u.studentId.toLowerCase() === l.actorId.toLowerCase())
+            (l.actorEmail && u?.email?.toLowerCase() === l.actorEmail.toLowerCase()) ||
+            (l.actorId && u?.studentId && u?.studentId.toLowerCase() === l.actorId.toLowerCase())
         );
         return getLogCategory(l, matched) === "guest";
       });
@@ -15171,31 +15181,32 @@ function AuditLogsPanel({
       const q = searchTerm.trim().toLowerCase();
       result = result.filter(
         (l) =>
-          l.actorName?.toLowerCase().includes(q) ||
-          l.actorEmail?.toLowerCase().includes(q) ||
-          l.action?.toLowerCase().includes(q) ||
-          l.details?.toLowerCase().includes(q) ||
-          l.requestNumber?.toLowerCase().includes(q) ||
-          l.actorId?.toLowerCase().includes(q)
+          l?.actorName?.toLowerCase().includes(q) ||
+          l?.actorEmail?.toLowerCase().includes(q) ||
+          l?.action?.toLowerCase().includes(q) ||
+          l?.details?.toLowerCase().includes(q) ||
+          l?.requestNumber?.toLowerCase().includes(q) ||
+          l?.actorId?.toLowerCase().includes(q)
       );
     }
     return result;
-  }, [logs, activeTab, searchTerm, users]);
+  }, [logs, activeTab, searchTerm, safeUsers]);
 
   // Group logs into 1 user entry per unique person (never double/duplicate)
   const groupedAccounts = useMemo(() => {
     const map = new Map<string, AccountAuditGroup>();
     for (const log of filteredLogs) {
+      if (!log) continue;
       // Find matching user from database users list if possible
-      const matchedUser = users.find(
+      const matchedUser = safeUsers.find(
         (u) =>
-          (log.actorEmail && u.email?.toLowerCase() === log.actorEmail.toLowerCase()) ||
-          (log.actorId && u.studentId && u.studentId.toLowerCase() === log.actorId.toLowerCase()) ||
-          (log.actorName && u.name?.toLowerCase().trim() === log.actorName.toLowerCase().trim())
+          (log.actorEmail && u?.email?.toLowerCase() === log.actorEmail.toLowerCase()) ||
+          (log.actorId && u?.studentId && u?.studentId.toLowerCase() === log.actorId.toLowerCase()) ||
+          (log.actorName && u?.name?.toLowerCase().trim() === log.actorName.toLowerCase().trim())
       );
 
       const canonicalName = matchedUser?.name || log.actorName || "System User";
-      const key = (matchedUser?.email || matchedUser?.studentId || canonicalName).trim().toLowerCase();
+      const key = (matchedUser?.email || matchedUser?.studentId || canonicalName).trim().toLowerCase() || `log-${log._id}`;
       const pfp = matchedUser?.picture || getActorPfp(log);
       const category = getLogCategory(log, matchedUser);
 
@@ -15228,13 +15239,17 @@ function AuditLogsPanel({
 
     // Sort logs inside each group by createdAt descending so latestLog is the most recent
     const result = Array.from(map.values()).map((group) => {
-      group.logs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      group.logs.sort((a, b) => {
+        const timeA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
       group.latestLog = group.logs[0];
       return group;
     });
 
     return result;
-  }, [filteredLogs, users]);
+  }, [filteredLogs, safeUsers]);
 
   // Tab counts accurately computed from UNIQUE USERS (not total activity entries)
   const counts = useMemo(() => {
@@ -15243,12 +15258,13 @@ function AuditLogsPanel({
     const priorityUsers = new Set<string>();
     const guestUsers = new Set<string>();
 
-    logs.forEach((l) => {
-      const matched = users.find(
+    (Array.isArray(logs) ? logs : []).forEach((l) => {
+      if (!l) return;
+      const matched = safeUsers.find(
         (u) =>
-          (l.actorEmail && u.email?.toLowerCase() === l.actorEmail.toLowerCase()) ||
-          (l.actorId && u.studentId && u.studentId.toLowerCase() === l.actorId.toLowerCase()) ||
-          (l.actorName && u.name?.toLowerCase().trim() === l.actorName.toLowerCase().trim())
+          (l.actorEmail && u?.email?.toLowerCase() === l.actorEmail.toLowerCase()) ||
+          (l.actorId && u?.studentId && u?.studentId.toLowerCase() === l.actorId.toLowerCase()) ||
+          (l.actorName && u?.name?.toLowerCase().trim() === l.actorName.toLowerCase().trim())
       );
       const actorKey = (matched?.email || matched?.studentId || l.actorEmail || l.actorId || l.actorName || "user").trim().toLowerCase();
       allUsers.add(actorKey);
@@ -15269,7 +15285,7 @@ function AuditLogsPanel({
       priority: priorityUsers.size,
       guest: guestUsers.size,
     };
-  }, [logs, users]);
+  }, [logs, safeUsers]);
 
   const handleExportCSV = () => {
     if (!filteredLogs.length) return;
@@ -15332,7 +15348,7 @@ function AuditLogsPanel({
           <Button
             variant="outline"
             size="sm"
-            onClick={handleExportAuditCSV}
+            onClick={handleExportCSV}
             className="h-8 gap-1.5 text-xs font-semibold cursor-pointer"
           >
             <Printer className="size-3.5" /> Export CSV
@@ -15532,11 +15548,11 @@ function AuditLogsPanel({
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const matchedUser = users.find(
+                          const matchedUser = safeUsers.find(
                             (u) =>
-                              (account.actorEmail && u.email?.toLowerCase() === account.actorEmail.toLowerCase()) ||
-                              (account.actorId && u.studentId && u.studentId.toLowerCase() === account.actorId.toLowerCase()) ||
-                              (account.actorName && u.name?.toLowerCase().trim() === account.actorName.toLowerCase().trim())
+                              (account.actorEmail && u?.email?.toLowerCase() === account.actorEmail.toLowerCase()) ||
+                              (account.actorId && u?.studentId && u?.studentId.toLowerCase() === account.actorId.toLowerCase()) ||
+                              (account.actorName && u?.name?.toLowerCase().trim() === account.actorName.toLowerCase().trim())
                           );
                           setSelectedUserDetails({ account, user: matchedUser });
                         }}
