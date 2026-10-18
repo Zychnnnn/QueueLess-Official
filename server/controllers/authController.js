@@ -1331,7 +1331,20 @@ export const updateProfile = async (req, res) => {
       req.body.studentId.trim().toLowerCase() !== (user.studentId || "").trim().toLowerCase()
     ) {
       return res.status(403).json({
-        message: "Your Staff ID Number is verified and permanently locked. Only a System Administrator can modify or override this ID.",
+        message: "Your Staff ID Number is verified and locked. Only a System Administrator can modify or override this ID.",
+      });
+    }
+
+    // Student Lock: Once a Student ID Number is verified, students cannot edit it; only admin can override.
+    if (
+      user.role === "student" &&
+      user.contactVerified &&
+      user.studentId &&
+      req.body.studentId &&
+      req.body.studentId.trim().toLowerCase() !== user.studentId.trim().toLowerCase()
+    ) {
+      return res.status(403).json({
+        message: "Your Student ID Number is verified and locked. Only an administrator can update your Student ID.",
       });
     }
 

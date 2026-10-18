@@ -1683,6 +1683,20 @@ function QueueLessApp() {
               <Calendar className="size-5" />
             </Button>
 
+            {signedIn && (role === "student" || role === "guest") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer h-9 px-3 rounded-full border border-primary/20"
+                aria-label="Campus Registrar Helper"
+                title="Campus Registrar Helper - Ask questions about registrar services and facilities"
+                onClick={() => setShowAiHelper(true)}
+              >
+                <Bot className="size-4" />
+                <span>Registrar AI</span>
+              </Button>
+            )}
+
             <div className="relative">
               <Button
                 variant="ghost"
@@ -1711,7 +1725,7 @@ function QueueLessApp() {
                     onClick={() => setNotificationsOpen(false)}
                   />
 
-                  <div className="absolute right-0 top-12 z-40 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                  <div className="absolute right-0 top-12 z-40 w-[min(26rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
                     <div className="border-b border-border/80 pb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -2070,6 +2084,13 @@ function QueueLessApp() {
                         navigate("personal_details")
                       }
                     />
+
+                    <NavButton
+                      active={false}
+                      icon={<Bot className="size-4" />}
+                      label="Registrar AI Helper"
+                      onClick={() => setShowAiHelper(true)}
+                    />
                   </>
                 )}
               </>
@@ -2168,28 +2189,9 @@ function QueueLessApp() {
                 </button>
               </div>
             ) : (role === "student" || role === "guest") ? (
-              <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-3 shadow-2xs">
-                {/* Registrar Helper Button at the top */}
-                <button
-                  type="button"
-                  onClick={() => setShowAiHelper(true)}
-                  aria-label="Campus Registrar Helper"
-                  title="Campus Registrar Helper - Ask questions about registrar services and facilities"
-                  className="w-full flex items-center justify-between rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-xs hover:bg-primary/90 hover:scale-[1.01] active:scale-[0.98] transition-all cursor-pointer mb-2.5 border border-primary-foreground/20"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex size-2 shrink-0">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
-                    </span>
-                    <Bot className="size-3.5 shrink-0" />
-                    <span>Registrar Helper</span>
-                  </div>
-                  <span className="text-[10px] font-semibold text-primary-foreground/85">Ask AI →</span>
-                </button>
-
+              <div className="mb-4 rounded-md bg-muted p-3">
                 <p className="text-xs font-bold text-foreground">Need help?</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
                   Visit the Registrar's Office during campus hours.
                 </p>
               </div>
@@ -5300,7 +5302,11 @@ function StudentProfileView({
                 label={
                   <div className="flex items-center justify-between w-full mb-1">
                     <span>Student ID Number</span>
-                    {editStudentId.trim() && (
+                    {(currentUser.contactVerified || (currentUser.studentId && isValidStudentId(currentUser.studentId))) ? (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                        <Lock className="size-3" /> Verified ID
+                      </span>
+                    ) : editStudentId.trim() ? (
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           isValidStudentId(editStudentId)
@@ -5316,7 +5322,7 @@ function StudentProfileView({
                           "03-XXXX-XXXXXX or 03-XX-XXXX-XXXXXX"
                         )}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 }
               >
@@ -5325,14 +5331,21 @@ function StudentProfileView({
                   value={editStudentId}
                   onChange={(e) => handleStudentIdChange(e.target.value)}
                   placeholder="Enter your Student Id"
-                  className="field font-mono"
+                  disabled={Boolean(currentUser.contactVerified || (currentUser.studentId && isValidStudentId(currentUser.studentId)))}
+                  className={`field font-mono ${
+                    (currentUser.contactVerified || (currentUser.studentId && isValidStudentId(currentUser.studentId)))
+                      ? "bg-muted/60 text-muted-foreground cursor-not-allowed border-dashed"
+                      : ""
+                  }`}
                   maxLength={17}
                 />
                 <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>
-                    Enter your Official UPang ID
+                    {(currentUser.contactVerified || (currentUser.studentId && isValidStudentId(currentUser.studentId)))
+                      ? "Official UPang Student ID"
+                      : "Enter your Official UPang ID"}
                   </span>
-                  {editStudentId.length > 0 && (
+                  {editStudentId.length > 0 && !(currentUser.contactVerified || (currentUser.studentId && isValidStudentId(currentUser.studentId))) && (
                     <span className="font-mono font-bold">
                       {editStudentId.length}/17 max
                     </span>
@@ -5349,7 +5362,7 @@ function StudentProfileView({
                     <span>Staff ID Number</span>
                     {currentUser.staffIdVerified ? (
                       <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
-                        <Lock className="size-3" /> Verified & Permanent
+                        <Lock className="size-3" /> Verified
                       </span>
                     ) : editStudentId.trim() ? (
                       <span
@@ -5385,7 +5398,7 @@ function StudentProfileView({
                 <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>
                     {currentUser.staffIdVerified
-                      ? "🔒 Locked and verified by institution. Only system administrators can update your Staff ID."
+                      ? "Official UPang Staff ID"
                       : "Enter your Official UPang Staff ID (Required to manage requests)"}
                   </span>
                   {editStudentId.length > 0 && !currentUser.staffIdVerified && (
@@ -6134,8 +6147,12 @@ function StudentPersonalDetailsView({
   // When a user is new, their details are editable until confirmed; once saved, only Admin can edit.
   const isNewUser = !currentUser.termsAccepted || !currentUser.lastName?.trim();
   const isNameLocked = currentUser.role !== "admin" && !isNewUser;
-  // Student ID is locked once the student has saved it; only Admin can change it afterward
-  const isIdLocked = currentUser.role !== "admin" && !isNewUser && Boolean(currentUser.studentId?.trim());
+  // Student ID is locked once verified or saved; only Admin can change it afterward
+  const isIdLocked =
+    currentUser.role !== "admin" &&
+    (Boolean(currentUser.contactVerified) ||
+      (!isNewUser && Boolean(currentUser.studentId?.trim())) ||
+      Boolean(currentUser.studentId && isValidStudentId(currentUser.studentId)));
 
   const validateInputs = () => {
     // Student ID is required for students
@@ -6569,8 +6586,8 @@ function StudentPersonalDetailsView({
                   <div className="flex items-center justify-between w-full mb-1">
                     <span>Student ID Number *</span>
                     {isIdLocked ? (
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-0.5">
-                        <Lock className="size-2.5" /> Locked
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                        <Lock className="size-2.5" /> Verified ID
                       </span>
                     ) : editStudentId.trim() && (
                       <span
@@ -6595,22 +6612,21 @@ function StudentPersonalDetailsView({
                   value={editStudentId}
                   onChange={(e) => handleStudentIdChange(e.target.value)}
                   placeholder="Enter your Official UPang ID"
-                  className={`field font-mono ${isIdLocked ? "cursor-not-allowed bg-muted/60 opacity-80 pointer-events-none select-none" : ""}`}
+                  className={`field font-mono ${isIdLocked ? "cursor-not-allowed bg-muted/60 opacity-80 pointer-events-none select-none border-dashed" : ""}`}
                   maxLength={17}
                   required
                   readOnly={isIdLocked}
                   disabled={isIdLocked}
                 />
-                {isIdLocked && (
-                  <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
-                    <Lock className="size-3 shrink-0" /> Student ID is locked. Only an Administrator can update your Student ID.
-                  </p>
-                )}
-                {!isIdLocked && (
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    Enter your Official UPang ID
-                  </p>
-                )}
+                <p className="mt-1 text-[11px] text-muted-foreground flex items-center gap-1">
+                  {isIdLocked ? (
+                    <>
+                      <Lock className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400" /> Official UPang Student ID
+                    </>
+                  ) : (
+                    "Enter your Official UPang ID"
+                  )}
+                </p>
               </Field>
             )}
 
@@ -13568,6 +13584,8 @@ function CampusRegistrarHelperModal({
     }, 350);
   };
 
+  const [showConfirmDeleteHistory, setShowConfirmDeleteHistory] = useState(false);
+
   const handleNewConversation = () => {
     const fresh: HelperChatMessage[] = [
       {
@@ -13609,6 +13627,46 @@ function CampusRegistrarHelperModal({
         className="relative flex flex-col w-full max-w-lg h-[85vh] max-h-[680px] rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Delete History Confirmation Dialog */}
+        {showConfirmDeleteHistory && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+            <div className="w-full max-w-xs rounded-xl border border-destructive/30 bg-card p-4 shadow-2xl animate-in zoom-in-95 duration-150 text-left">
+              <div className="flex items-center gap-2 text-destructive mb-2">
+                <div className="flex size-7 items-center justify-center rounded-lg bg-destructive/15">
+                  <Trash2 className="size-3.5" />
+                </div>
+                <h4 className="font-display text-sm font-bold text-foreground">
+                  Delete Chat History?
+                </h4>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+                This will clear all saved messages with the Campus Registrar Helper. Are you sure?
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowConfirmDeleteHistory(false)}
+                  className="h-7 text-xs cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => {
+                    setShowConfirmDeleteHistory(false);
+                    handleDeleteHistory();
+                  }}
+                  className="h-7 text-xs font-bold gap-1 cursor-pointer"
+                >
+                  <Trash2 className="size-3" /> Yes, Delete
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/30 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -13631,22 +13689,24 @@ function CampusRegistrarHelperModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={handleNewConversation}
               title="Start new conversation"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted/60 transition cursor-pointer"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted/60 transition cursor-pointer whitespace-nowrap"
             >
-              <RotateCcw className="size-3" /> New convo
+              <RotateCcw className="size-3 shrink-0" />
+              <span>New convo</span>
             </button>
             <button
               type="button"
-              onClick={handleDeleteHistory}
+              onClick={() => setShowConfirmDeleteHistory(true)}
               title="Delete chat history"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-destructive px-2 py-1 rounded-md hover:bg-destructive/10 transition cursor-pointer"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-destructive px-2 py-1 rounded-md hover:bg-destructive/10 transition cursor-pointer whitespace-nowrap"
             >
-              <Trash2 className="size-3" /> Delete
+              <Trash2 className="size-3 shrink-0" />
+              <span>Delete</span>
             </button>
             <Button
               size="icon"
@@ -15199,47 +15259,47 @@ function ManageRequests({
       {/* Delete Request Confirmation Modal */}
       {deletingReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-left">
-            <div className="flex items-center gap-3 border-b border-border pb-4 mb-4">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
-                <Trash2 className="size-6" />
+          <div className="w-full max-w-sm rounded-xl border border-destructive/30 bg-card p-4 shadow-xl animate-in zoom-in-95 duration-150 text-left">
+            <div className="flex items-center gap-2.5 border-b border-border pb-2.5 mb-2.5">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive">
+                <Trash2 className="size-4" />
               </div>
-              <div>
-                <h3 className="font-display text-base font-bold text-foreground">
+              <div className="min-w-0">
+                <h3 className="font-display text-sm font-bold text-foreground">
                   Confirm Delete Request
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   Ticket #{deletingReq.id} • Line #{deletingReq.lineNumber ?? 1}
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-foreground/90 leading-relaxed mb-4">
-              Are you sure you want to permanently delete this request? This action cannot be undone and will permanently remove this document request from the database and queue.
+            <p className="text-xs text-muted-foreground leading-relaxed mb-2.5">
+              Are you sure you want to permanently delete this request? This action cannot be undone.
             </p>
 
-            <div className="rounded-xl border border-border bg-muted/40 p-3.5 text-xs space-y-2 mb-4">
-              <div className="flex justify-between">
+            <div className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs space-y-1.5 mb-3">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-muted-foreground">Student:</span>
-                <span className="font-semibold text-foreground">{deletingReq.student} ({deletingReq.studentId})</span>
+                <span className="font-semibold text-foreground truncate max-w-[200px]">{deletingReq.student} ({deletingReq.studentId})</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-muted-foreground">Document:</span>
-                <span className="font-semibold text-foreground">{deletingReq.document} ({deletingReq.copies || 1} copy/copies)</span>
+                <span className="font-semibold text-foreground truncate max-w-[200px]">{deletingReq.document} ({deletingReq.copies || 1}x)</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-muted-foreground">Status:</span>
                 <span className="font-semibold text-foreground">{deletingReq.status}</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2.5">
+            <div className="flex items-center justify-end gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setDeletingReq(null)}
                 disabled={deleteLoading}
-                className="cursor-pointer text-xs"
+                className="h-8 cursor-pointer text-xs"
               >
                 Cancel
               </Button>
@@ -15248,7 +15308,7 @@ function ManageRequests({
                 variant="destructive"
                 disabled={deleteLoading}
                 onClick={() => handleDeleteRequest(deletingReq)}
-                className="cursor-pointer text-xs font-bold gap-1.5"
+                className="h-8 cursor-pointer text-xs font-bold gap-1.5"
               >
                 {deleteLoading ? (
                   <>
@@ -15256,7 +15316,7 @@ function ManageRequests({
                   </>
                 ) : (
                   <>
-                    <Trash2 className="size-3.5" /> Permanently Delete
+                    <Trash2 className="size-3.5" /> Delete
                   </>
                 )}
               </Button>
@@ -21023,13 +21083,18 @@ function Notice({
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-1.5">
-          <p className="text-xs font-bold text-foreground leading-snug line-clamp-2">
-            {title}
-          </p>
-          <div className="flex items-center gap-1 shrink-0 pt-0.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-1.5 min-w-0">
+            {isUnread && (
+              <span className="mt-1 size-2 shrink-0 rounded-full bg-primary ring-2 ring-card animate-pulse" />
+            )}
+            <p className="text-xs font-bold text-foreground leading-snug line-clamp-2">
+              {title}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
             {time && (
-              <span className="text-[10px] text-muted-foreground font-medium">
+              <span className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">
                 {time}
               </span>
             )}
@@ -21070,10 +21135,6 @@ function Notice({
           </div>
         )}
       </div>
-
-      {isUnread && (
-        <span className="absolute top-2 right-2 size-2 rounded-full bg-primary ring-2 ring-card" />
-      )}
     </div>
   );
 }
