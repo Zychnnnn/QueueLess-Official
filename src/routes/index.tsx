@@ -2567,6 +2567,8 @@ function AuthScreen({
   const [hasGoogleBtn, setHasGoogleBtn] =
     useState(false);
 
+const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta.apps.googleusercontent.com";
+
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -2577,7 +2579,7 @@ function AuthScreen({
           ? localStorage.getItem("queueless_google_client_id")
           : "") ||
         (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) ||
-        ""
+        DEFAULT_GOOGLE_CLIENT_ID
       );
     });
 
@@ -2628,7 +2630,7 @@ function AuthScreen({
 
   useEffect(() => {
     const activeClientId =
-      customClientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || "";
+      customClientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || DEFAULT_GOOGLE_CLIENT_ID;
     if (!activeClientId) return;
 
     let isMounted = true;
@@ -2684,7 +2686,7 @@ function AuthScreen({
 
   const handleCustomGoogleClick = () => {
     const activeClientId =
-      customClientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || "";
+      customClientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || DEFAULT_GOOGLE_CLIENT_ID;
     if (!activeClientId) {
       setShowGoogleModal(true);
       return;
