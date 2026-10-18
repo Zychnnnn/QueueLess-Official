@@ -251,6 +251,8 @@ type AuthUser = {
   emergencyContactAddress?: string;
   // Name change tracking
   nameLastChanged?: string;
+  // Staff ID verification tracking
+  staffIdVerified?: boolean;
 };
 
 type AccountUser = {
@@ -2490,28 +2492,23 @@ function QueueLessApp() {
         />
       )}
 
-      {/* Floating Campus Registrar Helper Bubble Chat - Students & Guests Only */}
+      {/* Campus Registrar Helper Docked Action Button - Students & Guests Only */}
       {signedIn && (currentUser?.role === "student" || currentUser?.role === "guest") && (
-        <div className="fixed left-5 top-1/2 -translate-y-1/2 z-40 print:hidden group">
+        <div className="fixed bottom-5 right-6 z-40 print:hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
           <button
             type="button"
             onClick={() => setShowAiHelper(true)}
             aria-label="Campus Registrar Helper"
-            title="Campus Registrar Helper"
-            className="relative flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer border border-primary-foreground/20"
+            title="Campus Registrar Helper - Ask questions about registrar services and facilities"
+            className="flex items-center gap-2 rounded-full bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer border border-primary-foreground/20 ring-1 ring-black/10"
           >
-            <span className="absolute -top-0.5 -right-0.5 flex size-3">
+            <span className="relative flex size-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex size-3 rounded-full bg-emerald-400 border-2 border-primary" />
+              <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
             </span>
-            <MessageCircle className="size-6" />
+            <Bot className="size-4" />
+            <span>Registrar Helper</span>
           </button>
-          <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden sm:block opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="whitespace-nowrap rounded-lg bg-card px-3 py-1.5 text-xs font-bold text-foreground shadow-xl border border-border flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Campus Registrar Helper</span>
-            </div>
-          </div>
         </div>
       )}
 
@@ -5337,7 +5334,11 @@ function StudentProfileView({
                 label={
                   <div className="flex items-center justify-between w-full mb-1">
                     <span>Staff ID Number</span>
-                    {editStudentId.trim() && (
+                    {currentUser.staffIdVerified ? (
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                        <Lock className="size-3" /> Verified & Permanent
+                      </span>
+                    ) : editStudentId.trim() ? (
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           isValidStaffId(editStudentId)
@@ -5353,7 +5354,7 @@ function StudentProfileView({
                           "UP-00-000-T format"
                         )}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 }
               >
@@ -5362,14 +5363,19 @@ function StudentProfileView({
                   value={editStudentId}
                   onChange={(e) => handleStaffIdChange(e.target.value)}
                   placeholder="UP-00-000-T"
-                  className="field font-mono uppercase"
+                  disabled={Boolean(currentUser.staffIdVerified)}
+                  className={`field font-mono uppercase ${
+                    currentUser.staffIdVerified ? "bg-muted/60 text-muted-foreground cursor-not-allowed border-dashed" : ""
+                  }`}
                   maxLength={11}
                 />
                 <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>
-                    Enter your Official UPang Staff ID
+                    {currentUser.staffIdVerified
+                      ? "🔒 Locked and verified by institution. Only system administrators can update your Staff ID."
+                      : "Enter your Official UPang Staff ID (Required to manage requests)"}
                   </span>
-                  {editStudentId.length > 0 && (
+                  {editStudentId.length > 0 && !currentUser.staffIdVerified && (
                     <span className="font-mono font-bold">
                       {editStudentId.length}/11
                     </span>
@@ -8831,6 +8837,7 @@ function StaffView({
         setRequests={setRequests}
         setFlash={setFlash}
         currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
       />
     );
   }
@@ -11408,7 +11415,7 @@ function DigitalReceiptModal({
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [internalSaving, setInternalSaving] = useState(false);
   const [editFlash, setEditFlash] = useState("");
-  const [receiptMode, setReceiptMode] = useState<"staff_release" | "user_queue_slip" | "profile">(() =>
+  const [receiptMode, setReceiptMode] = useState<"staff_release" | "user_queue_slip">(() =>
     isStaff ? "staff_release" : "user_queue_slip"
   );
 
@@ -11625,20 +11632,6 @@ function DigitalReceiptModal({
             <Receipt className="size-3.5 text-primary" />
             <span>User Queue Slip</span>
           </button>
-          {isStaff && (
-            <button
-              type="button"
-              onClick={() => setReceiptMode("profile")}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 font-bold transition cursor-pointer text-xs ${
-                receiptMode === "profile"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <UserRound className="size-3.5" />
-              <span>Applicant Profile</span>
-            </button>
-          )}
         </div>
 
         {/* Scrollable Receipt Body */}
@@ -13210,8 +13203,45 @@ function CampusRegistrarHelperModal({
       };
     }
 
+    // 0.1 Conversational Greetings & Warm Welcomes (Taglish / English)
+    if (/^(hi|hello|hey|musta|kamusta|kumusta|mabuhay|good\s*(morning|afternoon|evening|day)|gandang\s*araw|sup|yo)\b/i.test(q)) {
+      return {
+        text: "Mabuhay! Hello! Kamusta ka? Ako ang iyong Campus Registrar Helper dito sa PHINMA University of Pangasinan. 😊\n\n" +
+          "Paano kita matutulungan ngayong araw? Pwede mo akong tanungin tungkol sa:\n" +
+          "• Paano mag-request ng documents (TOR, Good Moral, COR, TCG)\n" +
+          "• Mga requirements sa pag-claim sa Main Building counter\n" +
+          "• Registrar office hours & contact numbers sa Dagupan campus\n" +
+          "• Campus facilities, computer labs, at CSDL announcements\n\n" +
+          "I-type mo lang ang tanong mo sa baba o pumili sa mga topics sa ibaba!",
+        chips: ["Paano mag-request ng document?", "Ano ang requirements para makapag-claim?", "What are your office hours?", "Saan ang Registrar's Office?"],
+      };
+    }
+
+    // 0.2 Thank You / Appreciation (Conversational)
+    if (/^(salamat|maraming salamat|thanks|thank you|ty|thank u|saludo|tenkyu|arigato)\b/i.test(q)) {
+      return {
+        text: "Walang anuman! Masaya akong makatulong sa'yo. 😊\n\n" +
+          "Lagi mong tandaan na dalhin ang iyong valid Student ID o Government ID kapag pupunta sa Registrar Counter sa Ground Floor, Main Building. Huwag mag-atubiling magtanong kung may kailangan ka pa!",
+        chips: ["Office hours & location", "Requirements to claim", "How does Queue Line work?"],
+      };
+    }
+
+    // 0.3 Taglish / Conversational "Paano mag-request" / How to request guide
+    if (q.includes("paano mag request") || q.includes("pano mag request") || q.includes("paano kumuha") || q.includes("pano kumuha") || q.includes("how to request") || q.includes("step by step") || q.includes("proseso")) {
+      return {
+        text: "Napakadali lang mag-request ng document sa QueueLess! Narito ang simpleng hakbang:\n\n" +
+          "1. Pumunta sa 'Request a document' tab sa iyong student navigation.\n" +
+          "2. Piliin ang uri ng dokumento na kailangan mo (halimbawa: TOR, Certificate of Good Moral, Certificate of Registration / Grades).\n" +
+          "3. Ilagay ang Purpose (trabaho, scholarship, board exam, transfer, etc.) at dami ng kopya.\n" +
+          "4. I-click ang 'Submit Request'. Agad kang bibigyan ng Queue Line Number at digital tracking slip.\n" +
+          "5. Subaybayan ang iyong status sa 'Track request' tab. Kapag 'Ready for Claiming' na, pumunta sa Registrar Counter (Ground Floor, Main Administration Building, Dagupan) dala ang iyong ID para i-claim ang dokumento!\n\n" +
+          "May partikular ka bang dokumento na gustong kunin?",
+        chips: ["Transcript of Records (TOR)", "Certificate of Good Moral Character", "Requirements to claim", "How much are the document fees?"],
+      };
+    }
+
     // 1. Office hours / schedule (Dagupan only)
-    if (q.includes("hour") || q.includes("schedule") || q.includes("open") || q.includes("time") || q.includes("saturday") || q.includes("sunday")) {
+    if (q.includes("hour") || q.includes("schedule") || q.includes("open") || q.includes("time") || q.includes("saturday") || q.includes("sunday") || q.includes("oras") || q.includes("bukas")) {
       return {
         text: "PHINMA University of Pangasinan (UPang) Registrar Office Hours:\n\n" +
           "• Monday to Friday: 8:00 AM – 5:00 PM\n" +
@@ -13829,30 +13859,38 @@ function ConfirmStatusModal({
     });
   };
 
-  return (
+  useEffect(() => {
+    const origOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = origOverflow;
+    };
+  }, []);
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3.5 animate-in fade-in duration-150"
       onClick={() => !loading && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Process Request & Update Receipt"
-        className="w-full max-w-lg max-h-[88vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden"
+        className="w-full max-w-md max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Pinned Header */}
-        <div className="flex items-center justify-between p-5 pb-3 border-b border-border/60 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
-              <ClipboardCheck className="size-5" />
+        <div className="flex items-center justify-between p-3.5 pb-2.5 border-b border-border/60 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+              <ClipboardCheck className="size-4" />
             </div>
             <div>
-              <h3 className="font-display text-base font-bold text-foreground">
+              <h3 className="font-display text-sm font-bold text-foreground">
                 Process Request & Update Receipt
               </h3>
-              <p className="text-xs text-muted-foreground">
-                Edit payment requirement and schedule before applying to receipt
+              <p className="text-[11px] text-muted-foreground">
+                Edit payment directive & schedule before applying to receipt
               </p>
             </div>
           </div>
@@ -13863,14 +13901,14 @@ function ConfirmStatusModal({
             className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition cursor-pointer"
             aria-label="Close dialog"
           >
-            <X className="size-5" />
+            <X className="size-4" />
           </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
+        <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
           {/* Request Summary Strip */}
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-muted/30 p-3 text-xs">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-muted/30 p-2.5 text-xs">
             <div>
               <span className="text-[11px] text-muted-foreground">Request & Queue:</span>
               <p className="font-bold text-foreground">
@@ -13899,7 +13937,7 @@ function ConfirmStatusModal({
             </div>
           </div>
 
-          <form id="process-request-form" onSubmit={handleSubmit} className="space-y-3.5">
+          <form id="process-request-form" onSubmit={handleSubmit} className="space-y-2.5">
             {/* Status Selection */}
             <div>
               <label className="text-xs font-bold text-foreground block mb-1">
@@ -13931,13 +13969,13 @@ function ConfirmStatusModal({
                 className="field text-xs font-semibold"
               />
               {/* 1-click Preset Chips */}
-              <div className="mt-1.5 flex flex-wrap gap-1">
+              <div className="mt-1 flex flex-wrap gap-1">
                 {paymentPresets.map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setPaymentStatus(preset)}
-                    className={`rounded-md px-2 py-0.5 text-[10px] font-semibold border transition cursor-pointer ${
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold border transition cursor-pointer ${
                       paymentStatus === preset
                         ? "border-primary bg-primary/15 text-primary font-bold"
                         : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -13962,13 +14000,13 @@ function ConfirmStatusModal({
                 className="field text-xs font-semibold"
               />
               {/* Schedule Presets */}
-              <div className="mt-1.5 flex flex-wrap gap-1">
+              <div className="mt-1 flex flex-wrap gap-1">
                 {schedulePresets.map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setPickupDate(preset)}
-                    className={`rounded-md px-2 py-0.5 text-[10px] font-semibold border transition cursor-pointer ${
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold border transition cursor-pointer ${
                       pickupDate === preset
                         ? "border-primary bg-primary/15 text-primary font-bold"
                         : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -13995,8 +14033,8 @@ function ConfirmStatusModal({
             </div>
 
             {/* Digital Receipt Live Preview Helper */}
-            <div className="rounded-lg border border-primary/25 bg-primary/5 p-2.5 text-xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-primary block mb-1">
+            <div className="rounded-lg border border-primary/25 bg-primary/5 p-2 text-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary block mb-0.5">
                 Receipt Preview
               </span>
               <div className="flex items-center justify-between text-foreground font-semibold text-[11px]">
@@ -14011,14 +14049,14 @@ function ConfirmStatusModal({
         </div>
 
         {/* Pinned Footer */}
-        <div className="p-4 border-t border-border/60 bg-muted/20 shrink-0 flex items-center justify-end gap-2.5">
+        <div className="p-3 border-t border-border/60 bg-muted/20 shrink-0 flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={onClose}
             disabled={loading}
-            className="cursor-pointer font-medium"
+            className="cursor-pointer font-medium text-xs h-8"
           >
             Cancel
           </Button>
@@ -14027,11 +14065,11 @@ function ConfirmStatusModal({
             type="submit"
             size="sm"
             disabled={loading}
-            className="gap-1.5 cursor-pointer font-semibold shadow-sm"
+            className="gap-1.5 cursor-pointer font-semibold shadow-sm text-xs h-8"
           >
             {loading ? (
               <>
-                <Loader2 className="size-3.5 animate-spin" /> Saving & Emailing...
+                <Loader2 className="size-3.5 animate-spin" /> Saving...
               </>
             ) : (
               <>
@@ -14041,7 +14079,8 @@ function ConfirmStatusModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -14050,11 +14089,13 @@ function ManageRequests({
   setRequests,
   setFlash,
   currentUser,
+  setCurrentUser,
 }: {
   requests: RequestItem[];
   setRequests: (r: RequestItem[]) => void;
   setFlash: (f: Flash) => void;
   currentUser?: AuthUser | null;
+  setCurrentUser?: (u: AuthUser | null) => void;
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Active");
@@ -14062,6 +14103,109 @@ function ManageRequests({
   const [staffQueueTab, setStaffQueueTab] = useState<"all" | "my_assigned" | "unassigned">("all");
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [confirmingAcceptReq, setConfirmingAcceptReq] = useState<RequestItem | null>(null);
+
+  // Staff ID Verification Guard: staff cannot manage requests if their Staff ID is not verified
+  const isStaffUnverified = Boolean(
+    currentUser?.role === "staff" && (!currentUser?.staffIdVerified || !currentUser?.studentId)
+  );
+  const [verifyStaffIdInput, setVerifyStaffIdInput] = useState(currentUser?.studentId || "");
+  const [verifyingStaffId, setVerifyingStaffId] = useState(false);
+  const [verifyStaffIdError, setVerifyStaffIdError] = useState("");
+
+  const handleVerifyStaffId = async () => {
+    const cleaned = verifyStaffIdInput.trim().toUpperCase();
+    const staffIdRegex = /^UP-\d{2}-\d{3}-[A-Z]$/i;
+    if (!staffIdRegex.test(cleaned)) {
+      setVerifyStaffIdError("Please enter a valid PHINMA UPang Staff ID format: UP-00-000-T (e.g. UP-01-234-T).");
+      return;
+    }
+    setVerifyingStaffId(true);
+    setVerifyStaffIdError("");
+    try {
+      const token = localStorage.getItem("queueless_token");
+      const res = await fetch(`${API_URL}/api/auth/profile`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          studentId: cleaned,
+          staffIdVerified: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to verify Staff ID.");
+      }
+      if (currentUser && setCurrentUser) {
+        const updatedUser: AuthUser = {
+          ...currentUser,
+          studentId: cleaned,
+          staffIdVerified: true,
+          ...(data.user || {}),
+        };
+        setCurrentUser(updatedUser);
+        localStorage.setItem("queueless_user", JSON.stringify(updatedUser));
+      }
+      setFlash({
+        tone: "success",
+        text: `Staff ID ${cleaned} verified successfully! Manage requests is now unlocked.`,
+      });
+    } catch (err) {
+      setVerifyStaffIdError(err instanceof Error ? err.message : "Failed to verify Staff ID.");
+    } finally {
+      setVerifyingStaffId(false);
+    }
+  };
+
+  // Delete Request state and handler
+  const [deletingReq, setDeletingReq] = useState<RequestItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteRequest = async (item: RequestItem) => {
+    const token = localStorage.getItem("queueless_token");
+    if (!token) {
+      setFlash({
+        tone: "error",
+        text: "Your session has expired. Please sign in again.",
+      });
+      return;
+    }
+
+    try {
+      setDeleteLoading(true);
+      const response = await fetch(
+        `${API_URL}/api/requests/${encodeURIComponent(item.id)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to delete request.");
+      }
+
+      setRequests(requests.filter((r) => r.id !== item.id));
+      setDeletingReq(null);
+      setFlash({
+        tone: "success",
+        text: `Request ${item.id} has been permanently deleted from records.`,
+      });
+    } catch (err) {
+      console.error("Delete request error:", err);
+      setFlash({
+        tone: "error",
+        text: err instanceof Error ? err.message : "Failed to delete request.",
+      });
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   // Receipt view and edit modals
   const [viewingReceipt, setViewingReceipt] = useState<RequestItem | null>(null);
@@ -14424,8 +14568,70 @@ function ManageRequests({
         text="Manage line-by-line queue priority, review details, and update student digital receipts."
       />
 
-      {/* Quick Queue Stats / Filter Pills */}
-      <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+      {isStaffUnverified ? (
+        <div className="mt-8 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 sm:p-8 text-center max-w-xl mx-auto shadow-xl">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 mb-4">
+            <Lock className="size-7" />
+          </div>
+          <h2 className="font-display text-lg sm:text-xl font-bold text-foreground">
+            Official Staff ID Verification Required
+          </h2>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+            In accordance with institutional registrar security policy, you must verify your official <strong>PHINMA UPang Staff ID Number</strong> before managing student queue requests. Once verified, this ID is permanently locked to your account and only an administrator can change it.
+          </p>
+
+          <div className="mt-6 text-left max-w-sm mx-auto space-y-3">
+            <div>
+              <label className="text-xs font-bold text-foreground block mb-1">
+                Enter Official Staff ID (UP-00-000-T)
+              </label>
+              <input
+                type="text"
+                value={verifyStaffIdInput}
+                onChange={(e) => {
+                  const val = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 11);
+                  setVerifyStaffIdInput(val);
+                  setVerifyStaffIdError("");
+                }}
+                placeholder="UP-00-000-T"
+                className="field font-mono uppercase text-center font-bold tracking-widest text-sm"
+                maxLength={11}
+              />
+            </div>
+
+            {verifyStaffIdError && (
+              <p className="text-xs text-destructive font-semibold flex items-center gap-1.5">
+                <AlertCircle className="size-3.5 shrink-0" />
+                {verifyStaffIdError}
+              </p>
+            )}
+
+            <Button
+              onClick={handleVerifyStaffId}
+              disabled={verifyingStaffId || !verifyStaffIdInput.trim()}
+              className="w-full gap-2 font-bold cursor-pointer h-10 shadow-sm"
+            >
+              {verifyingStaffId ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Verifying Staff ID...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="size-4" /> Verify & Unlock Manage Requests
+                </>
+              )}
+            </Button>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-center gap-1.5">
+            <Lock className="size-3" />
+            <span>Format: 2 letters, 2 digits, 3 digits, 1 letter (e.g. UP-01-234-T)</span>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Quick Queue Stats / Filter Pills */}
+          <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
         <button
           type="button"
           onClick={() => {
@@ -14758,6 +14964,16 @@ function ManageRequests({
                     <Eye className="size-3.5" />
                   </Button>
 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeletingReq(r)}
+                    className="h-8 w-8 p-0 cursor-pointer text-destructive border-border hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                    title="Delete Request"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+
                   {isPendingUnassigned ? (
                     <Button
                       size="sm"
@@ -14965,6 +15181,77 @@ function ManageRequests({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete Request Confirmation Modal */}
+      {deletingReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-left">
+            <div className="flex items-center gap-3 border-b border-border pb-4 mb-4">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
+                <Trash2 className="size-6" />
+              </div>
+              <div>
+                <h3 className="font-display text-base font-bold text-foreground">
+                  Confirm Delete Request
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Ticket #{deletingReq.id} • Line #{deletingReq.lineNumber ?? 1}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-foreground/90 leading-relaxed mb-4">
+              Are you sure you want to permanently delete this request? This action cannot be undone and will permanently remove this document request from the database and queue.
+            </p>
+
+            <div className="rounded-xl border border-border bg-muted/40 p-3.5 text-xs space-y-2 mb-4">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Student:</span>
+                <span className="font-semibold text-foreground">{deletingReq.student} ({deletingReq.studentId})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Document:</span>
+                <span className="font-semibold text-foreground">{deletingReq.document} ({deletingReq.copies || 1} copy/copies)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Status:</span>
+                <span className="font-semibold text-foreground">{deletingReq.status}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeletingReq(null)}
+                disabled={deleteLoading}
+                className="cursor-pointer text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={deleteLoading}
+                onClick={() => handleDeleteRequest(deletingReq)}
+                className="cursor-pointer text-xs font-bold gap-1.5"
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" /> Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="size-3.5" /> Permanently Delete
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+        </>
       )}
     </div>
   );
@@ -19610,8 +19897,8 @@ function DocumentsPanel({
       )}
 
       <div className={`${readOnly ? "mt-6" : "mt-4"} overflow-hidden rounded-md border border-border bg-card`}>
-        {/* max-h-[285px] ensures 4 documents fit cleanly without scrolling, and the 5th document triggers scrolling */}
-        <div className="max-h-[285px] overflow-y-auto divide-y divide-border pr-0.5">
+        {/* max-h-[358px] ensures 5 documents fit cleanly without scrolling, and the 6th document triggers scrolling */}
+        <div className="max-h-[358px] overflow-y-auto divide-y divide-border pr-0.5">
           {docs.map(
             (doc, index) => {
               const reqs = getDocumentRequirements(doc);

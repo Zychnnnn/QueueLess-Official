@@ -7,6 +7,7 @@ import {
   updateRequestStatus,
   updateRequest,
   rateRequest,
+  deleteRequest,
 } from "../controllers/requestController.js";
 
 import authMiddleware from "../middleware/authMiddleware.js";
@@ -50,6 +51,14 @@ router.patch(
   authMiddleware,
   roleMiddleware("staff", "admin"),
   updateRequest
+);
+
+// Delete request (staff and admin)
+router.delete(
+  "/:requestNumber",
+  authMiddleware,
+  roleMiddleware("staff", "admin"),
+  deleteRequest
 );
 
 // Student rate and send thanks to staff

@@ -51,6 +51,7 @@ export const formatUserObject = (user) => {
     status: user.status || (user.contactVerified === false ? "pending_activation" : "active"),
     createdAt: user.createdAt,
     contactVerified: Boolean(user.contactVerified),
+    staffIdVerified: Boolean(user.staffIdVerified),
     termsAccepted: Boolean(user.termsAccepted),
     termsAcceptedAt: user.termsAcceptedAt ? user.termsAcceptedAt.toISOString() : "",
     course: user.course || "",
@@ -1307,7 +1308,7 @@ export const updateProfile = async (req, res) => {
     }
 
     const updatableFields = [
-      "name", "studentId", "phone", "picture", "contactVerified", "course", "yearLevel", "birthDate",
+      "name", "studentId", "phone", "picture", "contactVerified", "staffIdVerified", "course", "yearLevel", "birthDate",
       "gender", "civilStatus", "nationality", "religion", "lastName", "firstName",
       "middleName", "extensionName", "nameLastChanged", "passwordLastChanged", "fatherName", "fatherOccupation",
       "fatherMobile", "motherName", "motherOccupation", "motherMobile", "spouseName",
@@ -1321,6 +1322,18 @@ export const updateProfile = async (req, res) => {
       "seniorHighSchool", "seniorHighYearGrad", "seniorHighType",
       "termsAccepted", "termsAcceptedAt"
     ];
+
+    // Institutional Lock: Once a Staff ID Number is verified, staff cannot edit it; only admin can override.
+    if (
+      user.role === "staff" &&
+      user.staffIdVerified &&
+      req.body.studentId &&
+      req.body.studentId.trim().toLowerCase() !== (user.studentId || "").trim().toLowerCase()
+    ) {
+      return res.status(403).json({
+        message: "Your Staff ID Number is verified and permanently locked. Only a System Administrator can modify or override this ID.",
+      });
+    }
 
     const oldEmail = user.email;
     let emailChanged = false;

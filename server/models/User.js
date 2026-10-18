@@ -82,6 +82,7 @@ const userSchema = new mongoose.Schema(
 
     // Extended personal & official details
     contactVerified: { type: Boolean, default: false },
+    staffIdVerified: { type: Boolean, default: false },
     course: { type: String, default: "" },
     yearLevel: { type: String, default: "" },
     birthDate: { type: String, default: "" },

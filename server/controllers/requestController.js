@@ -497,3 +497,35 @@ export const rateRequest = async (req, res) => {
     return res.status(500).json({ message: "Server error while submitting rating." });
   }
 };
+
+export const deleteRequest = async (req, res) => {
+  try {
+    const { requestNumber } = req.params;
+    const request = await Request.findOne({ requestNumber });
+    if (!request) {
+      return res.status(404).json({ message: "Request not found." });
+    }
+
+    await Request.deleteOne({ requestNumber });
+
+    recordAuditLog({
+      actorName: req.user.name || "Registrar Staff",
+      actorEmail: req.user.email || "",
+      actorRole: req.user.role || "staff",
+      actorId: req.user.studentId || String(req.user.id),
+      targetCategory: "requests",
+      action: `Deleted Request #${requestNumber}`,
+      details: `Request for "${request.document}" (Student: ${request.student}, ID: ${request.studentId}) was permanently removed from active queue by ${req.user.name}.`,
+      requestNumber,
+      status: "Warning",
+    });
+
+    return res.status(200).json({
+      message: `Request #${requestNumber} deleted successfully.`,
+      requestNumber,
+    });
+  } catch (error) {
+    console.error("deleteRequest error:", error);
+    return res.status(500).json({ message: "Server error while deleting request." });
+  }
+};
