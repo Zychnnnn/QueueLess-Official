@@ -136,7 +136,8 @@ type View =
   | "profile"
   | "personal_details"
   | "audit_logs"
-  | "official_records";
+  | "official_records"
+  | "archive";
 
 type Status =
   | "Pending"
@@ -1197,26 +1198,25 @@ function QueueLessApp() {
         }
       });
 
-      // Check daily request quota for student / guest
-      const todayStr = new Date().toDateString();
-      const userRequestsToday = requests.filter((r) => {
-        if (!r.date) return false;
+      // Check 24-hour rolling request quota for student / guest
+      const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+      const recentUserRequests = requests.filter((r) => {
         const matchesUser =
           (currentUser.studentId && r.studentId === currentUser.studentId) ||
           (currentUser.email && r.student && r.student.toLowerCase() === (currentUser.name || "").toLowerCase());
-        const isToday =
-          new Date(r.date).toDateString() === todayStr ||
-          Boolean((r as any).createdAt && new Date((r as any).createdAt).toDateString() === todayStr);
-        return matchesUser && isToday;
-      }).length;
+        const dateStr = (r as any).createdAt || r.date;
+        if (!dateStr) return false;
+        const parsed = new Date(dateStr).getTime();
+        return matchesUser && !isNaN(parsed) && parsed >= twentyFourHoursAgo;
+      });
 
-      if (userRequestsToday >= 2) {
+      if (recentUserRequests.length >= 2) {
         list.unshift({
-          id: `quota-reached-${new Date().toISOString().split("T")[0]}`,
+          id: `quota-reached-24h`,
           title: "Daily Request Limit Reached (2/2)",
-          text: "You have reached your daily quota of 2 document requests for today. Please wait until tomorrow to submit new document requests. Thank you for using and trusting QueueLess Registrar!",
+          text: "You have reached your quota of 2 document requests within the last 24 hours. The quota resets 24 hours after each request. Please wait before submitting new requests. Thank you for using and trusting QueueLess Registrar!",
           tone: "warning",
-          time: "Quota",
+          time: "24h Quota",
           actionView: "requests",
         });
       }
@@ -2281,6 +2281,17 @@ function QueueLessApp() {
                   label="Audit logs"
                   onClick={() =>
                     navigate("audit_logs")
+                  }
+                />
+
+                <NavButton
+                  active={
+                    view === "archive"
+                  }
+                  icon={<FileCheck2 />}
+                  label="Staff operations & archive"
+                  onClick={() =>
+                    navigate("archive")
                   }
                 />
               </>
@@ -4976,7 +4987,22 @@ function StudentProfileView({
       return false;
     }
     const cleanDigits = normalizePhone(editPhone);
-    if (cleanDigits && (cleanDigits.length !== 11 || !cleanDigits.startsWith("09"))) {
+    if (currentUser.role === "admin") {
+      if (!cleanDigits) {
+        setFlash({
+          tone: "error",
+          text: "Administrator contact phone number is required so staff can reach you for urgent overrides and inquiries.",
+        });
+        return false;
+      }
+      if (cleanDigits.length !== 11 || !cleanDigits.startsWith("09")) {
+        setFlash({
+          tone: "error",
+          text: "Please enter a valid 11-digit administrator phone number starting with 09 (required for staff escalations).",
+        });
+        return false;
+      }
+    } else if (cleanDigits && (cleanDigits.length !== 11 || !cleanDigits.startsWith("09"))) {
       setFlash({
         tone: "error",
         text: `Please enter a valid 11-digit mobile number starting with 09 (currently ${cleanDigits.length}/11 digits) or leave blank.`,
@@ -5524,21 +5550,39 @@ function StudentProfileView({
               </Field>
             )}
 
-            <Field label="Phone Number (Optional)">
+            <Field
+              label={
+                <div className="flex items-center justify-between w-full mb-1">
+                  <span>
+                    {currentUser.role === "admin"
+                      ? "Phone Number (Required for Staff Escalations & Emergency Overrides) *"
+                      : "Phone Number (Optional)"}
+                  </span>
+                  {currentUser.role === "admin" && (
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
+                      Required for Admin
+                    </span>
+                  )}
+                </div>
+              }
+            >
               <input
                 type="tel"
                 inputMode="numeric"
                 value={editPhone}
+                required={currentUser.role === "admin"}
                 onChange={(e) => {
                   setEditPhone(normalizePhone(e.target.value));
                 }}
-                placeholder="09XXXXXXXXX (Optional)"
-                className="field font-mono"
+                placeholder={currentUser.role === "admin" ? "09XXXXXXXXX (Required)" : "09XXXXXXXXX (Optional)"}
+                className={`field font-mono ${currentUser.role === "admin" && !editPhone.trim() ? "border-amber-500 ring-1 ring-amber-500/20" : ""}`}
                 maxLength={11}
               />
               <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                 <span>
-                  {currentUser.role === "staff"
+                  {currentUser.role === "admin"
+                    ? "Required: Staff will use this number to contact you for emergency queue overrides and escalations."
+                    : currentUser.role === "staff"
                     ? "Campus or personal contact number starting with 09 (optional)"
                     : "Enter valid 11-digit mobile number starting with 09 (optional)"}
                 </span>
@@ -8202,26 +8246,10 @@ function NewRequest({
     }
   }, [showConfirmModal]);
 
-  // Check how many document requests this user submitted today (max 2 per day)
+  // Check how many document requests this user submitted in the last rolling 24 hours (max 2 per 24 hours)
   const userRequestsToday = useMemo(() => {
     if (!existingRequests || !existingRequests.length) return 0;
-    const now = new Date();
-    const todayYear = now.getFullYear();
-    const todayMonth = now.getMonth();
-    const todayDate = now.getDate();
-
-    const isToday = (dateStr?: string) => {
-      if (!dateStr || typeof dateStr !== "string") return false;
-      const parsed = new Date(dateStr);
-      if (!isNaN(parsed.getTime())) {
-        return (
-          parsed.getFullYear() === todayYear &&
-          parsed.getMonth() === todayMonth &&
-          parsed.getDate() === todayDate
-        );
-      }
-      return false;
-    };
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
 
     const studentIdClean = (currentUser.studentId || "").trim().toLowerCase();
     const emailClean = (currentUser.email || "").trim().toLowerCase();
@@ -8233,7 +8261,10 @@ function NewRequest({
       const matchName = Boolean(nameClean && r.student && r.student.trim().toLowerCase() === nameClean);
       if (!matchId && !matchEmail && !matchName) return false;
 
-      return isToday(r.date) || isToday((r as any).createdAt);
+      const dateStr = (r as any).createdAt || r.date;
+      if (!dateStr) return false;
+      const parsed = new Date(dateStr).getTime();
+      return !isNaN(parsed) && parsed >= twentyFourHoursAgo;
     }).length;
   }, [existingRequests, currentUser]);
 
@@ -8769,11 +8800,12 @@ interface ClaimedRecordBackup {
 const getClaimedBackupRecords = (allRequests: RequestItem[]): ClaimedRecordBackup[] => {
   try {
     const raw = localStorage.getItem("queueless_claimed_backup");
-    const stored: ClaimedRecordBackup[] = raw ? JSON.parse(raw) : [];
+    let stored: ClaimedRecordBackup[] = raw ? JSON.parse(raw) : [];
 
-    // Sync any requests with status "Claimed" that might not be in the archive yet
+    // Clean ghost records so when user deletes requests, archive starts fresh at 0
     const claimedInRequests = allRequests.filter((r) => r.status === "Claimed");
-    let changed = false;
+    const claimedIds = new Set(claimedInRequests.map((r) => r.id));
+    stored = stored.filter((item) => claimedIds.has(item.id));
 
     claimedInRequests.forEach((req) => {
       if (!stored.some((item) => item.id === req.id)) {
@@ -8792,14 +8824,10 @@ const getClaimedBackupRecords = (allRequests: RequestItem[]): ClaimedRecordBacku
           copies: req.copies || 1,
           pickupDate: req.pickupDate,
         });
-        changed = true;
       }
     });
 
-    if (changed) {
-      localStorage.setItem("queueless_claimed_backup", JSON.stringify(stored));
-    }
-
+    localStorage.setItem("queueless_claimed_backup", JSON.stringify(stored));
     return stored;
   } catch {
     return [];
@@ -9155,7 +9183,7 @@ function StaffView({
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <Button
                 size="sm"
                 variant="outline"
@@ -9164,6 +9192,24 @@ function StaffView({
                 className="gap-1.5 text-xs h-9 cursor-pointer font-medium"
               >
                 <Printer className="size-3.5" /> Export (.CSV)
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  if (window.confirm("Are you sure you want to clear and reset all archived release slips?")) {
+                    localStorage.removeItem("queueless_claimed_backup");
+                    setBackupRecords([]);
+                    setFlash({
+                      tone: "success",
+                      text: "Archived release slips cleared. Ledger starts fresh at (0).",
+                    });
+                  }
+                }}
+                disabled={backupRecords.length === 0}
+                className="gap-1.5 text-xs h-9 cursor-pointer font-medium text-destructive hover:bg-destructive/10 hover:text-destructive border-border hover:border-destructive/30"
+              >
+                <Trash2 className="size-3.5" /> Clear Archive
               </Button>
               <Button
                 size="sm"
@@ -12452,7 +12498,7 @@ function EditReceiptModal({
   const [remarks, setRemarks] = useState<string>(request.remarks || "");
   const [pickupDate, setPickupDate] = useState<string>(request.pickupDate || "");
   const [copies, setCopies] = useState<number>(request.copies || 1);
-  const [document, setDocument] = useState<string>(request.document);
+  const [docName, setDocName] = useState<string>(request.document);
   const [purpose, setPurpose] = useState<string>(request.purpose);
   const [paymentStatus, setPaymentStatus] = useState<string>(
     request.paymentStatus || "Proceed to Registrar Staff"
@@ -12480,7 +12526,7 @@ function EditReceiptModal({
       remarks: remarks.trim(),
       pickupDate: pickupDate.trim(),
       copies: Number(copies),
-      document,
+      document: docName,
       purpose,
       paymentStatus: paymentStatus.trim(),
     });
@@ -12770,6 +12816,32 @@ function StaffContactAdminModal({
   const [validationError, setValidationError] = useState("");
   const [showHotline, setShowHotline] = useState(false);
 
+  const ADMIN_TARGETS = [
+    {
+      id: "registrar" as const,
+      title: "QueueLess Registrar Admin",
+      badge: "Registrar Operations",
+      phone: "+63 995-078-5660",
+      landline: "(075) 522-5635 loc. 101",
+      email: "registrar.admin@up.phinma.edu.ph",
+      handleScope: "Registrar Operations & Overrides",
+      handleDesc: "Counter queues, document releasing, student records & credentials.",
+    },
+    {
+      id: "master" as const,
+      title: "QueueLess Admin",
+      badge: "Lead Admin (Higher Handle)",
+      phone: "+63 917-889-2041",
+      landline: "(075) 522-5635 loc. 100",
+      email: "admin.queueless@up.phinma.edu.ph",
+      handleScope: "Higher Authority / System-Wide",
+      handleDesc: "Higher handle who manages all system controls, technical support & master overrides.",
+    },
+  ];
+
+  const [selectedAdminId, setSelectedAdminId] = useState<"registrar" | "master">("registrar");
+  const selectedAdmin = ADMIN_TARGETS.find((a) => a.id === selectedAdminId) || ADMIN_TARGETS[0];
+
   const ticketRef = useMemo(
     () => `TKT-${Math.floor(100000 + Math.random() * 900000)}`,
     []
@@ -12849,8 +12921,8 @@ function StaffContactAdminModal({
           actorRole: "staff",
           actorId: currentUser?.studentId || currentUser?.id || "STAFF",
           targetCategory: "staff",
-          action: `Staff Concern [${ticketRef}] [${priority.toUpperCase()}]: ${subject.trim()}`,
-          details: `[Category: ${category}] ${message.trim()}`,
+          action: `Staff Concern [${ticketRef}] [${priority.toUpperCase()}] to ${selectedAdmin.title}: ${subject.trim()}`,
+          details: `[Assigned To: ${selectedAdmin.title} | Required Contact Phone: ${selectedAdmin.phone}] [Category: ${category}] ${message.trim()}`,
           status: priority === "Urgent" ? "Warning" : "Success",
         }),
       });
@@ -12861,6 +12933,10 @@ function StaffContactAdminModal({
         const list = stored ? JSON.parse(stored) : [];
         list.unshift({
           id: ticketRef,
+          targetAdminId: selectedAdmin.id,
+          targetAdminTitle: selectedAdmin.title,
+          targetAdminPhone: selectedAdmin.phone,
+          targetAdminEmail: selectedAdmin.email,
           staffName: currentUser?.name || "Registrar Staff",
           staffEmail: currentUser?.email || "",
           staffId: currentUser?.studentId || currentUser?.id || "STAFF",
@@ -12878,13 +12954,13 @@ function StaffContactAdminModal({
 
       setFlash({
         tone: "success",
-        text: `Inquiry #${ticketRef} logged & dispatched to Administrator workspace. Admin notified.`,
+        text: `Inquiry #${ticketRef} dispatched to ${selectedAdmin.title}. Contact phone: ${selectedAdmin.phone}. Admin notified.`,
       });
       onClose();
     } catch {
       setFlash({
         tone: "success",
-        text: `Inquiry #${ticketRef} saved locally and queued for Administrator review.`,
+        text: `Inquiry #${ticketRef} saved locally for ${selectedAdmin.title}. Direct Phone: ${selectedAdmin.phone}.`,
       });
       onClose();
     } finally {
@@ -12930,6 +13006,61 @@ function StaffContactAdminModal({
 
         {/* Scrollable Content Body */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto mt-3 pr-1 space-y-3 text-xs">
+          {/* Select Which Admin to Contact */}
+          <div>
+            <label className="text-[11px] font-bold text-foreground block mb-1.5 flex items-center justify-between">
+              <span>Select Administrator to Contact *</span>
+              <span className="text-[10px] text-primary font-semibold">Phone Required & Displayed</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {ADMIN_TARGETS.map((adm) => {
+                const isSelected = selectedAdminId === adm.id;
+                return (
+                  <button
+                    key={adm.id}
+                    type="button"
+                    onClick={() => setSelectedAdminId(adm.id)}
+                    className={`text-left rounded-xl border p-2.5 transition cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40"
+                        : "border-border bg-muted/30 hover:bg-muted/60"
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className={`text-[10px] font-black px-1.5 py-0.2 rounded uppercase tracking-wider ${
+                          adm.id === "master"
+                            ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/20"
+                            : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20"
+                        }`}>
+                          {adm.badge}
+                        </span>
+                        {isSelected && (
+                          <span className="size-2 rounded-full bg-primary" />
+                        )}
+                      </div>
+                      <p className="font-bold text-foreground text-xs leading-snug">
+                        {adm.title}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                        {adm.handleDesc}
+                      </p>
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t border-border/60 flex flex-col gap-0.5 text-[10px]">
+                      <span className="text-muted-foreground font-medium flex items-center gap-1">
+                        <Phone className="size-2.5 text-primary" /> Mobile: <strong className="text-foreground font-bold">{adm.phone}</strong>
+                      </span>
+                      <span className="text-muted-foreground/80 flex items-center gap-1">
+                        <Mail className="size-2.5 text-primary" /> {adm.email}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Quick Helpful Topic Templates */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -14377,11 +14508,25 @@ function ManageRequests({
         throw new Error(result.message || "Failed to delete request.");
       }
 
-      setRequests(requests.filter((r) => r.id !== item.id));
+      const remaining = requests.filter((r) => r.id !== item.id);
+      let lineCounter = 1;
+      const resequenced = remaining.map((r) => {
+        if (r.status !== "Claimed") {
+          const nextItem = { ...r, lineNumber: lineCounter };
+          lineCounter++;
+          return nextItem;
+        }
+        return r;
+      });
+
+      setRequests(resequenced);
+      try {
+        localStorage.setItem("queueless_requests", JSON.stringify(resequenced));
+      } catch {}
       setDeletingReq(null);
       setFlash({
         tone: "success",
-        text: `Request ${item.id} has been permanently deleted from records.`,
+        text: `Request ${item.id} has been permanently deleted from records. Queue lines updated.`,
       });
     } catch (err) {
       console.error("Delete request error:", err);
@@ -14646,13 +14791,25 @@ function ManageRequests({
         ...payload,
       };
 
-      setRequests(
-        requests.map((r) => (r.id === reqId ? updatedItem : r))
-      );
-
+      let nextRequests = requests.map((r) => (r.id === reqId ? updatedItem : r));
       if (payload.status === "Claimed") {
+        let lineCounter = 1;
+        nextRequests = nextRequests.map((r) => {
+          if (r.id === reqId) return r; // Claimed record keeps its line number for official receipts
+          if (r.status !== "Claimed") {
+            const renumbered = { ...r, lineNumber: lineCounter };
+            lineCounter++;
+            return renumbered;
+          }
+          return r;
+        });
         archiveClaimedRecord(updatedItem, "Registrar Staff");
       }
+
+      setRequests(nextRequests);
+      try {
+        localStorage.setItem("queueless_requests", JSON.stringify(nextRequests));
+      } catch {}
 
       setPendingStatusChange(null);
       setFlash({
@@ -15433,6 +15590,436 @@ function ManageRequests({
   );
 }
 
+function AdminOperationsAndArchivePanel({
+  requests,
+  setFlash,
+  users = [],
+}: {
+  requests: RequestItem[];
+  setFlash: (f: Flash) => void;
+  users?: AccountUser[];
+}) {
+  const [tab, setTab] = useState<"claimed_vault" | "deleted_users" | "deleted_requests">("claimed_vault");
+  const [backupSearch, setBackupSearch] = useState("");
+  const [backupRecords, setBackupRecords] = useState<ClaimedRecordBackup[]>(() =>
+    getClaimedBackupRecords(requests)
+  );
+  const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
+
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [deletedSearch, setDeletedSearch] = useState("");
+
+  const fetchAuditLogs = async () => {
+    const token = localStorage.getItem("queueless_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/audit-logs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.logs) {
+        setAuditLogs(data.logs);
+      }
+    } catch (err) {
+      console.error("Fetch audit logs error in archive:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAuditLogs();
+    setBackupRecords(getClaimedBackupRecords(requests));
+  }, [requests]);
+
+  const handleClearArchive = () => {
+    if (window.confirm("Are you sure you want to clean and reset all archived release slips? This will reset the archive counter to 0.")) {
+      localStorage.removeItem("queueless_claimed_backup");
+      setBackupRecords([]);
+      setFlash({
+        tone: "success",
+        text: "Archived release slips cleared. Archive starts fresh at (0).",
+      });
+    }
+  };
+
+  const filteredBackup = backupRecords.filter((b) => {
+    const q = backupSearch.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      b.id.toLowerCase().includes(q) ||
+      b.student.toLowerCase().includes(q) ||
+      b.studentId.toLowerCase().includes(q) ||
+      b.document.toLowerCase().includes(q) ||
+      b.purpose.toLowerCase().includes(q)
+    );
+  });
+
+  // Filter audit logs for deleted users / accounts
+  const deletedUserLogs = auditLogs.filter((l) => {
+    const act = (l.action || "").toLowerCase();
+    const det = (l.details || "").toLowerCase();
+    return (
+      act.includes("delete") ||
+      act.includes("remove") ||
+      act.includes("reject") ||
+      det.includes("deleted user") ||
+      det.includes("removed account") ||
+      det.includes("application rejected")
+    ) && (act.includes("user") || act.includes("account") || det.includes("user") || det.includes("student"));
+  }).filter((l) => {
+    if (!deletedSearch.trim()) return true;
+    const q = deletedSearch.toLowerCase().trim();
+    return (
+      (l.actorName || "").toLowerCase().includes(q) ||
+      (l.action || "").toLowerCase().includes(q) ||
+      (l.details || "").toLowerCase().includes(q) ||
+      (l.actorId || "").toLowerCase().includes(q)
+    );
+  });
+
+  // Filter audit logs for deleted requests
+  const deletedRequestLogs = auditLogs.filter((l) => {
+    const act = (l.action || "").toLowerCase();
+    const det = (l.details || "").toLowerCase();
+    const cat = (l.targetCategory || "").toLowerCase();
+    return (
+      act.includes("deleted request") ||
+      det.includes("permanently removed from active queue") ||
+      (cat === "requests" && act.includes("delete"))
+    );
+  }).filter((l) => {
+    if (!deletedSearch.trim()) return true;
+    const q = deletedSearch.toLowerCase().trim();
+    return (
+      (l.actorName || "").toLowerCase().includes(q) ||
+      (l.action || "").toLowerCase().includes(q) ||
+      (l.details || "").toLowerCase().includes(q) ||
+      (l.requestNumber || "").toLowerCase().includes(q) ||
+      (l.actorId || "").toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="animate-rise space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <PageHeading
+          eyebrow="Administrative workspace"
+          title="Staff Operations & Archive"
+          text="Review, process, and permanently archive released student documents."
+        />
+
+        {/* Tab switchers */}
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-muted/40 p-1">
+          <Button
+            size="sm"
+            variant={tab === "claimed_vault" ? "default" : "ghost"}
+            onClick={() => setTab("claimed_vault")}
+            className="text-xs h-8 gap-1.5 cursor-pointer"
+          >
+            <FileCheck2 className="size-3.5" /> Claimed Vault
+            <span className="ml-1 rounded-full bg-primary/20 px-1.5 py-0.2 text-[10px] font-black">
+              {backupRecords.length}
+            </span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant={tab === "deleted_users" ? "default" : "ghost"}
+            onClick={() => setTab("deleted_users")}
+            className="text-xs h-8 gap-1.5 cursor-pointer"
+          >
+            <UsersRound className="size-3.5" /> Deleted Users Audit
+            <span className="ml-1 rounded-full bg-destructive/15 text-destructive px-1.5 py-0.2 text-[10px] font-bold">
+              {deletedUserLogs.length}
+            </span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant={tab === "deleted_requests" ? "default" : "ghost"}
+            onClick={() => setTab("deleted_requests")}
+            className="text-xs h-8 gap-1.5 cursor-pointer"
+          >
+            <Trash2 className="size-3.5" /> Deleted Requests Audit
+            <span className="ml-1 rounded-full bg-destructive/15 text-destructive px-1.5 py-0.2 text-[10px] font-bold">
+              {deletedRequestLogs.length}
+            </span>
+          </Button>
+        </div>
+      </div>
+
+      {tab === "claimed_vault" && (
+        <div className="space-y-4">
+          {/* Search & Actions Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search archived release slips by reference ID, student name, or document..."
+                value={backupSearch}
+                onChange={(e) => setBackupSearch(e.target.value)}
+                className="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-8 text-xs font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground"
+              />
+              {backupSearch && (
+                <button
+                  type="button"
+                  onClick={() => setBackupSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => exportClaimedBackupCsv(filteredBackup)}
+                disabled={filteredBackup.length === 0}
+                className="gap-1.5 text-xs h-9 cursor-pointer font-medium"
+              >
+                <Printer className="size-3.5" /> Export (.CSV)
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleClearArchive}
+                disabled={backupRecords.length === 0}
+                className="gap-1.5 text-xs h-9 cursor-pointer font-medium text-destructive hover:bg-destructive/10 hover:text-destructive border-border hover:border-destructive/30"
+              >
+                <Trash2 className="size-3.5" /> Clear Archive Slips
+              </Button>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => {
+                  setBackupRecords(getClaimedBackupRecords(requests));
+                  setFlash({
+                    tone: "success",
+                    text: "Claimed documents ledger synchronized successfully.",
+                  });
+                }}
+                className="gap-1.5 text-xs h-9 cursor-pointer font-medium shadow-xs"
+              >
+                <CheckCircle2 className="size-3.5" /> Sync Ledger
+              </Button>
+            </div>
+          </div>
+
+          {/* Claimed Documents Table / Cards */}
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            <div className="border-b border-border bg-muted/40 px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Archived Release Slips ({filteredBackup.length})
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Click any record to inspect or print official release receipt
+              </span>
+            </div>
+
+            {filteredBackup.length > 0 ? (
+              <div className="max-h-[380px] overflow-y-auto scrollbar-thin divide-y divide-border">
+                {filteredBackup.map((rec) => {
+                  const fullReq = requests.find((r) => r.id === rec.id) || {
+                    id: rec.id,
+                    student: rec.student,
+                    studentId: rec.studentId,
+                    document: rec.document,
+                    purpose: rec.purpose,
+                    remarks: rec.remarks || "",
+                    date: rec.date,
+                    status: "Claimed" as Status,
+                    lineNumber: rec.lineNumber || 1,
+                    priority: rec.priority || "Regular",
+                    copies: rec.copies || 1,
+                    pickupDate: rec.pickupDate || rec.claimedAt,
+                  };
+
+                  return (
+                    <div
+                      key={rec.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 hover:bg-muted/30 transition"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 font-mono font-bold text-xs">
+                          ✓
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-bold text-foreground">
+                              {rec.id}
+                            </span>
+                            <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                              Claimed & Released
+                            </span>
+                          </div>
+                          <p className="mt-1 font-semibold text-sm text-foreground">
+                            {rec.student}{" "}
+                            <span className="text-xs text-muted-foreground font-mono">
+                              ({rec.studentId})
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {rec.document} · {rec.copies || 1} copy · {rec.purpose}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">
+                            Released by: <strong className="text-foreground">{rec.releasedBy || "Registrar Officer"}</strong> on {rec.claimedAt}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedReceipt(fullReq)}
+                          className="h-8 text-xs cursor-pointer gap-1.5"
+                        >
+                          <Receipt className="size-3.5" /> View Receipt
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">
+                <FileCheck2 className="mx-auto size-10 opacity-40 mb-2" />
+                <p className="font-medium text-foreground">No archived release slips</p>
+                <p className="text-xs mt-1">
+                  Completed student requests marked as "Claimed" will be safely logged and preserved here.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "deleted_users" && (
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Filter deleted users by name, email, or actor..."
+              value={deletedSearch}
+              onChange={(e) => setDeletedSearch(e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-8 text-xs font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground"
+            />
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            <div className="border-b border-border bg-muted/40 px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Deleted Users & Rejected Applications ({deletedUserLogs.length})
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Real-time security audit trail of deleted/rejected accounts
+              </span>
+            </div>
+
+            {deletedUserLogs.length > 0 ? (
+              <div className="max-h-[380px] overflow-y-auto scrollbar-thin divide-y divide-border">
+                {deletedUserLogs.map((log) => (
+                  <div key={log._id} className="p-4 hover:bg-muted/30 transition text-xs space-y-1.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-destructive/15 border border-destructive/30 px-2 py-0.5 text-[10px] font-bold text-destructive">
+                          Account Removed
+                        </span>
+                        <strong className="text-foreground">{log.action}</strong>
+                      </div>
+                      <span className="text-muted-foreground text-[10px] font-mono">
+                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : "Recent"}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed">{log.details}</p>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-2 pt-1 border-t border-border/40">
+                      <span>Action by: <strong className="text-foreground">{log.actorName}</strong> ({log.actorRole})</span>
+                      {log.actorEmail && <span>• {log.actorEmail}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">
+                <UsersRound className="mx-auto size-10 opacity-40 mb-2" />
+                <p className="font-medium text-foreground">No deleted users recorded</p>
+                <p className="text-xs mt-1">Audit log will record whenever an account is deleted or rejected.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "deleted_requests" && (
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Filter deleted requests by ticket #, document, student, or staff..."
+              value={deletedSearch}
+              onChange={(e) => setDeletedSearch(e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-8 text-xs font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground"
+            />
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+            <div className="border-b border-border bg-muted/40 px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Deleted Requests Audit ({deletedRequestLogs.length})
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Permanent audit trail of deleted document requests
+              </span>
+            </div>
+
+            {deletedRequestLogs.length > 0 ? (
+              <div className="max-h-[380px] overflow-y-auto scrollbar-thin divide-y divide-border">
+                {deletedRequestLogs.map((log) => (
+                  <div key={log._id} className="p-4 hover:bg-muted/30 transition text-xs space-y-1.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-400">
+                          Request Deleted
+                        </span>
+                        <strong className="text-foreground">{log.action}</strong>
+                      </div>
+                      <span className="text-muted-foreground text-[10px] font-mono">
+                        {log.createdAt ? new Date(log.createdAt).toLocaleString() : "Recent"}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed">{log.details}</p>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-2 pt-1 border-t border-border/40">
+                      <span>Removed by: <strong className="text-foreground">{log.actorName}</strong> ({log.actorRole})</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-muted-foreground">
+                <Trash2 className="mx-auto size-10 opacity-40 mb-2" />
+                <p className="font-medium text-foreground">No deleted requests recorded</p>
+                <p className="text-xs mt-1">Audit log will record whenever a document request is removed from the active queue.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {selectedReceipt && (
+        <DigitalReceiptModal
+          request={selectedReceipt}
+          onClose={() => setSelectedReceipt(null)}
+          isStaff={false}
+        />
+      )}
+    </div>
+  );
+}
+
 function AdminView({
   view,
   navigate,
@@ -15560,6 +16147,16 @@ function AdminView({
       <AdminOfficialRecordsPanel
         setFlash={setFlash}
         onUsersUpdated={onUsersUpdated}
+        users={users}
+      />
+    );
+  }
+
+  if (view === "archive") {
+    return (
+      <AdminOperationsAndArchivePanel
+        requests={requests}
+        setFlash={setFlash}
         users={users}
       />
     );

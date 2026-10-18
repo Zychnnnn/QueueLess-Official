@@ -28,35 +28,37 @@ export const createRequest = async (req, res) => {
       return res.status(409).json({ message: "Request number already exists." });
     }
 
-    // Limit to 2 document requests per day per user
+    // Limit to 2 document requests per rolling 24 hours per user
     if (user.role === "student" || user.role === "guest") {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date();
-      endOfDay.setHours(23, 59, 59, 999);
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-      const todayRequestsCount = await Request.countDocuments({
+      const recentRequests = await Request.find({
         $or: [
           ...(user.studentId ? [{ studentId: user.studentId }] : []),
           ...(user.email ? [{ email: user.email }] : []),
         ],
-        createdAt: { $gte: startOfDay, $lte: endOfDay },
-      });
+        createdAt: { $gte: twentyFourHoursAgo },
+      }).sort({ createdAt: 1 });
 
-      if (todayRequestsCount >= 2) {
+      if (recentRequests.length >= 2) {
+        const oldestReq = recentRequests[0];
+        const oldestTime = oldestReq.createdAt ? new Date(oldestReq.createdAt).getTime() : Date.now();
+        const resetAt = new Date(oldestTime + 24 * 60 * 60 * 1000);
+        const diffMs = Math.max(0, resetAt.getTime() - Date.now());
+        const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60));
+        const minsLeft = Math.ceil((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        const timeMsg = hoursLeft > 0 ? `${hoursLeft}h ${minsLeft}m` : `${minsLeft} minutes`;
+
         return res.status(400).json({
-          message: "Daily request limit reached (2/2). Please wait until tomorrow to submit new document requests. Thank you for using and trusting QueueLess Registrar!",
+          message: `Daily request limit reached (2/2). Quota resets in ${timeMsg} (24-hour cycle). Please wait before submitting new document requests. Thank you for using and trusting QueueLess Registrar!`,
         });
       }
     }
 
     let lineNumber = req.body.lineNumber;
     if (!lineNumber) {
-      const highestActiveRequest = await Request.findOne({ status: { $ne: "Claimed" } }).sort({ lineNumber: -1 });
-      lineNumber =
-        highestActiveRequest && typeof highestActiveRequest.lineNumber === "number"
-          ? highestActiveRequest.lineNumber + 1
-          : 1;
+      const activeCount = await Request.countDocuments({ status: { $ne: "Claimed" } });
+      lineNumber = activeCount + 1;
     }
 
     const defaultPriority =
@@ -426,6 +428,26 @@ export const updateRequest = async (req, res) => {
       status: "Success",
     });
 
+    // Re-sequence remaining active queue lines so line numbers flow continuously without gaps
+    if (request.status === "Claimed") {
+      try {
+        const remainingActive = await Request.find({
+          status: { $ne: "Claimed" },
+          _id: { $ne: request._id },
+        }).sort({ lineNumber: 1, createdAt: 1 });
+
+        for (let i = 0; i < remainingActive.length; i++) {
+          const newLine = i + 1;
+          if (remainingActive[i].lineNumber !== newLine) {
+            remainingActive[i].lineNumber = newLine;
+            await remainingActive[i].save();
+          }
+        }
+      } catch (renumberErr) {
+        console.error("Queue renumbering error on claim:", renumberErr);
+      }
+    }
+
     return res.status(200).json({
       message: "Request receipt updated successfully.",
       request,
@@ -547,6 +569,23 @@ export const deleteRequest = async (req, res) => {
       requestNumber: request.requestNumber || requestNumber,
       status: "Warning",
     });
+
+    // Re-sequence remaining active queue lines so line numbers flow continuously without gaps
+    try {
+      const remainingActive = await Request.find({
+        status: { $ne: "Claimed" }
+      }).sort({ lineNumber: 1, createdAt: 1 });
+
+      for (let i = 0; i < remainingActive.length; i++) {
+        const newLine = i + 1;
+        if (remainingActive[i].lineNumber !== newLine) {
+          remainingActive[i].lineNumber = newLine;
+          await remainingActive[i].save();
+        }
+      }
+    } catch (renumberErr) {
+      console.error("Queue renumbering after delete error:", renumberErr);
+    }
 
     return res.status(200).json({
       message: `Request #${requestNumber} deleted successfully.`,
