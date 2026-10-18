@@ -24,6 +24,18 @@ export const isSchoolCredential = (email = "", studentId = "") => {
   return Boolean(isSchoolEmail || isOfficialStudentId);
 };
 
+export const isGuestAccount = (u) => {
+  if (!u) return false;
+  if (u.role === "admin" || u.role === "staff") return false;
+  if (u.role === "guest") return true;
+  const email = (u.email || "").toLowerCase().trim();
+  if (email.endsWith("@phinmaed.com") || email.includes("phinmaed") || email.endsWith(".edu.ph")) {
+    return false;
+  }
+  if (email.endsWith("@gmail.com")) return true;
+  return Boolean(u.studentId && String(u.studentId).startsWith("GUEST"));
+};
+
 export const isStrongPassword = (pwd = "") => {
   if (typeof pwd !== "string" || pwd.length < 8) return false;
   if (/\s/.test(pwd)) return false; // Reject passwords containing spaces
@@ -274,6 +286,17 @@ export const registerGuest = async (req, res) => {
       }
     );
 
+    recordAuditLog({
+      actorName: user.name,
+      actorEmail: user.email,
+      actorRole: "guest",
+      actorId: user.studentId || String(user._id),
+      targetCategory: "guest",
+      action: "Guest Registration",
+      details: `New guest account registered for ${user.name} (${user.studentId}, ${user.email}).`,
+      status: "Success",
+    });
+
     return res.status(201).json({
       message: "Guest account created successfully.",
       token,
@@ -392,15 +415,16 @@ export const login = async (req, res) => {
     }
     await user.save();
 
+    const isGuest = isGuestAccount(user);
     recordAuditLog({
       actorName: user.name,
       actorEmail: user.email,
-      actorRole: user.role,
+      actorRole: isGuest ? "guest" : user.role,
       actorId: user.studentId || String(user._id),
       actorPicture: user.picture || "",
-      targetCategory: user.role === "staff" ? "staff" : user.role === "guest" ? "guest" : (user.isPriority || user.userType === "priority") ? "priority" : "student",
-      action: `${user.role === "staff" ? "Staff" : user.role === "admin" ? "Admin" : user.role === "guest" ? "Guest" : "Student"} Portal Sign In`,
-      details: `${user.name} signed into QueueLess portal.`,
+      targetCategory: user.role === "staff" ? "staff" : isGuest ? "guest" : (user.isPriority || user.userType === "priority") ? "priority" : "student",
+      action: `${user.role === "staff" ? "Staff" : user.role === "admin" ? "Admin" : isGuest ? "Guest" : "Student"} Portal Sign In`,
+      details: `${isGuest ? "Guest " : ""}${user.name} signed into QueueLess portal.`,
       status: "Success",
     });
 
@@ -1028,15 +1052,16 @@ export const googleLogin = async (req, res) => {
       details: `Your account was accessed via Google authentication on ${new Date().toLocaleString()}. You can continue using QueueLess system safely.`,
     }).catch((err) => console.error("Google sign-in security email error:", err));
 
+    const isGuest = isGuestAccount(user);
     recordAuditLog({
       actorName: user.name,
       actorEmail: user.email,
-      actorRole: user.role,
+      actorRole: isGuest ? "guest" : user.role,
       actorId: user.studentId || String(user._id),
       actorPicture: user.picture || "",
-      targetCategory: user.role === "staff" ? "staff" : user.role === "guest" ? "guest" : (user.isPriority || user.userType === "priority") ? "priority" : "student",
-      action: "Google OAuth Sign In",
-      details: `${user.name} signed in via Google account (${user.email}).`,
+      targetCategory: user.role === "staff" ? "staff" : isGuest ? "guest" : (user.isPriority || user.userType === "priority") ? "priority" : "student",
+      action: isGuest ? "Guest Google Sign In" : "Google OAuth Sign In",
+      details: `${isGuest ? "Guest " : ""}${user.name} signed in via Google account (${user.email}).`,
       status: "Success",
     });
 
@@ -1423,15 +1448,16 @@ export const updateProfile = async (req, res) => {
       }).catch((err) => console.error("Email change security email error:", err));
     }
 
+    const isGuest = isGuestAccount(user);
     recordAuditLog({
       actorName: user.name,
       actorEmail: user.email,
-      actorRole: user.role,
+      actorRole: isGuest ? "guest" : user.role,
       actorId: user.studentId || String(user._id),
       actorPicture: user.picture || "",
-      targetCategory: user.role === "staff" ? "staff" : user.role === "guest" ? "guest" : (user.isPriority || user.userType === "priority") ? "priority" : "student",
-      action: user.role === "staff" ? "Staff Profile Updated" : user.role === "guest" ? "Guest Profile Updated" : "Student Profile Updated",
-      details: `${user.name} updated account details${emailChanged ? ` (Email changed from ${oldEmail} to ${newEmail})` : ""}.`,
+      targetCategory: user.role === "staff" ? "staff" : isGuest ? "guest" : (user.isPriority || user.userType === "priority") ? "priority" : "student",
+      action: user.role === "staff" ? "Staff Profile Updated" : isGuest ? "Guest Profile Updated" : "Student Profile Updated",
+      details: `${isGuest ? "Guest " : ""}${user.name} updated account details${emailChanged ? ` (Email changed from ${oldEmail} to ${newEmail})` : ""}.`,
       status: "Success",
     });
 

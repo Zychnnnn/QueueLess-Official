@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Request from "../models/Request.js";
 import User from "../models/User.js";
 import { sendRequestUpdateNotification } from "../services/emailService.js";
@@ -44,7 +45,7 @@ export const createRequest = async (req, res) => {
 
       if (todayRequestsCount >= 2) {
         return res.status(400).json({
-          message: "Daily limit reached. You can only request up to 2 documents per day. Please return tomorrow to submit another request.",
+          message: "Daily request limit reached (2/2). Please wait until tomorrow to submit new document requests. Thank you for using and trusting QueueLess Registrar!",
         });
       }
     }
@@ -123,14 +124,19 @@ export const createRequest = async (req, res) => {
       },
     });
 
+    const isGuest =
+      user.role === "guest" ||
+      (user.email && user.email.toLowerCase().endsWith("@gmail.com")) ||
+      (user.studentId && String(user.studentId).startsWith("GUEST"));
+
     recordAuditLog({
       actorName: user.name,
       actorEmail: user.email,
-      actorRole: user.role,
+      actorRole: isGuest ? "guest" : user.role,
       actorId: user.studentId || String(user._id),
-      targetCategory: user.isPriority || user.userType === "priority" ? "priority" : user.role === "guest" ? "guest" : "student",
-      action: `Submitted Document Request #${requestNumber}`,
-      details: `Document: ${document} (${req.body.copies || 1} copies). Purpose: ${purpose}. Priority: ${request.priority}.`,
+      targetCategory: isGuest ? "guest" : (user.isPriority || user.userType === "priority" ? "priority" : "student"),
+      action: isGuest ? `Guest Submitted Request #${requestNumber}` : `Submitted Document Request #${requestNumber}`,
+      details: `${isGuest ? "Guest " : ""}${user.name} submitted request for ${document} (${req.body.copies || 1} copies). Purpose: ${purpose}. Priority: ${request.priority}.`,
       requestNumber,
     });
 
@@ -381,8 +387,16 @@ export const updateRequest = async (req, res) => {
     if (req.body.assignedStaffId !== undefined) updateFields.assignedStaffId = req.body.assignedStaffId;
     if (req.body.assignedStaffName !== undefined) updateFields.assignedStaffName = req.body.assignedStaffName;
 
+    const query = {
+      $or: [
+        { requestNumber },
+        { requestNumber: new RegExp(`^${requestNumber}$`, "i") },
+        ...(mongoose.Types.ObjectId.isValid(requestNumber) ? [{ _id: requestNumber }] : [])
+      ]
+    };
+
     const request = await Request.findOneAndUpdate(
-      { requestNumber },
+      query,
       updateFields,
       { new: true }
     );
@@ -406,9 +420,9 @@ export const updateRequest = async (req, res) => {
       actorId: staffUser?.studentId || staffUser?._id || req.body.assignedStaffId || String(req.user.id),
       actorPicture: staffUser?.picture || "",
       targetCategory: "staff",
-      action: `Modified Ticket #${requestNumber}`,
+      action: `Modified Ticket #${request.requestNumber || requestNumber}`,
       details: `Updated request for student ${request.student} (${request.document}). Status: ${request.status}. Remarks: ${request.remarks || "No remarks"}.`,
-      requestNumber,
+      requestNumber: request.requestNumber || requestNumber,
       status: "Success",
     });
 
@@ -425,7 +439,14 @@ export const updateRequest = async (req, res) => {
 export const getRequestByNumber = async (req, res) => {
   try {
     const { requestNumber } = req.params;
-    const request = await Request.findOne({ requestNumber });
+    const query = {
+      $or: [
+        { requestNumber },
+        { requestNumber: new RegExp(`^${requestNumber}$`, "i") },
+        ...(mongoose.Types.ObjectId.isValid(requestNumber) ? [{ _id: requestNumber }] : [])
+      ]
+    };
+    const request = await Request.findOne(query);
     if (!request) {
       return res.status(404).json({ message: "Request not found." });
     }
@@ -501,12 +522,19 @@ export const rateRequest = async (req, res) => {
 export const deleteRequest = async (req, res) => {
   try {
     const { requestNumber } = req.params;
-    const request = await Request.findOne({ requestNumber });
+    const query = {
+      $or: [
+        { requestNumber },
+        { requestNumber: new RegExp(`^${requestNumber}$`, "i") },
+        ...(mongoose.Types.ObjectId.isValid(requestNumber) ? [{ _id: requestNumber }] : [])
+      ]
+    };
+    const request = await Request.findOne(query);
     if (!request) {
       return res.status(404).json({ message: "Request not found." });
     }
 
-    await Request.deleteOne({ requestNumber });
+    await Request.deleteOne({ _id: request._id });
 
     recordAuditLog({
       actorName: req.user.name || "Registrar Staff",
@@ -514,9 +542,9 @@ export const deleteRequest = async (req, res) => {
       actorRole: req.user.role || "staff",
       actorId: req.user.studentId || String(req.user.id),
       targetCategory: "requests",
-      action: `Deleted Request #${requestNumber}`,
+      action: `Deleted Request #${request.requestNumber || requestNumber}`,
       details: `Request for "${request.document}" (Student: ${request.student}, ID: ${request.studentId}) was permanently removed from active queue by ${req.user.name}.`,
-      requestNumber,
+      requestNumber: request.requestNumber || requestNumber,
       status: "Warning",
     });
 

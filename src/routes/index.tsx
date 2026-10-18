@@ -642,9 +642,24 @@ function QueueLessApp() {
     }
   });
 
+  const [deletedNotificationIds, setDeletedNotificationIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("queueless_deleted_notifications");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [notificationUndoAction, setNotificationUndoAction] = useState<{
+    type: "archive" | "delete";
+    id: string;
+    title: string;
+  } | null>(null);
+
   const [notificationTab, setNotificationTab] = useState<"inbox" | "archived">("inbox");
 
-  const archiveNotification = (id: string, e?: React.MouseEvent) => {
+  const archiveNotification = (id: string, title?: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setArchivedNotificationIds((prev) => {
       if (prev.includes(id)) return prev;
@@ -656,6 +671,9 @@ function QueueLessApp() {
       }
       return next;
     });
+    if (title) {
+      setNotificationUndoAction({ type: "archive", id, title });
+    }
   };
 
   const unarchiveNotification = (id: string, e?: React.MouseEvent) => {
@@ -669,6 +687,46 @@ function QueueLessApp() {
       }
       return next;
     });
+  };
+
+  const deleteNotification = (id: string, title?: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setDeletedNotificationIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      try {
+        localStorage.setItem("queueless_deleted_notifications", JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+    if (title) {
+      setNotificationUndoAction({ type: "delete", id, title });
+    }
+  };
+
+  const handleUndoNotificationAction = () => {
+    if (!notificationUndoAction) return;
+    const { type, id } = notificationUndoAction;
+    if (type === "archive") {
+      setArchivedNotificationIds((prev) => {
+        const next = prev.filter((item) => item !== id);
+        try {
+          localStorage.setItem("queueless_archived_notifications", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    } else if (type === "delete") {
+      setDeletedNotificationIds((prev) => {
+        const next = prev.filter((item) => item !== id);
+        try {
+          localStorage.setItem("queueless_deleted_notifications", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    }
+    setNotificationUndoAction(null);
   };
 
   const markNotificationAsRead = (id: string) => {
@@ -1139,6 +1197,30 @@ function QueueLessApp() {
         }
       });
 
+      // Check daily request quota for student / guest
+      const todayStr = new Date().toDateString();
+      const userRequestsToday = requests.filter((r) => {
+        if (!r.date) return false;
+        const matchesUser =
+          (currentUser.studentId && r.studentId === currentUser.studentId) ||
+          (currentUser.email && r.student && r.student.toLowerCase() === (currentUser.name || "").toLowerCase());
+        const isToday =
+          new Date(r.date).toDateString() === todayStr ||
+          Boolean((r as any).createdAt && new Date((r as any).createdAt).toDateString() === todayStr);
+        return matchesUser && isToday;
+      }).length;
+
+      if (userRequestsToday >= 2) {
+        list.unshift({
+          id: `quota-reached-${new Date().toISOString().split("T")[0]}`,
+          title: "Daily Request Limit Reached (2/2)",
+          text: "You have reached your daily quota of 2 document requests for today. Please wait until tomorrow to submit new document requests. Thank you for using and trusting QueueLess Registrar!",
+          tone: "warning",
+          time: "Quota",
+          actionView: "requests",
+        });
+      }
+
       if (currentUser.userType === "priority" || currentUser.isPriority) {
         list.unshift({
           id: "student-priority-banner",
@@ -1368,13 +1450,17 @@ function QueueLessApp() {
     return [];
   }, [requests, currentUser, adminUsers]);
 
+  const visibleNotifications = useMemo(() => {
+    return notifications.filter((n) => !deletedNotificationIds.includes(n.id));
+  }, [notifications, deletedNotificationIds]);
+
   const activeNotifications = useMemo(() => {
-    return notifications.filter((n) => !archivedNotificationIds.includes(n.id));
-  }, [notifications, archivedNotificationIds]);
+    return visibleNotifications.filter((n) => !archivedNotificationIds.includes(n.id));
+  }, [visibleNotifications, archivedNotificationIds]);
 
   const archivedNotifications = useMemo(() => {
-    return notifications.filter((n) => archivedNotificationIds.includes(n.id));
-  }, [notifications, archivedNotificationIds]);
+    return visibleNotifications.filter((n) => archivedNotificationIds.includes(n.id));
+  }, [visibleNotifications, archivedNotificationIds]);
 
   const unreadCount = useMemo(() => {
     return activeNotifications.filter((n) => !readNotificationIds.includes(n.id))
@@ -1683,17 +1769,29 @@ function QueueLessApp() {
               <Calendar className="size-5" />
             </Button>
 
+            {signedIn && role === "staff" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Contact Admin"
+                title="Contact System Administrator for assistance & overrides"
+                onClick={() => setShowStaffContactModal(true)}
+                className="relative cursor-pointer text-muted-foreground hover:text-foreground"
+              >
+                <Mail className="size-5" />
+              </Button>
+            )}
+
             {signedIn && (role === "student" || role === "guest") && (
               <Button
                 variant="ghost"
-                size="sm"
-                className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:bg-primary/10 cursor-pointer h-9 px-3 rounded-full border border-primary/20"
+                size="icon"
                 aria-label="Campus Registrar Helper"
-                title="Campus Registrar Helper - Ask questions about registrar services and facilities"
+                title="Campus Registrar Helper"
                 onClick={() => setShowAiHelper(true)}
+                className="relative cursor-pointer text-muted-foreground hover:text-foreground"
               >
-                <Bot className="size-4" />
-                <span>Registrar AI</span>
+                <Bot className="size-5" />
               </Button>
             )}
 
@@ -1814,6 +1912,22 @@ function QueueLessApp() {
                     </div>
 
                     <div className="mt-3 max-h-[380px] overflow-y-auto space-y-2.5 pr-0.5">
+                      {notificationUndoAction && (
+                        <div className="flex items-center justify-between gap-2 rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs">
+                          <span className="truncate text-foreground">
+                            {notificationUndoAction.type === "archive" ? "Archived: " : "Deleted: "}
+                            <strong className="font-semibold">{notificationUndoAction.title}</strong>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleUndoNotificationAction}
+                            className="font-bold text-primary hover:underline cursor-pointer shrink-0"
+                          >
+                            Undo
+                          </button>
+                        </div>
+                      )}
+
                       {notificationTab === "inbox" ? (
                         activeNotifications.length > 0 ? (
                           activeNotifications.map((notification) => (
@@ -1826,7 +1940,13 @@ function QueueLessApp() {
                               isUnread={
                                 !readNotificationIds.includes(notification.id)
                               }
-                              onArchive={() => archiveNotification(notification.id)}
+                              onArchive={(e) => archiveNotification(notification.id, notification.title, e)}
+                              onDelete={(e) => deleteNotification(notification.id, notification.title, e)}
+                              onView={() => {
+                                markNotificationAsRead(notification.id);
+                                setSelectedNotificationModal(notification);
+                                setNotificationsOpen(false);
+                              }}
                               isArchived={false}
                               onClick={() => {
                                 markNotificationAsRead(notification.id);
@@ -1855,7 +1975,12 @@ function QueueLessApp() {
                             tone={notification.tone}
                             time={notification.time}
                             isUnread={false}
-                            onArchive={() => unarchiveNotification(notification.id)}
+                            onArchive={(e) => unarchiveNotification(notification.id, e)}
+                            onDelete={(e) => deleteNotification(notification.id, notification.title, e)}
+                            onView={() => {
+                              setSelectedNotificationModal(notification);
+                              setNotificationsOpen(false);
+                            }}
                             isArchived={true}
                             onClick={() => {
                               setSelectedNotificationModal(notification);
@@ -2084,13 +2209,6 @@ function QueueLessApp() {
                         navigate("personal_details")
                       }
                     />
-
-                    <NavButton
-                      active={false}
-                      icon={<Bot className="size-4" />}
-                      label="Registrar AI Helper"
-                      onClick={() => setShowAiHelper(true)}
-                    />
                   </>
                 )}
               </>
@@ -2172,23 +2290,7 @@ function QueueLessApp() {
           </div>
 
           <div className="mt-auto shrink-0 border-t border-border pt-4">
-            {role === "staff" ? (
-              <div className="mb-4 rounded-md bg-primary/10 border border-primary/20 p-3">
-                <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <ShieldCheck className="size-3.5 text-primary" /> Need Admin Assistance?
-                </p>
-                <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-                  Reach out to the system admin for overrides & technical support.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowStaffContactModal(true)}
-                  className="mt-2.5 w-full rounded bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground hover:bg-primary/90 transition shadow-xs flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <Mail className="size-3" /> Contact Admin
-                </button>
-              </div>
-            ) : (role === "student" || role === "guest") ? (
+            {(role === "student" || role === "guest") ? (
               <div className="mb-4 rounded-md bg-muted p-3">
                 <p className="text-xs font-bold text-foreground">Need help?</p>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -2409,13 +2511,25 @@ function QueueLessApp() {
                     variant="outline"
                     className="h-8 text-xs cursor-pointer gap-1.5"
                     onClick={() => {
-                      archiveNotification(selectedNotificationModal.id);
+                      archiveNotification(selectedNotificationModal.id, selectedNotificationModal.title);
                       setSelectedNotificationModal(null);
                     }}
                   >
                     <Archive className="size-3.5" /> Archive Notification
                   </Button>
                 )}
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs cursor-pointer gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive border-border hover:border-destructive/30"
+                  onClick={() => {
+                    deleteNotification(selectedNotificationModal.id, selectedNotificationModal.title);
+                    setSelectedNotificationModal(null);
+                  }}
+                >
+                  <Trash2 className="size-3.5" /> Delete
+                </Button>
               </div>
 
               <div className="flex items-center gap-2">
@@ -12355,7 +12469,7 @@ function EditReceiptModal({
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    setConfirming(true);
+    handleConfirmSave();
   };
 
   const handleConfirmSave = () => {
@@ -14572,19 +14686,37 @@ function ManageRequests({
   }) => {
     if (!editingReceipt) return;
 
-    const token = localStorage.getItem("queueless_token");
-    if (!token) {
-      setFlash({
-        tone: "error",
-        text: "Your session has expired. Please sign in again.",
-      });
-      return;
+    const reqId = editingReceipt.id;
+    const updatedItem: RequestItem = {
+      ...editingReceipt,
+      ...updated,
+    };
+
+    // 1. Immediately update state and localStorage for instant responsive UI
+    const nextRequests = requests.map((r) => (r.id === reqId ? updatedItem : r));
+    setRequests(nextRequests);
+    try {
+      localStorage.setItem("queueless_requests", JSON.stringify(nextRequests));
+    } catch {}
+
+    if (updated.status === "Claimed") {
+      archiveClaimedRecord(updatedItem, "Registrar Staff");
     }
+
+    setEditingReceipt(null);
+    setFlash({
+      tone: "success",
+      text: `Receipt for ${reqId} successfully updated (Line #${updated.lineNumber}).`,
+    });
+
+    // 2. Sync with backend in background
+    const token = localStorage.getItem("queueless_token");
+    if (!token) return;
 
     try {
       setSavingEdit(true);
-      const response = await fetch(
-        `${API_URL}/api/requests/${encodeURIComponent(editingReceipt.id)}`,
+      await fetch(
+        `${API_URL}/api/requests/${encodeURIComponent(reqId)}`,
         {
           method: "PATCH",
           headers: {
@@ -14594,40 +14726,8 @@ function ManageRequests({
           body: JSON.stringify(updated),
         }
       );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to save receipt changes.");
-      }
-
-      const updatedItem: RequestItem = {
-        ...editingReceipt,
-        ...updated,
-      };
-
-      setRequests(
-        requests.map((r) => (r.id === editingReceipt.id ? updatedItem : r))
-      );
-
-      if (updated.status === "Claimed") {
-        archiveClaimedRecord(updatedItem, "Registrar Staff");
-      }
-
-      setEditingReceipt(null);
-      setFlash({
-        tone: "success",
-        text: `Receipt for ${editingReceipt.id} successfully updated (Line #${updated.lineNumber}).`,
-      });
     } catch (err) {
-      console.error("Save receipt error:", err);
-      setFlash({
-        tone: "error",
-        text:
-          err instanceof Error
-            ? err.message
-            : "Failed to update request receipt.",
-      });
+      console.error("Save receipt sync error:", err);
     } finally {
       setSavingEdit(false);
     }
@@ -15070,8 +15170,11 @@ function ManageRequests({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditingReceipt(r)}
-                        className="h-8 w-8 p-0 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingReceipt(r);
+                        }}
+                        className="h-8 w-8 p-0 cursor-pointer text-foreground hover:text-primary hover:border-primary/40"
                         title="Edit Receipt & Line"
                       >
                         <Edit3 className="size-3.5" />
@@ -15382,9 +15485,27 @@ function AdminView({
     let priority = 0;
     let guest = 0;
     auditLogs.forEach((l) => {
-      if (l.targetCategory === "staff" || l.actorRole === "staff") staff++;
-      else if (l.targetCategory === "priority" || l.targetCategory === "student" || l.actorRole === "student") priority++;
-      else if (l.targetCategory === "guest" || l.actorRole === "guest") guest++;
+      const roleLower = (l.actorRole || "").toLowerCase();
+      const emailLower = (l.actorEmail || "").toLowerCase();
+      const catLower = (l.targetCategory || "").toLowerCase();
+      const idLower = (l.actorId || "").toLowerCase();
+      const actionLower = (l.action || "").toLowerCase();
+      const detailsLower = (l.details || "").toLowerCase();
+
+      if (roleLower === "staff" || roleLower === "admin" || catLower === "staff") {
+        staff++;
+      } else if (
+        emailLower.endsWith("@gmail.com") ||
+        roleLower === "guest" ||
+        catLower === "guest" ||
+        idLower.startsWith("guest") ||
+        actionLower.includes("guest") ||
+        detailsLower.includes("guest")
+      ) {
+        guest++;
+      } else {
+        priority++;
+      }
     });
     return {
       all: auditLogs.length,
@@ -15929,13 +16050,23 @@ function AuditLogsPanel({
     const roleLower = (matchedUser?.role || l.actorRole || "").toLowerCase();
     const emailLower = (matchedUser?.email || l.actorEmail || "").toLowerCase();
     const catLower = (l.targetCategory || "").toLowerCase();
+    const idLower = (matchedUser?.studentId || l.actorId || "").toLowerCase();
+    const actionLower = (l.action || "").toLowerCase();
+    const detailsLower = (l.details || "").toLowerCase();
 
     // Staff and Admin are ALWAYS staff
     if (roleLower === "staff" || roleLower === "admin" || catLower === "staff") {
       return "staff";
     }
-    // Gmail or role === "guest" or targetCategory === "guest" is guest!
-    if (emailLower.endsWith("@gmail.com") || roleLower === "guest" || catLower === "guest") {
+    // Gmail or role === "guest" or targetCategory === "guest" or guest ID/action is guest!
+    if (
+      emailLower.endsWith("@gmail.com") ||
+      roleLower === "guest" ||
+      catLower === "guest" ||
+      idLower.startsWith("guest") ||
+      actionLower.includes("guest") ||
+      detailsLower.includes("guest")
+    ) {
       return "guest";
     }
     // Otherwise priority/student
@@ -21032,7 +21163,9 @@ function Notice({
   time,
   isUnread = false,
   onClick,
+  onView,
   onArchive,
+  onDelete,
   isArchived = false,
 }: {
   title: string;
@@ -21041,7 +21174,9 @@ function Notice({
   time?: string;
   isUnread?: boolean;
   onClick?: () => void;
-  onArchive?: () => void;
+  onView?: (e?: React.MouseEvent) => void;
+  onArchive?: (e?: React.MouseEvent) => void;
+  onDelete?: (e?: React.MouseEvent) => void;
   isArchived?: boolean;
 }) {
   const isScheduled = /calendar|scheduled|📅/i.test(title);
@@ -21098,13 +21233,26 @@ function Notice({
                 {time}
               </span>
             )}
+            {onView && (
+              <button
+                type="button"
+                title="View notification details"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onView(e);
+                }}
+                className="rounded p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition cursor-pointer"
+              >
+                <Eye className="size-3.5" />
+              </button>
+            )}
             {onArchive && (
               <button
                 type="button"
                 title={isArchived ? "Restore to inbox" : "Archive notification"}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onArchive();
+                  onArchive(e);
                 }}
                 className="rounded p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition cursor-pointer"
               >
@@ -21113,6 +21261,19 @@ function Notice({
                 ) : (
                   <Archive className="size-3.5" />
                 )}
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                title="Delete notification"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(e);
+                }}
+                className="rounded p-1 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition cursor-pointer"
+              >
+                <Trash2 className="size-3.5" />
               </button>
             )}
           </div>
