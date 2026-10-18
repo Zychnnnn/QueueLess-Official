@@ -8043,6 +8043,16 @@ function NewRequest({
   const [showConfirmModal, setShowConfirmModal] =
     useState(false);
 
+  useEffect(() => {
+    if (showConfirmModal) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [showConfirmModal]);
+
   // Check how many document requests this user submitted today (max 2 per day)
   const userRequestsToday = useMemo(() => {
     if (!existingRequests || !existingRequests.length) return 0;
@@ -8480,108 +8490,112 @@ function NewRequest({
       </form>
 
       {/* Student Request Confirmation Modal */}
-      {showConfirmModal && (
+      {showConfirmModal && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150"
           onClick={() => !loading && setShowConfirmModal(false)}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Confirm Request Submission"
-            className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+            className="w-full max-w-md max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-start gap-3 border-b border-border pb-4">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <FileCheck2 className="size-6" />
+            <div className="flex items-start gap-2.5 border-b border-border pb-3 shrink-0">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <FileCheck2 className="size-5" />
               </div>
               <div>
-                <h3 className="font-display text-lg font-bold text-foreground">
+                <h3 className="font-display text-base font-bold text-foreground">
                   Confirm Document Request
                 </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Please review the details below before submitting to the Registrar's Office.
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Review details below before submitting to the Registrar's Office.
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 space-y-2.5 rounded-xl border border-border bg-muted/20 p-4 text-xs">
-              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+            <div className="mt-3 flex-1 overflow-y-auto space-y-2 rounded-xl border border-border bg-muted/20 p-3 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-border/60">
                 <span className="text-muted-foreground font-medium">Document:</span>
                 <span className="font-bold text-foreground text-right">{doc}</span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+              <div className="flex justify-between items-center py-1 border-b border-border/60">
                 <span className="text-muted-foreground font-medium">Number of Copies:</span>
                 <span className="font-bold text-foreground">{copies} {copies === 1 ? "copy" : "copies"}</span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+              <div className="flex justify-between items-center py-1 border-b border-border/60">
                 <span className="text-muted-foreground font-medium">Purpose:</span>
                 <span className="font-bold text-foreground text-right">{purpose}</span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+              <div className="flex justify-between items-center py-1 border-b border-border/60">
                 <span className="text-muted-foreground font-medium">Student Name:</span>
                 <span className="font-semibold text-foreground">{currentUser.name}</span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+              <div className="flex justify-between items-center py-1 border-b border-border/60">
                 <span className="text-muted-foreground font-medium">Student ID Number:</span>
                 <span className="font-mono font-semibold text-foreground">{currentUser.studentId}</span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-border/60">
+              <div className="flex justify-between items-center py-1 border-b border-border/60">
                 <span className="text-muted-foreground font-medium">Queue Ranking:</span>
                 <span className="font-bold text-foreground">
                   {currentUser.isPriority || currentUser.userType === "priority" ? "⭐ Priority Lane (Official PHINMA)" : "Regular Queue"}
                 </span>
               </div>
               {remarks.trim() && (
-                <div className="flex flex-col py-1.5">
+                <div className="flex flex-col py-1">
                   <span className="text-muted-foreground font-medium mb-1">Additional Remarks:</span>
-                  <p className="rounded-md border border-border bg-background p-2.5 text-foreground font-medium italic">
+                  <p className="rounded-md border border-border bg-background p-2 text-foreground font-medium italic text-[11px]">
                     "{remarks.trim()}"
                   </p>
                 </div>
               )}
             </div>
 
-            <div className="mt-3 rounded-lg bg-primary/5 border border-primary/20 p-2.5 text-[11px] text-muted-foreground flex items-center gap-2">
-              <CheckCircle2 className="size-4 text-primary shrink-0" />
-              <span>An official Digital Request Receipt with your assigned queue line will be created immediately upon confirmation.</span>
+            <div className="mt-2.5 rounded-lg bg-primary/5 border border-primary/20 p-2 text-[11px] text-muted-foreground flex items-center gap-2 shrink-0">
+              <CheckCircle2 className="size-3.5 text-primary shrink-0" />
+              <span>An official Digital Request Receipt with your assigned queue line will be created immediately.</span>
             </div>
 
             {error && (
-              <div className="mt-3">
+              <div className="mt-2 shrink-0">
                 <InlineError text={error} />
               </div>
             )}
 
-            <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-border pt-4">
+            <div className="mt-3.5 flex items-center justify-end gap-2 border-t border-border pt-3 shrink-0">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => setShowConfirmModal(false)}
                 disabled={loading}
+                className="h-8 text-xs cursor-pointer"
               >
                 Back to Edit
               </Button>
               <Button
                 type="button"
+                size="sm"
                 onClick={executeSubmit}
                 disabled={loading}
-                className="gap-2 cursor-pointer"
+                className="h-8 text-xs gap-1.5 cursor-pointer font-bold"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="size-4 animate-spin" /> Submitting...
+                    <Loader2 className="size-3.5 animate-spin" /> Submitting...
                   </>
                 ) : (
                   <>
-                    Confirm & Submit <CheckCircle2 className="size-4" />
+                    Confirm & Submit <CheckCircle2 className="size-3.5" />
                   </>
                 )}
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -8960,29 +8974,6 @@ function StaffView({
                   .slice(0, 4)}
                 onSelect={setSelectedReceipt}
               />
-            </div>
-
-            {/* Quick Admin Assistance Footnote */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-4 text-xs mt-6">
-              <div className="flex items-center gap-3">
-                <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Headset className="size-4" />
-                </div>
-                <div>
-                  <p className="font-bold text-foreground">Need Registrar Administrator Assistance?</p>
-                  <p className="text-muted-foreground text-[11px]">
-                    Direct: (075) 522-5635 loc. 101 • Mobile: +63 995-078-5660 • Email: admin.queueless@up.phinma.edu.ph
-                  </p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setStaffTab("admin_contact")}
-                className="text-xs h-7.5 gap-1.5 cursor-pointer shrink-0 border-primary/30 text-primary hover:bg-primary/10 font-semibold"
-              >
-                <Headset className="size-3.5" /> Open Admin Directory
-              </Button>
             </div>
           </section>
         </>
@@ -9845,6 +9836,14 @@ function StudentPersonalDetailsModal({
     return resolved as Partial<AuthUser>;
   }, [request]);
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   const fullName =
     [
       userProfile.firstName,
@@ -9855,7 +9854,9 @@ function StudentPersonalDetailsModal({
       .filter(Boolean)
       .join(" ") || request.student;
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150"
       onClick={onClose}
@@ -9864,13 +9865,13 @@ function StudentPersonalDetailsModal({
         role="dialog"
         aria-modal="true"
         aria-label="Student Personal & Educational Details"
-        className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-2xl"
+        className="relative w-full max-w-xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header with Photo and Core Identification */}
-        <div className="flex items-start justify-between border-b border-border pb-4">
-          <div className="flex items-center gap-3.5">
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary overflow-hidden border-2 border-primary/20 shadow-xs">
+        <div className="flex items-start justify-between border-b border-border pb-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary overflow-hidden border-2 border-primary/20 shadow-xs">
               {userProfile.picture || request.picture ? (
                 <img
                   src={userProfile.picture || request.picture}
@@ -9878,15 +9879,15 @@ function StudentPersonalDetailsModal({
                   className="size-full object-cover"
                 />
               ) : (
-                <UserRound className="size-7" />
+                <UserRound className="size-6" />
               )}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-display text-lg font-bold text-foreground">
+                <h3 className="font-display text-base font-bold text-foreground">
                   {fullName}
                 </h3>
-                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold text-primary">
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold text-primary">
                   {userProfile.studentId || request.studentId || "Student"}
                 </span>
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
@@ -9906,14 +9907,14 @@ function StudentPersonalDetailsModal({
             variant="ghost"
             onClick={onClose}
             aria-label="Close"
-            className="size-8 cursor-pointer"
+            className="size-7 cursor-pointer shrink-0"
           >
-            <X className="size-4" />
+            <X className="size-3.5" />
           </Button>
         </div>
 
         {/* Section Tabs */}
-        <div className="mt-4 flex items-center gap-1.5 border-b border-border pb-2 overflow-x-auto">
+        <div className="mt-3 flex items-center gap-1.5 border-b border-border pb-2 overflow-x-auto shrink-0">
           {[
             { id: "all", label: "Full Profile" },
             { id: "education", label: "Educational Background" },
@@ -9925,7 +9926,7 @@ function StudentPersonalDetailsModal({
               key={t.id}
               type="button"
               onClick={() => setActiveTab(t.id as any)}
-              className={`rounded-lg px-3 py-1 text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+              className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
                 activeTab === t.id
                   ? "bg-primary text-primary-foreground shadow-xs"
                   : "bg-muted/60 text-muted-foreground hover:text-foreground"
@@ -9937,7 +9938,7 @@ function StudentPersonalDetailsModal({
         </div>
 
         {/* Content Body */}
-        <div className="mt-4 space-y-4">
+        <div className="flex-1 overflow-y-auto mt-3 pr-1 space-y-3">
           {/* EDUCATIONAL DETAILS */}
           {(activeTab === "all" || activeTab === "education") && (
             <div className="rounded-xl border border-border bg-card p-4 space-y-3">
@@ -10154,7 +10155,7 @@ function StudentPersonalDetailsModal({
         </div>
 
         {/* Footer */}
-        <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-3 shrink-0">
           <Button
             size="sm"
             variant="outline"
@@ -10172,7 +10173,8 @@ function StudentPersonalDetailsModal({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -10201,6 +10203,16 @@ function PickupCalendarModal({
   >(() => (currentUser?.role === "student" || currentUser?.role === "guest" ? "mine" : "all"));
   const [calendarViewMode, setCalendarViewMode] = useState<"appointments" | "registrations">("registrations");
   const [selectedCalendarUser, setSelectedCalendarUser] = useState<AccountUser | null>(null);
+
+  useEffect(() => {
+    if (selectedCalendarUser) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [selectedCalendarUser]);
   const [viewingStudentDetails, setViewingStudentDetails] = useState<RequestItem | null>(null);
   const [editingReq, setEditingReq] = useState<RequestItem | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -11106,7 +11118,7 @@ function PickupCalendarModal({
       )}
 
       {/* Calendar User Profile & Personal Details Modal */}
-      {selectedCalendarUser && (
+      {selectedCalendarUser && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150"
           onClick={() => setSelectedCalendarUser(null)}
@@ -11114,7 +11126,7 @@ function PickupCalendarModal({
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl text-xs space-y-4"
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-2xl text-xs space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -11369,7 +11381,8 @@ function PickupCalendarModal({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -11398,6 +11411,14 @@ function DigitalReceiptModal({
   const [receiptMode, setReceiptMode] = useState<"staff_release" | "user_queue_slip" | "profile">(() =>
     isStaff ? "staff_release" : "user_queue_slip"
   );
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   const userProfile: Partial<AuthUser> = useMemo(() => {
     const resolved: Record<string, any> = {};
@@ -11548,7 +11569,9 @@ function DigitalReceiptModal({
     }
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150 print:relative print:inset-auto print:bg-white print:p-0 print:block print-receipt-container"
       onClick={onClose}
@@ -11557,28 +11580,31 @@ function DigitalReceiptModal({
         role="dialog"
         aria-modal="true"
         aria-label="Official Document Receipt"
-        className="relative w-full max-w-xl max-h-[94vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl print:border-none print:shadow-none print:max-w-full print:p-0 print-receipt-card"
+        className="relative w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-2xl print:border-none print:shadow-none print:max-w-full print:p-0 print-receipt-card overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Screen Close Button */}
-        <div className="flex justify-end print:hidden -mt-1 -mr-1 mb-2">
+        {/* Screen Header & Close Button */}
+        <div className="flex justify-between items-center print:hidden pb-2 shrink-0 border-b border-border/60">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Receipt className="size-3.5 text-primary" /> Official Registrar Receipt
+          </span>
           <Button
             size="icon"
             variant="ghost"
             onClick={onClose}
             aria-label="Close receipt"
-            className="cursor-pointer size-8"
+            className="cursor-pointer size-7"
           >
-            <X className="size-4" />
+            <X className="size-3.5" />
           </Button>
         </div>
 
         {/* Receipt View Switcher Tabs */}
-        <div className="mb-4 flex items-center justify-center gap-1 rounded-lg bg-muted p-1 text-xs print:hidden">
+        <div className="my-2.5 flex items-center justify-center gap-1 rounded-lg bg-muted p-1 text-xs print:hidden shrink-0">
           <button
             type="button"
             onClick={() => setReceiptMode("staff_release")}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 font-bold transition cursor-pointer text-xs ${
               receiptMode === "staff_release"
                 ? "bg-card text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
@@ -11590,7 +11616,7 @@ function DigitalReceiptModal({
           <button
             type="button"
             onClick={() => setReceiptMode("user_queue_slip")}
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 font-bold transition cursor-pointer text-xs ${
               receiptMode === "user_queue_slip"
                 ? "bg-card text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
@@ -11603,7 +11629,7 @@ function DigitalReceiptModal({
             <button
               type="button"
               onClick={() => setReceiptMode("profile")}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1.5 font-bold transition cursor-pointer ${
+              className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 font-bold transition cursor-pointer text-xs ${
                 receiptMode === "profile"
                   ? "bg-primary text-primary-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -11615,6 +11641,8 @@ function DigitalReceiptModal({
           )}
         </div>
 
+        {/* Scrollable Receipt Body */}
+        <div className="flex-1 overflow-y-auto pr-1">
         {receiptMode === "staff_release" ? (
           /* ========================================================
            * 1. STAFF OFFICIAL DOCUMENT RELEASE & CLEARANCE RECEIPT
@@ -12200,15 +12228,16 @@ function DigitalReceiptModal({
             )}
           </div>
         )}
+        </div>
 
         {/* Action Buttons (Screen Only) */}
-        <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4 print:hidden">
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3 print:hidden shrink-0">
           {isStaff && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => setShowInternalEdit(true)}
-              className="gap-1.5 cursor-pointer text-xs"
+              className="gap-1.5 cursor-pointer text-xs h-8"
             >
               <Edit3 className="size-3.5" /> Edit Details & Line
             </Button>
@@ -12217,7 +12246,7 @@ function DigitalReceiptModal({
             variant="default"
             size="sm"
             onClick={() => window.print()}
-            className="gap-1.5 cursor-pointer font-bold shadow-sm text-xs"
+            className="gap-1.5 cursor-pointer font-bold shadow-sm text-xs h-8"
           >
             <Printer className="size-3.5" />
             {receiptMode === "staff_release"
@@ -12226,7 +12255,7 @@ function DigitalReceiptModal({
               ? "Print User Queue Slip"
               : "Print Profile Details"}
           </Button>
-          <Button size="sm" variant="outline" onClick={onClose} className="cursor-pointer text-xs">
+          <Button size="sm" variant="outline" onClick={onClose} className="cursor-pointer text-xs h-8">
             Close
           </Button>
         </div>
@@ -12253,7 +12282,8 @@ function DigitalReceiptModal({
           }}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -12293,6 +12323,14 @@ function EditReceiptModal({
   );
   const [confirming, setConfirming] = useState(false);
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setConfirming(true);
@@ -12312,20 +12350,22 @@ function EditReceiptModal({
     });
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150"
       onClick={() => !loading && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl"
+        className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div>
-            <h3 className="text-lg font-bold text-foreground">
+            <h3 className="text-base font-bold text-foreground">
               Edit Request Receipt & Queue Line
             </h3>
             <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-2 mt-0.5">
@@ -12572,7 +12612,8 @@ function EditReceiptModal({
         </form>
       )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -12590,15 +12631,74 @@ function StaffContactAdminModal({
   const [priority, setPriority] = useState<"Normal" | "Important" | "Urgent">("Normal");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState("");
+  const [showHotline, setShowHotline] = useState(false);
+
+  const ticketRef = useMemo(
+    () => `TKT-${Math.floor(100000 + Math.random() * 900000)}`,
+    []
+  );
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  const QUICK_TEMPLATES = [
+    {
+      label: "🎓 Record Discrepancy",
+      cat: "Student Record Verification",
+      prio: "Important" as const,
+      sub: "Student record discrepancy verification",
+      msg: "[Student Name / ID]: \n[Discrepancy Details]: Personal details/credentials do not match official records.\n[Action Needed]: Please verify against Registrar Master Archive.",
+    },
+    {
+      label: "⚡ Urgent Signature Override",
+      cat: "Document Signature / Approval",
+      prio: "Urgent" as const,
+      sub: "Urgent document signature authorization request",
+      msg: "[Document Type]: \n[Student ID]: \n[Reason]: Urgent release needed for student scholarship / employment deadline.\n[Action Needed]: Expedited Administrator approval required.",
+    },
+    {
+      label: "🔐 Access / Permissions",
+      cat: "System Concern / Bug Report",
+      prio: "Normal" as const,
+      sub: "Staff queue permissions or system issue report",
+      msg: `[Staff Account]: ${currentUser?.email || "staff"}\n[Module]: Registrar Queue / Student Archive\n[Issue Description]: Unable to process specific queue item / permission update needed.`,
+    },
+    {
+      label: "🗄️ Vault Archive Retrieval",
+      cat: "Document Signature / Approval",
+      prio: "Normal" as const,
+      sub: "Archived record retrieval from cold storage",
+      msg: "[Student Name / ID]: \n[Graduation Year / Batch]: \n[Requested Record]: Transcript / Certificate archive retrieval requested.",
+    },
+  ];
+
+  const handleApplyTemplate = (tpl: (typeof QUICK_TEMPLATES)[number]) => {
+    setCategory(tpl.cat);
+    setPriority(tpl.prio);
+    setSubject(tpl.sub);
+    setMessage(tpl.msg);
+    setValidationError("");
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!subject.trim() || !message.trim()) {
-      setFlash({ tone: "error", text: "Please enter both a subject and your message." });
+    if (subject.trim().length < 4) {
+      setValidationError("Please enter a descriptive subject (at least 4 characters).");
+      return;
+    }
+    if (message.trim().length < 8) {
+      setValidationError("Please enter a detailed message explaining your inquiry (at least 8 characters).");
       return;
     }
 
     setSubmitting(true);
+    setValidationError("");
     try {
       const token = localStorage.getItem("queueless_token");
       await fetch(`${API_URL}/api/audit-logs`, {
@@ -12613,7 +12713,7 @@ function StaffContactAdminModal({
           actorRole: "staff",
           actorId: currentUser?.studentId || currentUser?.id || "STAFF",
           targetCategory: "staff",
-          action: `Staff Concern: [${priority.toUpperCase()}] ${subject.trim()}`,
+          action: `Staff Concern [${ticketRef}] [${priority.toUpperCase()}]: ${subject.trim()}`,
           details: `[Category: ${category}] ${message.trim()}`,
           status: priority === "Urgent" ? "Warning" : "Success",
         }),
@@ -12624,7 +12724,7 @@ function StaffContactAdminModal({
         const stored = localStorage.getItem("queueless_staff_admin_messages");
         const list = stored ? JSON.parse(stored) : [];
         list.unshift({
-          id: `msg-${Date.now()}`,
+          id: ticketRef,
           staffName: currentUser?.name || "Registrar Staff",
           staffEmail: currentUser?.email || "",
           staffId: currentUser?.studentId || currentUser?.id || "STAFF",
@@ -12642,13 +12742,13 @@ function StaffContactAdminModal({
 
       setFlash({
         tone: "success",
-        text: "Your concern/question has been dispatched to the Administrator workspace. Admin has been notified.",
+        text: `Inquiry #${ticketRef} logged & dispatched to Administrator workspace. Admin notified.`,
       });
       onClose();
     } catch {
       setFlash({
         tone: "success",
-        text: "Your inquiry has been logged and queued for Administrator review.",
+        text: `Inquiry #${ticketRef} saved locally and queued for Administrator review.`,
       });
       onClose();
     } finally {
@@ -12656,41 +12756,97 @@ function StaffContactAdminModal({
     }
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150"
+        className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between border-b border-border pb-4">
-          <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-              <Headset className="size-5" />
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-border pb-3 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+              <Headset className="size-4.5" />
             </div>
             <div>
-              <h3 className="font-display text-base font-bold text-foreground">
-                Contact Administrator
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Submit an inquiry, report a system issue, or escalate a student record concern.
+              <div className="flex items-center gap-2">
+                <h3 className="font-display text-base font-bold text-foreground">
+                  Contact Administrator
+                </h3>
+                <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground border border-border font-bold">
+                  #{ticketRef}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Submit an inquiry, request override, or report an issue directly to Admin.
               </p>
             </div>
           </div>
-          <Button size="icon" variant="ghost" onClick={onClose} className="size-8 cursor-pointer">
-            <X className="size-4" />
+          <Button size="icon" variant="ghost" onClick={onClose} className="size-7 cursor-pointer shrink-0">
+            <X className="size-3.5" />
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3.5 text-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Scrollable Content Body */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto mt-3 pr-1 space-y-3 text-xs">
+          {/* Quick Helpful Topic Templates */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-semibold text-muted-foreground">
+                Helpful Quick Templates (click to auto-fill):
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowHotline(!showHotline)}
+                className="text-[10px] text-primary hover:underline cursor-pointer font-semibold flex items-center gap-1"
+              >
+                <Phone className="size-3" />
+                {showHotline ? "Hide hotline info" : "Admin direct helpline"}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.label}
+                  type="button"
+                  onClick={() => handleApplyTemplate(tpl)}
+                  className="rounded-lg border border-border bg-muted/40 hover:bg-primary/10 hover:border-primary/40 px-2 py-1 text-[11px] font-medium text-foreground transition cursor-pointer"
+                >
+                  {tpl.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Admin Direct Hotline Details SLA (Collapsible/Helpful) */}
+          {showHotline && (
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-[11px] space-y-1.5 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between font-bold text-primary">
+                <span className="flex items-center gap-1.5">
+                  <Headset className="size-3.5" /> Official Registrar Admin Directory
+                </span>
+                <span className="text-[10px] bg-primary/15 px-1.5 py-0.5 rounded">Mon–Sat 8AM–5PM</span>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Direct: <strong className="text-foreground">(075) 522-5635 loc. 101</strong> • Mobile: <strong className="text-foreground">+63 995-078-5660</strong>
+                <br />
+                Email: <strong className="text-foreground">admin.queueless@up.phinma.edu.ph</strong> • Rm 101, Main Registrar Building
+              </p>
+            </div>
+          )}
+
+          {/* Category & Priority Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <Field label="Inquiry Category">
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="field cursor-pointer"
+                className="field cursor-pointer h-8 text-xs"
               >
                 <option value="General Question / Inquiries">General Question / Inquiries</option>
                 <option value="System Concern / Bug Report">System Concern / Bug Report</option>
@@ -12704,56 +12860,80 @@ function StaffContactAdminModal({
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as any)}
-                className="field cursor-pointer"
+                className={`field cursor-pointer h-8 text-xs font-semibold ${
+                  priority === "Urgent" ? "text-amber-600 dark:text-amber-400 border-amber-500/50" : ""
+                }`}
               >
                 <option value="Normal">Normal</option>
                 <option value="Important">Important</option>
-                <option value="Urgent">⚡ Urgent</option>
+                <option value="Urgent">⚡ Urgent (Immediate Action)</option>
               </select>
             </Field>
           </div>
 
+          {/* Subject with character hint */}
           <Field label="Subject / Topic *">
             <input
               type="text"
               value={subject}
-              onChange={(e) => setSubject(e.target.value)}
+              onChange={(e) => {
+                setSubject(e.target.value);
+                if (validationError) setValidationError("");
+              }}
               placeholder="e.g. Student record discrepancy on graduation certificate..."
-              className="field"
+              className="field h-8 text-xs"
               required
             />
           </Field>
 
+          {/* Detailed Message */}
           <Field label="Detailed Message / Concern *">
             <textarea
-              rows={4}
+              rows={3}
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                if (validationError) setValidationError("");
+              }}
               placeholder="Describe your question, concern, or situation with student name/ID if relevant..."
-              className="field resize-none leading-relaxed"
+              className="field resize-none leading-relaxed text-xs"
               required
             />
+            <div className="flex justify-between items-center text-[10px] text-muted-foreground mt-1">
+              <span>Be specific to ensure prompt administrator review.</span>
+              <span>{message.length} characters</span>
+            </div>
           </Field>
 
-          <div className="rounded-xl border border-muted bg-muted/40 p-3 text-[11px] text-muted-foreground flex items-center gap-2">
-            <ShieldCheck className="size-4 text-primary shrink-0" />
+          {validationError && (
+            <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2 text-[11px] text-destructive flex items-center gap-1.5">
+              <AlertCircle className="size-3.5 shrink-0" />
+              <span>{validationError}</span>
+            </div>
+          )}
+
+          {/* Dispatch Metadata Note */}
+          <div className="rounded-xl border border-muted bg-muted/40 p-2.5 text-[11px] text-muted-foreground flex items-center gap-2">
+            <ShieldCheck className="size-3.5 text-primary shrink-0" />
             <span>
-              Dispatched from <strong>{currentUser?.name || "Registrar Staff"}</strong> ({currentUser?.email || "staff"}). Admin can review in System Audit Logs.
+              Dispatched from <strong>{currentUser?.name || "Registrar Staff"}</strong> ({currentUser?.email || "staff"}). Tracked under Ticket #{ticketRef}.
             </span>
           </div>
 
-          <div className="flex items-center justify-end gap-2.5 pt-2">
-            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={submitting}>
+          {/* Footer Actions */}
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border shrink-0">
+            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={submitting} className="h-8 text-xs cursor-pointer">
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={submitting} className="font-bold gap-1.5 cursor-pointer">
+            <Button type="submit" size="sm" disabled={submitting} className="h-8 text-xs font-bold gap-1.5 cursor-pointer">
               {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
               Send to Admin
             </Button>
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
