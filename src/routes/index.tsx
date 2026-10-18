@@ -14946,25 +14946,46 @@ function AuditLogsPanel({
           },
         }
       );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to load audit logs.");
+      if (res.ok) {
+        const data = await res.json();
+        const deletedLogs = getDeletedLogIds();
+        const deletedActors = getDeletedActorKeys();
+        let validLogs = (data.logs || []).filter((l: AuditLogItem) => {
+          if (deletedLogs.has(l._id)) return false;
+          if (l.actorEmail && deletedActors.has(l.actorEmail.toLowerCase())) return false;
+          if (l.actorId && deletedActors.has(l.actorId.toLowerCase())) return false;
+          if (l.actorName && deletedActors.has(l.actorName.toLowerCase())) return false;
+          return true;
+        });
+
+        // If local deleted filter hid all logs but DB actually has real logs, auto-reset local filter
+        if (validLogs.length === 0 && (data.logs || []).length > 0) {
+          localStorage.removeItem("queueless_deleted_audit_logs");
+          localStorage.removeItem("queueless_deleted_audit_actors");
+          validLogs = data.logs;
+        }
+
+        setLogs(validLogs);
+        try {
+          localStorage.setItem("queueless_cached_audit_logs", JSON.stringify(validLogs));
+        } catch {}
+        return;
       }
 
-      // Filter against persistently deleted log IDs and deleted user actor keys
-      const deletedLogs = getDeletedLogIds();
-      const deletedActors = getDeletedActorKeys();
-      const validLogs = (data.logs || []).filter((l: AuditLogItem) => {
-        if (deletedLogs.has(l._id)) return false;
-        if (l.actorEmail && deletedActors.has(l.actorEmail.toLowerCase())) return false;
-        if (l.actorId && deletedActors.has(l.actorId.toLowerCase())) return false;
-        if (l.actorName && deletedActors.has(l.actorName.toLowerCase())) return false;
-        return true;
-      });
-
-      setLogs(validLogs);
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || `Server returned HTTP ${res.status}`);
     } catch (err) {
-      console.error("Fetch audit logs error:", err);
+      console.warn("Fetch audit logs error, attempting local fallback:", err);
+      try {
+        const localCached = localStorage.getItem("queueless_cached_audit_logs");
+        if (localCached) {
+          const parsed = JSON.parse(localCached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLogs(parsed);
+            return;
+          }
+        }
+      } catch {}
       setError(err instanceof Error ? err.message : "Failed to load audit logs.");
     } finally {
       setLoading(false);
