@@ -50,3 +50,4 @@ mongoose.connection.on("connected", () => {
 });
 
 export default connectDB;
+

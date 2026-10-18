@@ -3,6 +3,7 @@ import express from "express";
 import {
   createRequest,
   getRequests,
+  getRequestByNumber,
   updateRequestStatus,
   updateRequest,
   rateRequest,
@@ -21,11 +22,18 @@ router.post(
   createRequest
 );
 
-// View requests
+// View all authorized requests (students receive only their own)
 router.get(
   "/",
   authMiddleware,
   getRequests
+);
+
+// View single request by requestNumber (enforces student ownership)
+router.get(
+  "/:requestNumber",
+  authMiddleware,
+  getRequestByNumber
 );
 
 // Update request status (quick update)

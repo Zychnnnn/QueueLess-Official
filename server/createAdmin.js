@@ -43,7 +43,7 @@ export const ensureAdminAccount = async () => {
     return;
   }
 
-  const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
+  const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 12);
   const user = await User.create({
     name: ADMIN_NAME.trim(),
     studentId: ADMIN_STUDENT_ID || "ADMIN-001",

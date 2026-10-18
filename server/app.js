@@ -59,11 +59,21 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many authentication attempts from this IP. Please wait 15 minutes before trying again.",
+  },
+});
+
 app.use(limiter);
 
 // Bind routes with both /api prefix and direct paths
-app.use("/api/auth", authRoutes);
-app.use("/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
+app.use("/auth", authLimiter, authRoutes);
 
 app.use("/api/requests", requestRoutes);
 app.use("/requests", requestRoutes);

@@ -8,6 +8,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   AlertCircle,
@@ -46,6 +47,7 @@ import {
   Mail,
   MapPin,
   Menu,
+  MessageCircle,
   Pencil,
   Plus,
   Phone,
@@ -2488,20 +2490,29 @@ function QueueLessApp() {
         />
       )}
 
-      {/* Floating Campus Registrar Helper Pill Button - Students & Guests Only */}
+      {/* Floating Campus Registrar Helper Bubble Chat - Students & Guests Only */}
       {signedIn && (currentUser?.role === "student" || currentUser?.role === "guest") && (
-        <button
-          type="button"
-          onClick={() => setShowAiHelper(true)}
-          className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-primary px-3.5 py-2.5 text-xs font-bold text-primary-foreground shadow-2xl transition hover:scale-105 active:scale-95 cursor-pointer border border-primary-foreground/20 print:hidden"
-        >
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
-          </span>
-          <Sparkles className="size-4" />
-          <span>Campus Registrar Helper</span>
-        </button>
+        <div className="fixed left-5 top-1/2 -translate-y-1/2 z-40 print:hidden group">
+          <button
+            type="button"
+            onClick={() => setShowAiHelper(true)}
+            aria-label="Campus Registrar Helper"
+            title="Campus Registrar Helper"
+            className="relative flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer border border-primary-foreground/20"
+          >
+            <span className="absolute -top-0.5 -right-0.5 flex size-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex size-3 rounded-full bg-emerald-400 border-2 border-primary" />
+            </span>
+            <MessageCircle className="size-6" />
+          </button>
+          <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3 hidden sm:block opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="whitespace-nowrap rounded-lg bg-card px-3 py-1.5 text-xs font-bold text-foreground shadow-xl border border-border flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Campus Registrar Helper</span>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Campus Registrar Helper AI Modal - Students & Guests Only */}
@@ -3009,9 +3020,14 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
       return;
     }
 
-    if (password.length < 8) {
+    if (/\s/.test(password)) {
+      setError("Password cannot contain spaces.");
+      return;
+    }
+
+    if (!isStrongPassword(password)) {
       setError(
-        "Password must contain at least 8 characters."
+        "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
       );
       return;
     }
@@ -3103,8 +3119,15 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must contain at least 6 characters.");
+    if (/\s/.test(password)) {
+      setError("Password cannot contain spaces.");
+      return;
+    }
+
+    if (!isStrongPassword(password)) {
+      setError(
+        "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+      );
       return;
     }
 
@@ -3880,8 +3903,8 @@ function GuestRegistration({
               onChange={(e) => setGuestPassword(e.target.value)}
               required
               className="field"
-              placeholder="At least 6 characters"
-              minLength={6}
+              placeholder="Min. 8 characters (uppercase, lowercase, number & symbol)"
+              minLength={8}
             />
             <PasswordStrengthMeter password={guestPassword} />
           </Field>
@@ -3895,7 +3918,7 @@ function GuestRegistration({
               required
               className="field"
               placeholder="Re-enter your password"
-              minLength={6}
+              minLength={8}
             />
           </Field>
         </div>
@@ -3925,27 +3948,52 @@ function GuestRegistration({
   );
 }
 
+function isStrongPassword(pass: string): boolean {
+  if (typeof pass !== "string" || pass.length < 8) return false;
+  if (/\s/.test(pass)) return false; // Absolutely no spaces allowed
+  const hasUpper = /[A-Z]/.test(pass);
+  const hasLower = /[a-z]/.test(pass);
+  const hasNumber = /[0-9]/.test(pass);
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(pass);
+  return hasUpper && hasLower && hasNumber && hasSpecial;
+}
+
 function PasswordStrengthMeter({ password }: { password: string }) {
   const getStrength = (pass: string) => {
-    if (!pass) return { score: 0, label: "Enter password", color: "bg-muted", textTone: "text-muted-foreground" };
-    let score = 0;
-    if (pass.length >= 6) score += 1;
-    if (pass.length >= 8) score += 1;
-    if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score += 1;
-    if (/[0-9]/.test(pass) || /[^A-Za-z0-9]/.test(pass)) score += 1;
-
-    switch (score) {
-      case 1:
-        return { score: 1, label: "Too Weak", color: "bg-rose-500", textTone: "text-rose-500" };
-      case 2:
-        return { score: 2, label: "Fair", color: "bg-amber-500", textTone: "text-amber-500" };
-      case 3:
-        return { score: 3, label: "Good", color: "bg-sky-500", textTone: "text-sky-500" };
-      case 4:
-        return { score: 4, label: "Strong", color: "bg-emerald-500", textTone: "text-emerald-500" };
-      default:
-        return { score: 0, label: "Too Weak", color: "bg-rose-500", textTone: "text-rose-500" };
+    if (!pass) {
+      return { score: 0, label: "Enter password", color: "bg-muted", textTone: "text-muted-foreground" };
     }
+
+    // Explicitly reject passwords with whitespace
+    if (/\s/.test(pass)) {
+      return { score: 0, label: "Spaces not allowed", color: "bg-rose-500", textTone: "text-rose-500" };
+    }
+
+    if (pass.length < 8) {
+      return { score: 1, label: "Too Short (Min. 8 chars)", color: "bg-rose-500", textTone: "text-rose-500" };
+    }
+
+    const hasUpper = /[A-Z]/.test(pass);
+    const hasLower = /[a-z]/.test(pass);
+    const hasNumber = /[0-9]/.test(pass);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(pass);
+
+    const typesCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
+
+    if (typesCount <= 2) {
+      return { score: 1, label: "Weak (Need upper, lower, number, symbol)", color: "bg-rose-500", textTone: "text-rose-500" };
+    }
+    if (typesCount === 3) {
+      return { score: 2, label: "Fair (Missing 1 requirement)", color: "bg-amber-500", textTone: "text-amber-500" };
+    }
+    if (typesCount === 4 && pass.length < 12) {
+      return { score: 3, label: "Good (Meets all requirements)", color: "bg-sky-500", textTone: "text-sky-500" };
+    }
+    if (typesCount === 4 && pass.length >= 12) {
+      return { score: 4, label: "Strong (12+ characters)", color: "bg-emerald-500", textTone: "text-emerald-500" };
+    }
+
+    return { score: 1, label: "Weak", color: "bg-rose-500", textTone: "text-rose-500" };
   };
 
   const { score, label, color, textTone } = getStrength(password);
@@ -3968,6 +4016,9 @@ function PasswordStrengthMeter({ password }: { password: string }) {
           />
         ))}
       </div>
+      <p className="text-[10px] text-muted-foreground leading-tight">
+        Must be at least 8 characters with uppercase, lowercase, numbers & symbols (no spaces).
+      </p>
     </div>
   );
 }
@@ -4046,8 +4097,14 @@ function ActivateAccountWithOtp({
       setError("Please enter the 6-digit OTP code sent to your email.");
       return;
     }
-    if (newPassword.length < 6) {
-      setError("Password must contain at least 6 characters.");
+    if (/\s/.test(newPassword)) {
+      setError("Password cannot contain spaces.");
+      return;
+    }
+    if (!isStrongPassword(newPassword)) {
+      setError(
+        "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+      );
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -4185,7 +4242,8 @@ function ActivateAccountWithOtp({
                     type={showPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Min. 6 chars"
+                    placeholder="Min. 8 characters (uppercase, lowercase, number & symbol)"
+                    minLength={8}
                     required
                     className="field h-9 text-xs pr-8"
                   />
@@ -4206,6 +4264,7 @@ function ActivateAccountWithOtp({
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter password"
                   required
+                  minLength={8}
                   className="field h-9 text-xs"
                 />
               </Field>
@@ -4350,8 +4409,8 @@ function ForgotPasswordWithOtp({
 
   const handleResetPassword = async (e: FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (/\s/.test(newPassword) || !isStrongPassword(newPassword)) {
+      setError("Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (no spaces).");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -4560,7 +4619,8 @@ function ForgotPasswordWithOtp({
                   type={showPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 6 characters"
+                  placeholder="Min. 8 characters (uppercase, lowercase, number & symbol)"
+                  minLength={8}
                   required
                   className="field pr-10"
                   autoFocus
@@ -4583,6 +4643,7 @@ function ForgotPasswordWithOtp({
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter your new password"
                 required
+                minLength={8}
                 className="field"
               />
             </Field>
@@ -4968,10 +5029,23 @@ function StudentProfileView({
       return;
     }
 
-    if (newPassword.length < 6) {
-      setPwError("New password must be at least 6 characters.");
+    if (/\s/.test(newPassword)) {
+      setPwError("Password cannot contain spaces.");
       return;
     }
+
+    if (!isStrongPassword(newPassword)) {
+      setPwError(
+        "New password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+      );
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPwError("New password cannot be the same as your current password.");
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       setPwError("New passwords do not match.");
       return;
@@ -5209,7 +5283,7 @@ function StudentProfileView({
                 />
                 <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>
-                    Official UPang ID formats: <strong className="font-mono">03-2223-038512</strong> or max <strong className="font-mono">03-01-2425-045805</strong>
+                    Enter your Official UPang ID
                   </span>
                   {editStudentId.length > 0 && (
                     <span className="font-mono font-bold">
@@ -5256,7 +5330,7 @@ function StudentProfileView({
                 />
                 <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>
-                    Official UPang Staff ID format: <strong className="font-mono">UP-00-000-T</strong>
+                    Enter your Official UPang Staff ID
                   </span>
                   {editStudentId.length > 0 && (
                     <span className="font-mono font-bold">
@@ -5399,10 +5473,10 @@ function StudentProfileView({
                     type={showNewPw ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder="Min. 8 characters (uppercase, lowercase, number & symbol)"
                     className="field pr-10"
                     required
-                    minLength={6}
+                    minLength={8}
                     disabled={!pwChangeAllowed || changingPassword}
                   />
                   <button
@@ -5426,7 +5500,7 @@ function StudentProfileView({
                   placeholder="Re-enter new password"
                   className="field"
                   required
-                  minLength={6}
+                  minLength={8}
                   disabled={!pwChangeAllowed || changingPassword}
                 />
               </Field>
@@ -5885,6 +5959,15 @@ function StudentPersonalDetailsView({
   const [editReligion, setEditReligion] = useState(currentUser.religion || "");
   const [editCivilStatus, setEditCivilStatus] = useState(currentUser.civilStatus || "Single");
 
+  // Student ID
+  const [editStudentId, setEditStudentId] = useState(currentUser.studentId || "");
+  const studentIdRegex = /^\d{2}(-\d{2})?-\d{4}-\d{5,6}$/;
+  const isValidStudentId = (id: string) => studentIdRegex.test(id.trim());
+  const handleStudentIdChange = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9-]/g, "").slice(0, 17);
+    setEditStudentId(cleaned);
+  };
+
   // Family Details
   const [fatherName, setFatherName] = useState(currentUser.fatherName || "");
   const [fatherOccupation, setFatherOccupation] = useState(currentUser.fatherOccupation || "");
@@ -5945,6 +6028,16 @@ function StudentPersonalDetailsView({
   const [termsError, setTermsError] = useState("");
   const [showTermsModal, setShowTermsModal] = useState(false);
 
+  useEffect(() => {
+    if (showConfirmModal || showSuccessModal || showTermsModal) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [showConfirmModal, showSuccessModal, showTermsModal]);
+
   // Email-based detection: @gmail.com = guest; @phinmaed.com or .edu.ph = student
   const isGuestUser = (() => {
     if (currentUser.role === "admin" || currentUser.role === "staff") return false;
@@ -5985,8 +6078,19 @@ function StudentPersonalDetailsView({
   // When a user is new, their details are editable until confirmed; once saved, only Admin can edit.
   const isNewUser = !currentUser.termsAccepted || !currentUser.lastName?.trim();
   const isNameLocked = currentUser.role !== "admin" && !isNewUser;
+  // Student ID is locked once the student has saved it; only Admin can change it afterward
+  const isIdLocked = currentUser.role !== "admin" && !isNewUser && Boolean(currentUser.studentId?.trim());
 
   const validateInputs = () => {
+    // Student ID is required for students
+    if (isStudent && !isIdLocked && !editStudentId.trim()) {
+      setFlash({ tone: "error", text: "Student ID is required." });
+      return false;
+    }
+    if (isStudent && !isIdLocked && editStudentId.trim() && !isValidStudentId(editStudentId)) {
+      setFlash({ tone: "error", text: "Please enter a valid Student ID format (e.g. 03-2223-038512)." });
+      return false;
+    }
     if (!isNameLocked && !lastName.trim()) {
       setFlash({ tone: "error", text: "Last name is required." });
       return false;
@@ -6060,6 +6164,7 @@ function StudentPersonalDetailsView({
       const finalMiddleName = isNameLocked ? (currentUser.middleName || middleName.trim()) : middleName.trim();
       const finalExtensionName = isNameLocked ? (currentUser.extensionName || extensionName.trim()) : extensionName.trim();
       const finalFullName = isNameLocked && currentUser.name ? currentUser.name : computedFullName;
+      const finalStudentId = isIdLocked ? (currentUser.studentId || editStudentId.trim()) : editStudentId.trim();
 
       const payload = {
         name: finalFullName,
@@ -6067,6 +6172,7 @@ function StudentPersonalDetailsView({
         firstName: finalFirstName,
         middleName: finalMiddleName,
         extensionName: finalExtensionName,
+        ...(isStudent ? { studentId: finalStudentId } : {}),
         termsAccepted: true,
         termsAcceptedAt: currentUser.termsAcceptedAt || new Date().toISOString(),
         phone: editPhone.replace(/\D/g, ""),
@@ -6399,6 +6505,58 @@ function StudentPersonalDetailsView({
                 </select>
               </Field>
             </div>
+
+            {/* Student ID Field - Required for students, locked once saved */}
+            {isStudent && (
+              <Field
+                label={
+                  <div className="flex items-center justify-between w-full mb-1">
+                    <span>Student ID Number *</span>
+                    {isIdLocked ? (
+                      <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-0.5">
+                        <Lock className="size-2.5" /> Locked
+                      </span>
+                    ) : editStudentId.trim() && (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          isValidStudentId(editStudentId)
+                            ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                            : "bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400"
+                        }`}
+                      >
+                        {isValidStudentId(editStudentId) ? (
+                          <><CheckCircle2 className="size-3" /> Valid ID Format</>
+                        ) : (
+                          "Invalid format"
+                        )}
+                      </span>
+                    )}
+                  </div>
+                }
+              >
+                <input
+                  type="text"
+                  value={editStudentId}
+                  onChange={(e) => handleStudentIdChange(e.target.value)}
+                  placeholder="Enter your Official UPang ID"
+                  className={`field font-mono ${isIdLocked ? "cursor-not-allowed bg-muted/60 opacity-80 pointer-events-none select-none" : ""}`}
+                  maxLength={17}
+                  required
+                  readOnly={isIdLocked}
+                  disabled={isIdLocked}
+                />
+                {isIdLocked && (
+                  <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                    <Lock className="size-3 shrink-0" /> Student ID is locked. Only an Administrator can update your Student ID.
+                  </p>
+                )}
+                {!isIdLocked && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Enter your Official UPang ID
+                  </p>
+                )}
+              </Field>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Mobile Number (Optional)">
@@ -7049,7 +7207,7 @@ function StudentPersonalDetailsView({
       </div>
 
       {/* Confirm Save Modal */}
-      {showConfirmModal && (
+      {showConfirmModal && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
           <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-3">
@@ -7134,10 +7292,11 @@ function StudentPersonalDetailsView({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showSuccessModal && (
+      {showSuccessModal && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-center">
             <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-4">
@@ -7161,10 +7320,11 @@ function StudentPersonalDetailsView({
               <CheckCircle2 className="size-4" /> {isRequiredGate ? "Enter Full Access Dashboard" : "OK"}
             </Button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {showTermsModal && (
+      {showTermsModal && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={() => setShowTermsModal(false)}
@@ -7253,7 +7413,8 @@ function StudentPersonalDetailsView({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -12778,32 +12939,13 @@ function CampusRegistrarHelperModal({
   onClose: () => void;
   currentUser?: AuthUser | null;
 }) {
-  const initialChips = [
-    "What are your office hours & location?",
-    "How do I request a Transcript of Records (TOR)?",
-    "What are the requirements to claim my document?",
-    "Can someone else claim my document for me?",
-    "How much are the document fees?",
-    "What is the Hawak Kamay (HK) Scholarship?",
-    "How does the Queue Line work?",
-    "Registrar contact phone & emails",
-    "How to request Certificate of Good Moral?",
-    "How to request Certificate of Grades (TCG)?",
-    "How to request Certificate of Registration (COR)?",
-    "Transfer credentials & Honorable Dismissal",
-    "CAV Certification & DFA Apostille procedure",
-    "Graduation clearance & diploma releasing",
-    "Lost Student ID replacement procedure",
-    "School uniform & ID validation policy (CSDL)",
-  ];
-
+  const [inputQuery, setInputQuery] = useState("");
   const [messages, setMessages] = useState<HelperChatMessage[]>([
     {
       id: "welcome",
       sender: "bot",
-      text: "Mabuhay! I am your **Campus Registrar Helper** at PHINMA University of Pangasinan. Please select any question below to get immediate, official guidance on document requests, queue lines, claiming credentials, or registrar office hours.",
+      text: "Mabuhay! I am your **Campus Registrar Helper** at PHINMA University of Pangasinan.\n\nYou can ask me about:\n• Campus Facilities, learning spaces & labs (https://up.phinma.edu.ph/facilities/)\n• CSDL Announcements & student activities (https://www.facebook.com/up.csdl)\n• Document request procedures, credentials & claiming\n• General school information, office hours & directory\n• QueueLess Registrar project research & guidelines\n\nPlease type your question below to get started!",
       time: "Just now",
-      chips: initialChips,
     },
   ]);
   const [isThinking, setIsThinking] = useState(false);
@@ -12878,19 +13020,38 @@ function CampusRegistrarHelperModal({
       };
     }
 
-    // 4. Center for Student Development and Leadership (CSDL)
-    if (q.includes("csdl") || q.includes("leadership") || q.includes("organization") || q.includes("council") || q.includes("club") || q.includes("student affairs") || q.includes("welfare") || q.includes("activity") || q.includes("activities")) {
+    // 3. Campus Facilities (Official Primary Reference: https://up.phinma.edu.ph/facilities/)
+    if (q.includes("facilit") || q.includes("building") || q.includes("lab") || q.includes("room") || q.includes("library") || q.includes("gym") || q.includes("court") || q.includes("space") || q.includes("canteen") || q.includes("hotel") || q.includes("hospital")) {
+      return {
+        text: "PHINMA UPang Campus Facilities & Learning Spaces:\n\n" +
+          "Primary Official Reference: https://up.phinma.edu.ph/facilities/\n\n" +
+          "• Specialized Laboratories & Training Spaces:\n" +
+          "  - Allied Health, Nursing Skills & Medical Laboratory Science (MedTech) simulation labs\n" +
+          "  - Mock Hotel & Mock Hospital Suites for clinical and hospitality management practicum\n" +
+          "  - Engineering, Architecture, and Computer Studies workshops and laboratories\n\n" +
+          "• Library & Learning Commons:\n" +
+          "  - Modern University Library with research volumes, digital workstations, and quiet study areas\n\n" +
+          "• Campus Life Spaces:\n" +
+          "  - Student Center, gymnasium, sports courts, and university dining cafeteria\n" +
+          "  - Ground Floor Main Administration Building housing the Registrar's Office & Student Services\n\n" +
+          "🌐 For complete details and official photographs, visit: https://up.phinma.edu.ph/facilities/",
+      };
+    }
+
+    // 4. Center for Student Development and Leadership (CSDL) & Student Activities
+    if (q.includes("csdl") || q.includes("leadership") || q.includes("organization") || q.includes("council") || q.includes("club") || q.includes("student affairs") || q.includes("welfare") || q.includes("activity") || q.includes("activities") || q.includes("announcement") || q.includes("event") || q.includes("post") || q.includes("facebook")) {
       return {
         text: "Center for Student Development and Leadership (CSDL) – PHINMA UPang:\n\n" +
-          "The CSDL is the heart of student life, leadership formation, and organizational development at PHINMA University of Pangasinan (Dagupan):\n\n" +
-          "• Student Organizations: Accreditations, leadership trainings, and events for recognized student clubs.\n" +
-          "• Student Governance: Guides the Supreme Student Government (SSG) and departmental academic councils.\n" +
-          "• Good Moral & Disciplinary Clearance: Coordinates character verification for certificates of good moral character.\n" +
-          "• Student Welfare: Handles student identification validation, uniform exemption approvals, and student grievances.\n\n" +
+          "Primary Official Reference: https://www.facebook.com/up.csdl\n\n" +
+          "• Student Development & Services:\n" +
+          "  - Recognized Student Organizations (RSOs), student councils, and leadership development programs\n" +
+          "  - Campus activities, orientation programs, and Supreme Student Government (SSG) governance\n" +
+          "  - Character verification for Good Moral certificates, ID validation stamping, and uniform guidelines\n\n" +
           "📍 Location: Student Center, Ground Floor, PHINMA UPang Dagupan\n" +
-          "🌐 Official Facebook: https://www.facebook.com/up.csdl\n" +
-          "⏰ Office Hours: Monday to Friday: 8:00 AM – 5:00 PM",
-        chips: ["How to request Good Moral?", "What are your office hours & location?", "School uniform & ID validation policy (CSDL)"],
+          "⏰ Office Hours: Monday to Friday: 8:00 AM – 5:00 PM\n" +
+          "🌐 Official CSDL Facebook Page: https://www.facebook.com/up.csdl\n\n" +
+          "📢 Note on Latest Announcements & Facebook Posts:\n" +
+          "For real-time event updates and announcements, please consult the official CSDL page above. If a specific Facebook post cannot be accessed directly, please provide the post or a screenshot so I can assist you based on verified details rather than guessing.",
       };
     }
 
@@ -13073,15 +13234,30 @@ function CampusRegistrarHelperModal({
       };
     }
 
+    // 19. QueueLess Registrar Project Development & Research Guidelines
+    if (q.includes("queueless") || q.includes("thesis") || q.includes("project") || q.includes("research") || q.includes("system") || q.includes("developer")) {
+      return {
+        text: "QueueLess Registrar Project Development & Research Guidelines:\n\n" +
+          "• Purpose: QueueLess is an academic thesis and software engineering research project developed to modernize document requesting and queue monitoring for PHINMA University of Pangasinan.\n\n" +
+          "⚠️ Important Project Notice:\n" +
+          "• Distinguish between verified school facts and software project features. We must not assume that the school currently uses or has approved our proposed QueueLess system as its live official operations.\n" +
+          "• Official student document requests continue to be processed according to official school registrar policies at the Ground Floor, Main Building.\n" +
+          "• When presenting QueueLess research, avoid inventing unverified school policies, fees, or administrative approvals.",
+      };
+    }
+
     // Default friendly response
     return {
-      text: "Thank you for asking! At PHINMA University of Pangasinan Office of the University Registrar, we assist students, alumni, and guests with document requests, queue scheduling, and institutional records.\n\n" +
-        "• Office Hours: Monday to Friday 8:00 AM – 5:00 PM, Saturday 8:00 AM – 12:00 PM.\n" +
-        "• Main Campus: Arellano St., Dagupan City • Tel: (075) 522-5635 • Email: registrar.up@phinmaed.com\n" +
-        "• Releasing: Documents are released at the counter based on what has been assigned to your ticket.\n" +
-        "• Student Affairs & CSDL: facebook.com/up.csdl • University: facebook.com/phinmaupang\n\n" +
-        "Click any suggestion below to get specific, detailed information!",
-      chips: initialChips.slice(0, 6),
+      text: "Thank you for asking! I am your Campus Registrar Helper for PHINMA University of Pangasinan.\n\n" +
+        "I provide guidance on:\n" +
+        "1. Campus Facilities & Labs: https://up.phinma.edu.ph/facilities/\n" +
+        "2. CSDL Announcements & Activities: https://www.facebook.com/up.csdl\n" +
+        "3. Document Request Procedures & Releasing\n" +
+        "4. QueueLess Registrar Project Guidelines\n" +
+        "5. General School & Office Directory\n\n" +
+        "• Office Hours: Monday to Friday 8:00 AM – 5:00 PM, Saturday 8:00 AM – 12:00 PM\n" +
+        "• Main Campus: Arellano St., Dagupan City • Tel: (075) 522-5635 • Email: registrar.up@phinmaed.com\n\n" +
+        "Please type your question in the chat box below. If your inquiry relates to a specific announcement or social media post, please provide the text or a screenshot so I can verify accurately rather than guessing.",
     };
   };
 
@@ -13118,14 +13294,15 @@ function CampusRegistrarHelperModal({
       {
         id: "welcome_reset",
         sender: "bot",
-        text: "Chat cleared. What else would you like to know about the PHINMA UPang Registrar Office or QueueLess?",
+        text: "Chat cleared. Please type your question below regarding PHINMA UPang facilities, CSDL announcements, or registrar procedures.",
         time: "Just now",
-        chips: initialChips.slice(0, 8),
       },
     ]);
   };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
       onClick={onClose}
@@ -13195,22 +13372,6 @@ function CampusRegistrarHelperModal({
                 {m.text}
               </div>
 
-              {/* Suggestion Chips */}
-              {m.chips && m.chips.length > 0 && (
-                <div className="mt-2.5 flex flex-wrap gap-1.5 max-w-[98%]">
-                  {m.chips.map((chip, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => handleSend(chip)}
-                      className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-card px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary hover:text-primary-foreground transition cursor-pointer shadow-2xs"
-                    >
-                      <span>{chip}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
               <span className="mt-1 px-1 text-[9px] text-muted-foreground font-medium">
                 {m.time}
               </span>
@@ -13226,8 +13387,39 @@ function CampusRegistrarHelperModal({
 
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Chat Input Form - User types question directly */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!inputQuery.trim() || isThinking) return;
+            handleSend(inputQuery);
+            setInputQuery("");
+          }}
+          className="flex items-center gap-2 border-t border-border bg-card p-3 shrink-0"
+        >
+          <input
+            type="text"
+            value={inputQuery}
+            onChange={(e) => setInputQuery(e.target.value)}
+            placeholder="Type your question here (e.g. facilities, CSDL, requirements)..."
+            className="field flex-1 h-9 text-xs px-3"
+            disabled={isThinking}
+            autoFocus
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={isThinking || !inputQuery.trim()}
+            className="h-9 px-3.5 cursor-pointer gap-1.5 shrink-0 font-semibold"
+          >
+            <Send className="size-3.5" />
+            <span>Send</span>
+          </Button>
+        </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -16435,8 +16627,28 @@ function AdminOfficialRecordsPanel({
     }
   };
 
+  const isGuestUserRecord = (u: AccountUser) => {
+    const roleLower = (u.role || "").toLowerCase();
+    if (roleLower === "admin" || roleLower === "staff") return false;
+    if (roleLower === "guest") return true;
+    if (u.studentId && u.studentId.startsWith("GUEST")) return true;
+    const email = (u.email || "").toLowerCase().trim();
+    if (email.endsWith("@gmail.com")) return true;
+    return false;
+  };
+
   const filteredUsers = users.filter((u) => {
-    const matchesRole = roleFilter === "all" || u.role === roleFilter;
+    const isGuest = isGuestUserRecord(u);
+    const roleLower = (u.role || "").toLowerCase();
+    let matchesRole = true;
+    if (roleFilter === "guest") {
+      matchesRole = isGuest;
+    } else if (roleFilter === "student") {
+      matchesRole = roleLower === "student" && !isGuest;
+    } else if (roleFilter === "staff") {
+      matchesRole = roleLower === "staff";
+    }
+
     const term = searchTerm.toLowerCase().trim();
     const matchesSearch =
       !term ||
@@ -16446,9 +16658,9 @@ function AdminOfficialRecordsPanel({
     return matchesRole && matchesSearch;
   });
 
-  const studentsCount = users.filter((u) => u.role === "student").length;
-  const staffCount = users.filter((u) => u.role === "staff").length;
-  const guestCount = users.filter((u) => u.role === "guest").length;
+  const studentsCount = users.filter((u) => (u.role || "").toLowerCase() === "student" && !isGuestUserRecord(u)).length;
+  const staffCount = users.filter((u) => (u.role || "").toLowerCase() === "staff").length;
+  const guestCount = users.filter(isGuestUserRecord).length;
 
   return (
     <div className="animate-rise space-y-6">
@@ -16538,17 +16750,14 @@ function AdminOfficialRecordsPanel({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map((u) => {
-            const isGuestUserRecord =
-              u.role === "guest" ||
-              u.email?.toLowerCase().endsWith("@gmail.com") ||
-              Boolean(u.studentId?.startsWith("GUEST"));
-            const displayRoleName = isGuestUserRecord ? "Users" : u.role;
+            const isGuest = isGuestUserRecord(u);
+            const displayRoleName = isGuest ? "Users" : u.role;
             const roleBadge =
               u.role === "admin"
                 ? "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30"
                 : u.role === "staff"
                 ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30"
-                : isGuestUserRecord
+                : isGuest
                 ? "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30"
                 : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
 
@@ -16596,7 +16805,7 @@ function AdminOfficialRecordsPanel({
                   </div>
 
                   <div className="space-y-1.5 text-xs text-muted-foreground bg-muted/20 p-2.5 rounded-xl border border-border/60">
-                    {!isGuestUserRecord && (
+                    {!isGuest && (
                       <div className="flex items-center justify-between">
                         <span>ID Number:</span>
                         <span className="font-mono font-bold text-foreground">{u.studentId || "N/A"}</span>
@@ -17065,6 +17274,16 @@ function UsersPanel({
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (selectedUserForProfile || showDeleteConfirmModal) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [selectedUserForProfile, showDeleteConfirmModal]);
 
   // Admin Form Validation
   const handleReviewAdmin = (e: FormEvent) => {
@@ -18594,21 +18813,22 @@ function UsersPanel({
       )}
 
       {/* Admin View User Profile & Manage Account Modal */}
-      {selectedUserForProfile && (
+      {selectedUserForProfile && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
           onClick={() => setSelectedUserForProfile(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-2xl text-xs space-y-4"
+            aria-label="User Profile Details"
+            className="relative flex flex-col w-full max-w-lg max-h-[85vh] rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left text-xs"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-start justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-3.5">
-                <div className="relative flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary overflow-hidden border border-border shadow-xs">
+            {/* Sticky Header with Minimize / Close Button */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border px-4 py-2.5 bg-card/95 backdrop-blur-xs shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary overflow-hidden border border-border shadow-xs">
                   {selectedUserForProfile.picture ? (
                     <img
                       src={selectedUserForProfile.picture}
@@ -18616,18 +18836,18 @@ function UsersPanel({
                       className="size-full object-cover"
                     />
                   ) : (
-                    <UserRound className="size-7" />
+                    <UserRound className="size-5" />
                   )}
                 </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-display text-base font-bold text-foreground">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h3 className="font-display text-sm font-bold text-foreground truncate">
                       {selectedUserForProfile.name}
                     </h3>
                     {getRoleBadge(selectedUserForProfile)}
                   </div>
                   {!isGuestAccount(selectedUserForProfile) && selectedUserForProfile.studentId && (
-                    <p className="font-mono text-xs text-muted-foreground mt-0.5">
+                    <p className="font-mono text-[11px] text-muted-foreground mt-0.5">
                       {selectedUserForProfile.studentId}
                     </p>
                   )}
@@ -18637,11 +18857,15 @@ function UsersPanel({
                 size="icon"
                 variant="ghost"
                 onClick={() => setSelectedUserForProfile(null)}
-                className="size-8 cursor-pointer"
+                title="Close modal"
+                className="size-8 cursor-pointer text-muted-foreground hover:text-foreground shrink-0"
               >
                 <X className="size-4" />
               </Button>
             </div>
+
+            {/* Scrollable Compact Body */}
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5 text-xs">
 
             {/* Terms and Privacy Agreement Status */}
             <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
@@ -18881,8 +19105,10 @@ function UsersPanel({
               </div>
             </div>
 
-            {/* Account Metadata & Actions */}
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+            </div>
+
+            {/* Sticky Bottom Footer */}
+            <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-2.5 bg-card/95 backdrop-blur-xs shrink-0">
               <div className="text-[10px] text-muted-foreground">
                 {selectedUserForProfile.lastLogin && (
                   <p>Last login: {new Date(selectedUserForProfile.lastLogin).toLocaleString()}</p>
@@ -18897,24 +19123,24 @@ function UsersPanel({
                   <>
                     <Button
                       size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer gap-1"
+                      className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer gap-1"
                       onClick={() => {
                         handleApproveUser(selectedUserForProfile);
                         setSelectedUserForProfile(null);
                       }}
                     >
-                      <Check className="size-3.5" /> Admit
+                      <Check className="size-3" /> Admit
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-destructive border-destructive/30 hover:bg-destructive/10 cursor-pointer gap-1"
+                      className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10 cursor-pointer gap-1"
                       onClick={() => {
                         handleRejectUser(selectedUserForProfile);
                         setSelectedUserForProfile(null);
                       }}
                     >
-                      <X className="size-3.5" /> Reject
+                      <X className="size-3" /> Reject
                     </Button>
                   </>
                 )}
@@ -18922,14 +19148,15 @@ function UsersPanel({
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedUserForProfile(null)}
-                  className="cursor-pointer"
+                  className="h-8 text-xs cursor-pointer"
                 >
                   Close
                 </Button>
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

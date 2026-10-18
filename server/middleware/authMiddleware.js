@@ -1,66 +1,70 @@
 import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
-const JWT_SECRETS = [
-  process.env.JWT_SECRET,
-  "queueless-production-secret-key-2026-auth",
-  "replace-with-a-long-random-secret",
-].filter(Boolean);
+const JWT_SECRET = process.env.JWT_SECRET || "queueless-production-secret-key-2026-auth";
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
-        message: "Access denied. No token provided.",
+        message: "Access denied. Authentication token required.",
       });
     }
 
     const token = authHeader.split(" ")[1];
-
     if (!token) {
-      return res.status(401).json({ message: "No token provided." });
+      return res.status(401).json({ message: "Access denied. No token provided." });
     }
 
-    // Support offline session tokens for admin / staff
-    if (token.startsWith("offline-token-")) {
-      req.user = {
-        id: "admin-offline",
-        email: "admin@up.phinma.edu.ph",
-        role: "admin",
-        studentId: "ADMIN-001",
-      };
-      return next();
-    }
-
-    let decoded = null;
-    for (const secret of JWT_SECRETS) {
-      try {
-        decoded = jwt.verify(token, secret);
-        if (decoded) break;
-      } catch {
-        /* try next secret */
-      }
-    }
-
-    if (!decoded) {
-      // Decode gracefully if secret changed or rotated
-      const unverified = jwt.decode(token);
-      if (unverified && typeof unverified === "object" && unverified.role) {
-        req.user = unverified;
-        return next();
-      }
-
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (jwtErr) {
       return res.status(401).json({
-        message: "Invalid or expired token.",
+        message:
+          jwtErr.name === "TokenExpiredError"
+            ? "Session expired. Please log in again."
+            : "Invalid authentication token signature.",
       });
     }
 
-    req.user = decoded;
+    if (!decoded || !decoded.id) {
+      return res.status(401).json({
+        message: "Invalid token payload.",
+      });
+    }
+
+    // Verify user exists and synchronize live role from database
+    const dbUser = await User.findById(decoded.id).select(
+      "role approvalStatus email studentId name isPriority userType"
+    );
+
+    if (!dbUser) {
+      return res.status(401).json({ message: "User account no longer exists." });
+    }
+
+    if (dbUser.approvalStatus === "rejected") {
+      return res.status(403).json({
+        message: "Account access revoked. Please contact administrator.",
+      });
+    }
+
+    req.user = {
+      id: dbUser._id.toString(),
+      role: dbUser.role,
+      email: dbUser.email,
+      studentId: dbUser.studentId,
+      name: dbUser.name,
+      isPriority: dbUser.isPriority,
+      userType: dbUser.userType,
+    };
+
     next();
   } catch (error) {
     return res.status(401).json({
-      message: "Invalid or expired token.",
+      message: "Authentication failed.",
     });
   }
 };

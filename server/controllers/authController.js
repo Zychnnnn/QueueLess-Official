@@ -24,6 +24,16 @@ export const isSchoolCredential = (email = "", studentId = "") => {
   return Boolean(isSchoolEmail || isOfficialStudentId);
 };
 
+export const isStrongPassword = (pwd = "") => {
+  if (typeof pwd !== "string" || pwd.length < 8) return false;
+  if (/\s/.test(pwd)) return false; // Reject passwords containing spaces
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasLower = /[a-z]/.test(pwd);
+  const hasNumber = /[0-9]/.test(pwd);
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(pwd);
+  return hasUpper && hasLower && hasNumber && hasSpecial;
+};
+
 export const formatUserObject = (user) => {
   if (!user) return null;
   return {
@@ -143,9 +153,10 @@ export const register = async (req, res) => {
     const isPriority = true;
     const userType = "priority";
 
-    if (password.length < 8) {
+    if (!isStrongPassword(password)) {
       return res.status(400).json({
-        message: "Password must contain at least 8 characters.",
+        message:
+          "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
       });
     }
 
@@ -156,7 +167,7 @@ export const register = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await User.create({
       name: cleanName,
@@ -226,14 +237,15 @@ export const registerGuest = async (req, res) => {
       });
     }
 
-    if (password.length < 6) {
+    if (!isStrongPassword(password)) {
       return res.status(400).json({
-        message: "Password must be at least 6 characters.",
+        message:
+          "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
       });
     }
 
     const guestId = "GUEST-" + Math.floor(10000 + Math.random() * 90000);
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const user = await User.create({
       name: cleanName,
@@ -302,18 +314,18 @@ export const login = async (req, res) => {
         { studentId: inputIdentifier },
         { studentId: inputIdentifier.toUpperCase() },
       ],
-    });
+    }).select("+password");
 
-    if (!user) {
-      return res.status(401).json({
-        message: "Invalid Student ID / email or password.",
+    if (user && user.lockUntil && user.lockUntil > Date.now()) {
+      const remainingMinutes = Math.ceil((user.lockUntil - Date.now()) / (60 * 1000));
+      return res.status(423).json({
+        message: `Account is temporarily locked due to repeated failed login attempts. Please wait ${remainingMinutes} minute(s) before trying again, or reset your password.`,
       });
     }
 
-    if (!user.password) {
-      return res.status(400).json({
-        message:
-          "This account was created with Google Sign-In. Please click 'Sign in with Google' or use 'Forgot password?' to set a password.",
+    if (!user || !user.password) {
+      return res.status(401).json({
+        message: "Invalid email/ID or password.",
       });
     }
 
@@ -336,10 +348,19 @@ export const login = async (req, res) => {
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+      if (user.failedLoginAttempts >= 5) {
+        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15-minute lockout
+      }
+      await user.save();
       return res.status(401).json({
-        message: "Invalid Student ID / email or password.",
+        message: "Invalid email/ID or password.",
       });
     }
+
+    // Reset failed login attempts on successful authentication
+    user.failedLoginAttempts = 0;
+    user.lockUntil = undefined;
 
     const token = jwt.sign(
       {
@@ -435,12 +456,18 @@ export const createStaffAccount = async (req, res) => {
       });
     }
 
-    // Generate secure temporary password
-    const tempPassword = req.body.password && req.body.password.length >= 8
-      ? req.body.password
-      : `Staff@${Math.floor(100000 + Math.random() * 900000)}`;
+    // Generate secure temporary password or validate provided password
+    let tempPassword = `Staff@${Math.floor(100000 + Math.random() * 900000)}`;
+    if (req.body.password) {
+      if (!isStrongPassword(req.body.password)) {
+        return res.status(400).json({
+          message: "Provided password must be at least 8 characters long and contain uppercase, lowercase, number, and special character with no spaces.",
+        });
+      }
+      tempPassword = req.body.password;
+    }
 
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
     const user = await User.create({
       name: name.trim(),
       email: cleanEmail,
@@ -527,7 +554,7 @@ export const createStudentByAdmin = async (req, res) => {
       ? req.body.password
       : `Student@${Math.floor(100000 + Math.random() * 900000)}`;
 
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
     const user = await User.create({
       name: name.trim(),
       email: cleanEmail,
@@ -620,11 +647,17 @@ export const createAdminByAdmin = async (req, res) => {
       });
     }
 
-    const tempPassword = req.body.password && req.body.password.length >= 8
-      ? req.body.password
-      : `Admin@${Math.floor(100000 + Math.random() * 900000)}`;
+    let tempPassword = `Admin@${Math.floor(100000 + Math.random() * 900000)}`;
+    if (req.body.password) {
+      if (!isStrongPassword(req.body.password)) {
+        return res.status(400).json({
+          message: "Provided password must be at least 8 characters long and contain uppercase, lowercase, number, and special character with no spaces.",
+        });
+      }
+      tempPassword = req.body.password;
+    }
 
-    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+    const hashedPassword = await bcrypt.hash(tempPassword, 12);
     const user = await User.create({
       name: name.trim(),
       email: cleanEmail,
@@ -1070,18 +1103,12 @@ export const requestPasswordResetOtp = async (req, res) => {
     const user = await User.findOne(query);
 
     if (!user) {
-      if (role === "admin") {
-        return res.status(404).json({
-          message: `No administrator account found for "${input}". Please verify your Admin ID or email.`,
-        });
-      }
-      if (role === "staff") {
-        return res.status(404).json({
-          message: `No registrar staff account found for "${input}". Please verify your Staff ID or email.`,
-        });
-      }
-      return res.status(404).json({
-        message: `This email or ID "${input}" is not registered in our system. Verification OTP cannot be sent.`,
+      return res.status(200).json({
+        message:
+          "If that account exists in our records, a 6-digit verification code has been dispatched. Please check your inbox.",
+        email: cleanInput,
+        maskedEmail: cleanInput,
+        emailSent: true,
       });
     }
 
@@ -1108,7 +1135,8 @@ export const requestPasswordResetOtp = async (req, res) => {
         : userEmail;
 
     return res.status(200).json({
-      message: `A 6-digit verification code has been sent to your registered email (${maskedEmail}). Please check your inbox.`,
+      message:
+        "If that account exists in our records, a 6-digit verification code has been dispatched. Please check your inbox.",
       email: userEmail,
       maskedEmail,
       emailSent: sendResult?.sent ?? false,
@@ -1239,9 +1267,19 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
     user.password = hashedPassword;
     user.contactVerified = true;
+    user.passwordLastChanged = new Date().toISOString();
+    user.failedLoginAttempts = 0;
+    user.lockUntil = undefined;
     await user.save();
 
     await PasswordResetOtp.deleteOne({ _id: record._id });
@@ -1323,11 +1361,26 @@ export const updateProfile = async (req, res) => {
       emailChanged = true;
     }
 
+    const isAdmin = user.role === "admin";
+    const isNameLocked = Boolean(user.nameLastChanged || (user.lastName && user.firstName));
+
     updatableFields.forEach((field) => {
       if (req.body[field] !== undefined) {
+        // Enforce institutional locks: only admin can modify student ID or already-locked legal name
+        if (!isAdmin && field === "studentId") {
+          return; // Student cannot alter official student ID
+        }
+        if (!isAdmin && isNameLocked && ["name", "lastName", "firstName", "middleName", "extensionName"].includes(field)) {
+          return; // Legal name is locked from modification by student/staff
+        }
         user[field] = req.body[field];
       }
     });
+
+    // If first-time name registration by student, lock the legal name
+    if (!isAdmin && !isNameLocked && (req.body.lastName || req.body.firstName)) {
+      user.nameLastChanged = new Date().toISOString();
+    }
 
     if (user.termsAccepted && !user.termsAcceptedAt) {
       user.termsAcceptedAt = new Date();
@@ -1432,9 +1485,16 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
+    if (!isStrongPassword(newPassword)) {
       return res.status(400).json({
-        message: "New password must be at least 6 characters.",
+        message:
+          "New password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+      });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        message: "New password cannot be the same as your current password.",
       });
     }
 
@@ -1445,7 +1505,7 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select("+password");
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
@@ -1495,9 +1555,11 @@ export const changePassword = async (req, res) => {
 
     await PasswordResetOtp.deleteOne({ _id: otpRecord._id });
 
-    const salt = await bcrypt.genSalt(10);
+    const salt = await bcrypt.genSalt(12);
     user.password = await bcrypt.hash(newPassword, salt);
     user.passwordLastChanged = new Date().toISOString();
+    user.failedLoginAttempts = 0;
+    user.lockUntil = undefined;
     await user.save();
 
     sendSecurityConfirmationEmail({

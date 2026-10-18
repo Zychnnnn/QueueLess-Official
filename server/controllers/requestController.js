@@ -422,6 +422,33 @@ export const updateRequest = async (req, res) => {
   }
 };
 
+export const getRequestByNumber = async (req, res) => {
+  try {
+    const { requestNumber } = req.params;
+    const request = await Request.findOne({ requestNumber });
+    if (!request) {
+      return res.status(404).json({ message: "Request not found." });
+    }
+
+    // Enforce student ownership: students can only access their own request
+    if (req.user.role === "student" || req.user.role === "guest") {
+      const isOwner =
+        (req.user.studentId && request.studentId === req.user.studentId) ||
+        (req.user.email && request.email === req.user.email);
+      if (!isOwner) {
+        return res.status(403).json({
+          message: "Access denied. You do not have permission to access another student's document request.",
+        });
+      }
+    }
+
+    return res.status(200).json({ request });
+  } catch (error) {
+    console.error("getRequestByNumber error:", error);
+    return res.status(500).json({ message: "Server error while fetching request." });
+  }
+};
+
 export const rateRequest = async (req, res) => {
   try {
     const { requestNumber } = req.params;
@@ -430,6 +457,18 @@ export const rateRequest = async (req, res) => {
     const request = await Request.findOne({ requestNumber });
     if (!request) {
       return res.status(404).json({ message: "Request not found." });
+    }
+
+    // Enforce student ownership: student can only rate their own request
+    if (req.user.role === "student" || req.user.role === "guest") {
+      const isOwner =
+        (req.user.studentId && request.studentId === req.user.studentId) ||
+        (req.user.email && request.email === req.user.email);
+      if (!isOwner) {
+        return res.status(403).json({
+          message: "Access denied. You can only submit ratings for your own document requests.",
+        });
+      }
     }
 
     request.rating = Number(rating) || 5;
