@@ -49,23 +49,47 @@ app.use(
   })
 );
 
+app.set("trust proxy", 1);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+const isLocalOrDevRequest = (req) => {
+  if (process.env.NODE_ENV !== "production") return true;
+  const ip = req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || "";
+  return (
+    !ip ||
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip === "::ffff:127.0.0.1" ||
+    ip.includes("127.0.0.1") ||
+    ip.includes("localhost")
+  );
+};
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5000,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: isLocalOrDevRequest,
 });
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: (req) => {
+    if (isLocalOrDevRequest(req)) return true;
+    // Don't rate limit read-only requests or non-login administrative operations
+    if (req.method === "GET") return true;
+    if (req.path.startsWith("/users") || req.path.startsWith("/profile")) return true;
+    return false;
+  },
   message: {
-    message: "Too many authentication attempts from this IP. Please wait 15 minutes before trying again.",
+    message: "Too many authentication attempts from this IP. Please wait a few minutes before trying again.",
   },
 });
 

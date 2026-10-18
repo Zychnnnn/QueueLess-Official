@@ -2555,6 +2555,34 @@ function AuthScreen({
   onSignIn: (user: AuthUser) => void;
 }) {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [inputIdentity, setInputIdentity] = useState(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("identity") || "";
+    }
+    return "";
+  });
+  const [inputPassword, setInputPassword] = useState(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("password") || "";
+    }
+    return "";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search) {
+      const p = new URLSearchParams(window.location.search);
+      if (p.has("identity") || p.has("password")) {
+        p.delete("identity");
+        p.delete("password");
+        const remaining = p.toString();
+        const newUrl = window.location.pathname + (remaining ? `?${remaining}` : "") + window.location.hash;
+        window.history.replaceState({}, "", newUrl);
+      }
+    }
+  }, []);
+
   const [mode, setMode] =
     useState<"login" | "register" | "guest-register" | "forgot-password" | "activate-account">(
       "login"
@@ -3305,6 +3333,8 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
                   <input
                     name="identity"
                     type="text"
+                    value={inputIdentity}
+                    onChange={(e) => setInputIdentity(e.target.value)}
                     autoComplete="username"
                     className="field"
                     placeholder="Enter your username"
@@ -3317,6 +3347,8 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
                     <input
                       name="password"
                       type={showLoginPassword ? "text" : "password"}
+                      value={inputPassword}
+                      onChange={(e) => setInputPassword(e.target.value)}
                       autoComplete="current-password"
                       className="field pr-10"
                       placeholder="Enter your password"
