@@ -2564,9 +2564,6 @@ function AuthScreen({
   const [showGoogleModal, setShowGoogleModal] =
     useState(false);
 
-  const [hasGoogleBtn, setHasGoogleBtn] =
-    useState(false);
-
 const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta.apps.googleusercontent.com";
 
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -2622,6 +2619,41 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
       });
     } catch (err) {
       console.warn("Backend unavailable, activating Google sign-in client fallback:", err);
+      if (authPayload.access_token) {
+        try {
+          const profileRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+            headers: { Authorization: `Bearer ${authPayload.access_token}` },
+          });
+          if (profileRes.ok) {
+            const profile = await profileRes.json();
+            const email = (profile.email || "").toLowerCase().trim();
+            const name = profile.name || profile.given_name || "Google User";
+            const picture = profile.picture || "";
+            const isGmail = email.endsWith("@gmail.com");
+            const isPhinma = email.endsWith("@phinmaed.com") || email.endsWith(".edu.ph");
+            const role: Role = isGmail ? "guest" : "student";
+            const googleUser: AuthUser = {
+              id: `google-${profile.sub || Date.now()}`,
+              name,
+              email,
+              role,
+              studentId: isGmail ? "" : "03-2425-098124",
+              picture,
+              userType: isPhinma ? "priority" : "normal",
+              isPriority: isPhinma,
+              termsAccepted: true,
+              termsAcceptedAt: new Date().toISOString(),
+              lastLogin: new Date().toISOString(),
+            };
+            localStorage.setItem("queueless_token", `offline-token-${Date.now()}`);
+            localStorage.setItem("queueless_user", JSON.stringify(googleUser));
+            onSignIn(googleUser);
+            return;
+          }
+        } catch (tokenErr) {
+          console.error("Client Google profile fetch error:", tokenErr);
+        }
+      }
       if (authPayload.credential) {
         try {
           const base64Url = authPayload.credential.split(".")[1];
@@ -2692,20 +2724,6 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
           auto_select: false,
           cancel_on_tap_outside: true,
         });
-
-        const container = document.getElementById("google-signin-btn-container");
-        if (container && isMounted) {
-          container.innerHTML = "";
-          google.accounts.id.renderButton(container, {
-            theme: "outline",
-            size: "large",
-            shape: "rectangular",
-            text: "continue_with",
-            logo_alignment: "left",
-            width: 320,
-          });
-          setHasGoogleBtn(true);
-        }
       }
     };
 
@@ -2736,23 +2754,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
     // @ts-expect-error Google Identity Services
     const google = window.google;
 
-    // First try the native Google ID prompt (One-Tap / standard chooser)
-    if (google?.accounts?.id) {
-      try {
-        google.accounts.id.prompt((notification: any) => {
-          if (notification?.isNotDisplayed?.() || notification?.isSkippedMoment?.()) {
-            const renderedBtn = document.querySelector("#google-signin-btn-container div[role=button]") as HTMLElement;
-            if (renderedBtn) {
-              renderedBtn.click();
-            }
-          }
-        });
-      } catch (promptErr) {
-        console.warn("Google prompt error:", promptErr);
-      }
-    }
-
-    // Secondary: OAuth 2.0 Token Client
+    // Use Google Identity Services OAuth 2.0 Token Client (exact behavior from localhost:5173)
     if (google?.accounts?.oauth2) {
       try {
         const tokenClient = google.accounts.oauth2.initTokenClient({
@@ -2775,6 +2777,14 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
         return;
       } catch (err) {
         console.error("Google OAuth2 token client error:", err);
+      }
+    }
+
+    if (google?.accounts?.id) {
+      try {
+        google.accounts.id.prompt();
+      } catch (promptErr) {
+        console.warn("Google prompt error:", promptErr);
       }
     }
   };
@@ -3360,33 +3370,27 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
                 </div>
               </div>
 
-              <div className="space-y-3 flex flex-col items-center">
-                <div
-                  id="google-signin-btn-container"
-                  className="w-full flex justify-center min-h-[44px]"
-                />
-                {!hasGoogleBtn && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="w-full gap-3 border-border font-semibold shadow-sm transition hover:bg-muted"
-                    disabled={loading || googleLoading}
-                    onClick={handleCustomGoogleClick}
-                  >
-                    {googleLoading ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin" />
-                        <span>Connecting with Google...</span>
-                      </>
-                    ) : (
-                      <>
-                        <GoogleIcon className="size-5 shrink-0" />
-                        <span>Sign in with Google</span>
-                      </>
-                    )}
-                  </Button>
-                )}
+              <div className="space-y-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full gap-3 border-border font-semibold shadow-sm transition hover:bg-muted"
+                  disabled={loading || googleLoading}
+                  onClick={handleCustomGoogleClick}
+                >
+                  {googleLoading ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Connecting with Google...</span>
+                    </>
+                  ) : (
+                    <>
+                      <GoogleIcon className="size-5 shrink-0" />
+                      <span>Sign in with Google</span>
+                    </>
+                  )}
+                </Button>
               </div>
             </>
           ) : mode === "register" ? (
