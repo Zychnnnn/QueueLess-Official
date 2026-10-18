@@ -1883,6 +1883,19 @@ function QueueLessApp() {
               )}
             </button>
 
+            {signedIn && (role === "student" || role === "guest") && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden size-9 text-primary hover:bg-primary/10 cursor-pointer"
+                aria-label="Campus Registrar Helper"
+                title="Campus Registrar Helper"
+                onClick={() => setShowAiHelper(true)}
+              >
+                <Bot className="size-5" />
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="icon"
@@ -2155,9 +2168,28 @@ function QueueLessApp() {
                 </button>
               </div>
             ) : (role === "student" || role === "guest") ? (
-              <div className="mb-4 rounded-md bg-muted p-3">
+              <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 p-3 shadow-2xs">
+                {/* Registrar Helper Button at the top */}
+                <button
+                  type="button"
+                  onClick={() => setShowAiHelper(true)}
+                  aria-label="Campus Registrar Helper"
+                  title="Campus Registrar Helper - Ask questions about registrar services and facilities"
+                  className="w-full flex items-center justify-between rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-xs hover:bg-primary/90 hover:scale-[1.01] active:scale-[0.98] transition-all cursor-pointer mb-2.5 border border-primary-foreground/20"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex size-2 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+                    </span>
+                    <Bot className="size-3.5 shrink-0" />
+                    <span>Registrar Helper</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-primary-foreground/85">Ask AI →</span>
+                </button>
+
                 <p className="text-xs font-bold text-foreground">Need help?</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
                   Visit the Registrar's Office during campus hours.
                 </p>
               </div>
@@ -2492,25 +2524,6 @@ function QueueLessApp() {
         />
       )}
 
-      {/* Campus Registrar Helper Docked Action Button - Students & Guests Only */}
-      {signedIn && (currentUser?.role === "student" || currentUser?.role === "guest") && (
-        <div className="fixed bottom-5 right-6 z-40 print:hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
-          <button
-            type="button"
-            onClick={() => setShowAiHelper(true)}
-            aria-label="Campus Registrar Helper"
-            title="Campus Registrar Helper - Ask questions about registrar services and facilities"
-            className="flex items-center gap-2 rounded-full bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer border border-primary-foreground/20 ring-1 ring-black/10"
-          >
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
-            </span>
-            <Bot className="size-4" />
-            <span>Registrar Helper</span>
-          </button>
-        </div>
-      )}
 
       {/* Campus Registrar Helper AI Modal - Students & Guests Only */}
       {showAiHelper && (currentUser?.role === "student" || currentUser?.role === "guest") && (
