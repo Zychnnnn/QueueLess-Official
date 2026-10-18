@@ -2736,7 +2736,23 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
     // @ts-expect-error Google Identity Services
     const google = window.google;
 
-    // Use Google Identity Services OAuth 2.0 Token Client (opens the exact Account Chooser popup)
+    // First try the native Google ID prompt (One-Tap / standard chooser)
+    if (google?.accounts?.id) {
+      try {
+        google.accounts.id.prompt((notification: any) => {
+          if (notification?.isNotDisplayed?.() || notification?.isSkippedMoment?.()) {
+            const renderedBtn = document.querySelector("#google-signin-btn-container div[role=button]") as HTMLElement;
+            if (renderedBtn) {
+              renderedBtn.click();
+            }
+          }
+        });
+      } catch (promptErr) {
+        console.warn("Google prompt error:", promptErr);
+      }
+    }
+
+    // Secondary: OAuth 2.0 Token Client
     if (google?.accounts?.oauth2) {
       try {
         const tokenClient = google.accounts.oauth2.initTokenClient({
@@ -2761,24 +2777,6 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
         console.error("Google OAuth2 token client error:", err);
       }
     }
-
-    // Fallback direct OAuth 2.0 popup with prompt=select_account
-    const width = 500;
-    const height = 650;
-    const left = window.screenLeft + (window.outerWidth - width) / 2;
-    const top = window.screenTop + (window.outerHeight - height) / 2;
-
-    const popupUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
-      activeClientId
-    )}&redirect_uri=${encodeURIComponent(
-      window.location.origin
-    )}&response_type=token%20id_token&scope=openid%20email%20profile&prompt=select_account&nonce=${Date.now()}`;
-
-    window.open(
-      popupUrl,
-      "GoogleSignInPopup",
-      `width=${width},height=${height},left=${left},top=${top},status=no,toolbar=no,menubar=no`
-    );
   };
 
   const submitLogin = async (
@@ -3362,27 +3360,33 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="w-full gap-3 border-border font-semibold shadow-sm transition hover:bg-muted"
-                  disabled={loading || googleLoading}
-                  onClick={handleCustomGoogleClick}
-                >
-                  {googleLoading ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      <span>Connecting with Google...</span>
-                    </>
-                  ) : (
-                    <>
-                      <GoogleIcon className="size-5 shrink-0" />
-                      <span>Sign in with Google</span>
-                    </>
-                  )}
-                </Button>
+              <div className="space-y-3 flex flex-col items-center">
+                <div
+                  id="google-signin-btn-container"
+                  className="w-full flex justify-center min-h-[44px]"
+                />
+                {!hasGoogleBtn && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="w-full gap-3 border-border font-semibold shadow-sm transition hover:bg-muted"
+                    disabled={loading || googleLoading}
+                    onClick={handleCustomGoogleClick}
+                  >
+                    {googleLoading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        <span>Connecting with Google...</span>
+                      </>
+                    ) : (
+                      <>
+                        <GoogleIcon className="size-5 shrink-0" />
+                        <span>Sign in with Google</span>
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
             </>
           ) : mode === "register" ? (
