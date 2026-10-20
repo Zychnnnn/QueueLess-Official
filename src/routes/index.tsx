@@ -539,21 +539,23 @@ function isPersonalDetailsComplete(u: AuthUser | null | undefined): boolean {
     Boolean(u.email?.toLowerCase().endsWith("@gmail.com"));
 
   const hasNames = Boolean((u.firstName || "").trim() && (u.lastName || "").trim());
-
-  if (isGuest) {
-    return hasNames;
-  }
-
-  const hasAddress = Boolean((u.currentAddress || u.address || "").trim());
-  const hasAcademic = Boolean((u.course || "").trim() && (u.yearLevel || "").trim());
-  const hasElementary = Boolean((u.elemSchool || "").trim());
-  const hasJuniorHigh = Boolean((u.juniorHighSchool || "").trim());
   const hasGender = Boolean((u.gender || "").trim());
   const hasBirthDate = Boolean((u.birthDate || "").trim());
   const hasReligion = Boolean((u.religion || "").trim());
+  const hasAddress = Boolean((u.currentAddress || u.address || "").trim());
   const hasFather = Boolean((u.fatherName || "").trim());
   const hasMother = Boolean((u.motherName || "").trim());
   const hasGuardian = Boolean((u.guardianName || "").trim());
+
+  // For Guests: Personal Details, Family Details, and Address Details are ALL required (phones optional)
+  if (isGuest) {
+    return hasNames && hasGender && hasBirthDate && hasReligion && hasAddress && hasFather && hasMother && hasGuardian;
+  }
+
+  // For Students: Personal Details, Family Details, Address Details, AND Educational Details are required
+  const hasAcademic = Boolean((u.course || "").trim() && (u.yearLevel || "").trim());
+  const hasElementary = Boolean((u.elemSchool || "").trim());
+  const hasJuniorHigh = Boolean((u.juniorHighSchool || "").trim());
 
   return hasNames && hasAddress && hasAcademic && hasElementary && hasJuniorHigh && hasGender && hasBirthDate && hasReligion && hasFather && hasMother && hasGuardian;
 }
@@ -6369,6 +6371,7 @@ function SearchableSelect({
   options,
   placeholder = "Select an option",
   disabled = false,
+  id,
 }: {
   label: ReactNode;
   value: string;
@@ -6376,6 +6379,7 @@ function SearchableSelect({
   options: string[];
   placeholder?: string;
   disabled?: boolean;
+  id?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -6407,6 +6411,7 @@ function SearchableSelect({
         {label}
       </label>
       <button
+        id={id}
         type="button"
         disabled={disabled}
         onClick={() => {
@@ -6585,13 +6590,14 @@ function StudentPersonalDetailsView({
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
   const [activeSectionTab, setActiveSectionTab] = useState<"all" | "personal" | "family" | "address" | "course">("all");
   const [termsAgreed, setTermsAgreed] = useState(Boolean(currentUser.termsAccepted));
   const [termsError, setTermsError] = useState("");
   const [showTermsModal, setShowTermsModal] = useState(false);
 
   useEffect(() => {
-    if (showConfirmModal || showSuccessModal || showTermsModal) {
+    if (showConfirmModal || showSuccessModal || showTermsModal || showMissingFieldsModal) {
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
@@ -6927,40 +6933,160 @@ function StudentPersonalDetailsView({
     }
   };
 
-  const handleSave = () => {
-    if (!validateInputs()) return;
-    setShowConfirmModal(true);
+  interface MissingFieldItem {
+    id: string;
+    label: string;
+    section: "personal" | "family" | "address" | "course";
+    sectionTitle: string;
+  }
+
+  const getMissingFields = (): MissingFieldItem[] => {
+    const list: MissingFieldItem[] = [];
+
+    // --- Section 1: Personal Details ---
+    if (!isNameLocked && !lastName.trim()) {
+      list.push({ id: "field-lastName", label: "Last Name", section: "personal", sectionTitle: "Personal Details" });
+    }
+    if (!isNameLocked && !firstName.trim()) {
+      list.push({ id: "field-firstName", label: "First Name", section: "personal", sectionTitle: "Personal Details" });
+    }
+    if (isStudent && !isIdLocked && (!editStudentId.trim() || !isValidStudentId(editStudentId))) {
+      list.push({ id: "field-studentId", label: "Official UPang Student ID", section: "personal", sectionTitle: "Personal Details" });
+    }
+    if (!editEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editEmail.trim())) {
+      list.push({ id: "field-email", label: "Email Address", section: "personal", sectionTitle: "Personal Details" });
+    }
+    if (!editGender) {
+      list.push({ id: "field-gender", label: "Gender", section: "personal", sectionTitle: "Personal Details" });
+    }
+    if (!editBirthDate) {
+      list.push({ id: "field-birthDate", label: "Date of Birth", section: "personal", sectionTitle: "Personal Details" });
+    }
+    if (!editNationality.trim()) {
+      list.push({ id: "field-nationality", label: "Nationality", section: "personal", sectionTitle: "Personal Details" });
+    }
+    if (!editReligion.trim()) {
+      list.push({ id: "field-religion", label: "Religion", section: "personal", sectionTitle: "Personal Details" });
+    }
+    if (!editCivilStatus) {
+      list.push({ id: "field-civilStatus", label: "Civil Status", section: "personal", sectionTitle: "Personal Details" });
+    }
+
+    // --- Section 2: Family Details (Required for BOTH Guest & Student) ---
+    if (!fatherName.trim()) {
+      list.push({ id: "field-fatherName", label: "Father's Full Name", section: "family", sectionTitle: "Family Details" });
+    }
+    if (!fatherOccupation.trim()) {
+      list.push({ id: "field-fatherOccupation", label: "Father's Occupation", section: "family", sectionTitle: "Family Details" });
+    }
+    if (!motherName.trim()) {
+      list.push({ id: "field-motherName", label: "Mother's Full Name (Maiden)", section: "family", sectionTitle: "Family Details" });
+    }
+    if (!motherOccupation.trim()) {
+      list.push({ id: "field-motherOccupation", label: "Mother's Occupation", section: "family", sectionTitle: "Family Details" });
+    }
+    if (!guardianName.trim()) {
+      list.push({ id: "field-guardianName", label: "Guardian / Emergency Contact Name", section: "family", sectionTitle: "Family Details" });
+    }
+    if (!guardianRelationship.trim()) {
+      list.push({ id: "field-guardianRelationship", label: "Guardian Relationship", section: "family", sectionTitle: "Family Details" });
+    }
+
+    // --- Section 3: Address Details (Required for BOTH Guest & Student) ---
+    if (!currentAddress.trim()) {
+      list.push({ id: "field-currentAddress", label: "Current Street Address", section: "address", sectionTitle: "Address Details" });
+    }
+    if (!currentCity.trim()) {
+      list.push({ id: "field-currentCity", label: "Current City / Municipality", section: "address", sectionTitle: "Address Details" });
+    }
+    if (!currentProvince.trim()) {
+      list.push({ id: "field-currentProvince", label: "Current Province", section: "address", sectionTitle: "Address Details" });
+    }
+    if (!currentPostalCode.trim()) {
+      list.push({ id: "field-currentPostalCode", label: "Current Postal Code", section: "address", sectionTitle: "Address Details" });
+    }
+    if (!sameAsCurrentAddress) {
+      if (!permanentAddress.trim()) {
+        list.push({ id: "field-permanentAddress", label: "Permanent Street Address", section: "address", sectionTitle: "Address Details" });
+      }
+      if (!permanentCity.trim()) {
+        list.push({ id: "field-permanentCity", label: "Permanent City / Municipality", section: "address", sectionTitle: "Address Details" });
+      }
+      if (!permanentProvince.trim()) {
+        list.push({ id: "field-permanentProvince", label: "Permanent Province", section: "address", sectionTitle: "Address Details" });
+      }
+      if (!permanentPostalCode.trim()) {
+        list.push({ id: "field-permanentPostalCode", label: "Permanent Postal Code", section: "address", sectionTitle: "Address Details" });
+      }
+    }
+
+    // --- Section 4: Educational Details (Required for Student ONLY) ---
+    if (isStudent) {
+      if (!editCourse.trim()) {
+        list.push({ id: "field-course", label: "Degree / Academic Program", section: "course", sectionTitle: "Educational Details" });
+      }
+      if (!editYearLevel.trim()) {
+        list.push({ id: "field-yearLevel", label: "Year Level / Status", section: "course", sectionTitle: "Educational Details" });
+      }
+      if (!elemSchool.trim()) {
+        list.push({ id: "field-elemSchool", label: "Elementary School Name", section: "course", sectionTitle: "Educational Details" });
+      }
+      if (!juniorHighSchool.trim()) {
+        list.push({ id: "field-juniorHighSchool", label: "Junior High School Name", section: "course", sectionTitle: "Educational Details" });
+      }
+      if (!seniorHighSchool.trim()) {
+        list.push({ id: "field-seniorHighSchool", label: "Senior High School Name", section: "course", sectionTitle: "Educational Details" });
+      }
+    }
+
+    // --- Terms & Conditions ---
+    if (!termsAgreed) {
+      list.push({ id: "student-terms-agreement", label: "Terms and Conditions Agreement", section: "personal", sectionTitle: "Agreement" });
+    }
+
+    return list;
   };
 
-  // Compute missing required fields for visual indicator
-  const missingFields: string[] = (() => {
-    const m: string[] = [];
-    if (!isNameLocked && !lastName.trim()) m.push("Last Name");
-    if (!isNameLocked && !firstName.trim()) m.push("First Name");
-    if (isStudent && !isIdLocked && !editStudentId.trim()) m.push("Student ID");
-    if (!editGender) m.push("Gender");
-    if (!editBirthDate) m.push("Date of Birth");
-    if (!editNationality.trim()) m.push("Nationality");
-    if (!editReligion.trim()) m.push("Religion");
-    if (!editCivilStatus) m.push("Civil Status");
-    if (!currentAddress.trim()) m.push("Current Address");
-    if (!currentCity.trim()) m.push("City / Municipality");
-    if (!currentProvince.trim()) m.push("Province");
-    if (!currentPostalCode.trim()) m.push("Postal Code");
-    if (isStudent && !fatherName.trim()) m.push("Father's Name");
-    if (isStudent && !fatherOccupation.trim()) m.push("Father's Occupation");
-    if (isStudent && !motherName.trim()) m.push("Mother's Name");
-    if (isStudent && !motherOccupation.trim()) m.push("Mother's Occupation");
-    if (isStudent && !guardianName.trim()) m.push("Guardian Name");
-    if (isStudent && !guardianRelationship.trim()) m.push("Guardian Relationship");
-    if (isStudent && !editCourse.trim()) m.push("Course / Program");
-    if (isStudent && !editYearLevel.trim()) m.push("Year Level");
-    if (isStudent && !elemSchool.trim()) m.push("Elementary School");
-    if (isStudent && !juniorHighSchool.trim()) m.push("Junior High School");
-    if (isStudent && !seniorHighSchool.trim()) m.push("Senior High School");
-    if (!termsAgreed) m.push("Terms & Conditions Agreement");
-    return m;
-  })();
+  const navigateToField = (fieldId: string, section: "personal" | "family" | "address" | "course") => {
+    setShowMissingFieldsModal(false);
+    setActiveSectionTab(section);
+
+    setTimeout(() => {
+      const el = document.getElementById(fieldId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        if ("focus" in el && typeof (el as HTMLElement).focus === "function") {
+          (el as HTMLElement).focus();
+        }
+        el.classList.add("ring-4", "ring-amber-500", "ring-offset-2", "border-amber-500");
+        setTimeout(() => {
+          el.classList.remove("ring-4", "ring-amber-500", "ring-offset-2", "border-amber-500");
+        }, 2800);
+      }
+    }, 120);
+  };
+
+  const handleSave = () => {
+    // Phone numbers are explicitly OPTIONAL: only validate format if provided
+    if (editPhone.trim()) {
+      const cleanDigits = normalizePhone(editPhone);
+      if (cleanDigits.length !== 11 || !cleanDigits.startsWith("09")) {
+        setFlash({
+          tone: "error",
+          text: `Mobile number must be a valid 11-digit number starting with 09 (currently ${cleanDigits.length}/11 digits) or leave blank.`,
+        });
+        return;
+      }
+    }
+
+    const missing = getMissingFields();
+    if (missing.length > 0) {
+      setShowMissingFieldsModal(true);
+      return;
+    }
+
+    setShowConfirmModal(true);
+  };
 
   const SectionHeading = ({ icon, title, subtitle, badge }: { icon: React.ReactNode; title: string; subtitle: string; badge?: string }) => (
     <div className="mb-4 flex items-start justify-between border-b border-border/70 pb-3">
@@ -7113,6 +7239,7 @@ function StudentPersonalDetailsView({
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
+                  id="field-lastName"
                   placeholder="e.g. Dela Cruz"
                   className={`field ${isNameLocked ? "cursor-not-allowed bg-muted/60 opacity-80 pointer-events-none select-none" : ""}`}
                   required
@@ -7136,6 +7263,7 @@ function StudentPersonalDetailsView({
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
+                  id="field-firstName"
                   placeholder="e.g. Juan"
                   className={`field ${isNameLocked ? "cursor-not-allowed bg-muted/60 opacity-80 pointer-events-none select-none" : ""}`}
                   required
@@ -7217,6 +7345,7 @@ function StudentPersonalDetailsView({
                   type="text"
                   value={editStudentId}
                   onChange={(e) => handleStudentIdChange(e.target.value)}
+                  id="field-studentId"
                   placeholder="Enter your Official UPang ID"
                   className={`field font-mono ${isIdLocked ? "cursor-not-allowed bg-muted/60 opacity-80 pointer-events-none select-none border-dashed" : ""}`}
                   maxLength={17}
@@ -7245,6 +7374,7 @@ function StudentPersonalDetailsView({
                   onChange={(e) => {
                     setEditPhone(normalizePhone(e.target.value));
                   }}
+                  id="field-phone"
                   placeholder="09XXXXXXXXX (Optional)"
                   className="field font-mono"
                   maxLength={11}
@@ -7263,6 +7393,7 @@ function StudentPersonalDetailsView({
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
+                  id="field-email"
                   placeholder="e.g. user@phinmaed.com"
                   className="field"
                 />
@@ -7271,7 +7402,7 @@ function StudentPersonalDetailsView({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="* Gender">
-                <select value={editGender} onChange={(e) => setEditGender(e.target.value)} className="field cursor-pointer">
+                <select id="field-gender" value={editGender} onChange={(e) => setEditGender(e.target.value)} className="field cursor-pointer">
                   <option value="">Please Select</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
@@ -7279,6 +7410,7 @@ function StudentPersonalDetailsView({
               </Field>
               <Field label="* Date of Birth">
                 <input
+                  id="field-birthDate"
                   type="date"
                   value={editBirthDate}
                   onChange={(e) => setEditBirthDate(e.target.value)}
@@ -7291,6 +7423,7 @@ function StudentPersonalDetailsView({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="* Nationality">
                 <input
+                  id="field-nationality"
                   type="text"
                   value={editNationality}
                   onChange={(e) => setEditNationality(e.target.value)}
@@ -7300,6 +7433,7 @@ function StudentPersonalDetailsView({
               </Field>
               <Field label="* Religion">
                 <input
+                  id="field-religion"
                   type="text"
                   value={editReligion}
                   onChange={(e) => setEditReligion(e.target.value)}
@@ -7308,7 +7442,7 @@ function StudentPersonalDetailsView({
                 />
               </Field>
               <Field label="* Civil Status">
-                <select value={editCivilStatus} onChange={(e) => setEditCivilStatus(e.target.value)} className="field cursor-pointer">
+                <select id="field-civilStatus" value={editCivilStatus} onChange={(e) => setEditCivilStatus(e.target.value)} className="field cursor-pointer">
                   <option value="Single">Single</option>
                   <option value="Married">Married</option>
                   <option value="Widowed">Widowed</option>
@@ -7334,6 +7468,7 @@ function StudentPersonalDetailsView({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Father's Full Name">
                 <input
+                  id="field-fatherName"
                   type="text"
                   value={fatherName}
                   onChange={(e) => setFatherName(e.target.value)}
@@ -7343,6 +7478,7 @@ function StudentPersonalDetailsView({
               </Field>
               <Field label="Father's Occupation">
                 <input
+                  id="field-fatherOccupation"
                   type="text"
                   value={fatherOccupation}
                   onChange={(e) => setFatherOccupation(e.target.value)}
@@ -7369,6 +7505,7 @@ function StudentPersonalDetailsView({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="* Mother's Full Name (Maiden)">
                 <input
+                  id="field-motherName"
                   type="text"
                   value={motherName}
                   onChange={(e) => setMotherName(e.target.value)}
@@ -7378,6 +7515,7 @@ function StudentPersonalDetailsView({
               </Field>
               <Field label="* Mother's Occupation">
                 <input
+                  id="field-motherOccupation"
                   type="text"
                   value={motherOccupation}
                   onChange={(e) => setMotherOccupation(e.target.value)}
@@ -7457,6 +7595,7 @@ function StudentPersonalDetailsView({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Name of Guardian">
                 <input
+                  id="field-guardianName"
                   type="text"
                   value={guardianName}
                   onChange={(e) => setGuardianName(e.target.value)}
@@ -7466,6 +7605,7 @@ function StudentPersonalDetailsView({
               </Field>
               <Field label="Relationship with Guardian">
                 <input
+                  id="field-guardianRelationship"
                   type="text"
                   value={guardianRelationship}
                   onChange={(e) => setGuardianRelationship(e.target.value)}
@@ -7505,6 +7645,7 @@ function StudentPersonalDetailsView({
               <p className="font-semibold text-foreground mb-2 text-xs">Current Address</p>
               <Field label="* Address (House No., Street, Barangay)">
                 <input
+                  id="field-currentAddress"
                   type="text"
                   value={currentAddress}
                   onChange={(e) => setCurrentAddress(e.target.value)}
@@ -7514,6 +7655,7 @@ function StudentPersonalDetailsView({
               </Field>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
                 <SearchableSelect
+                  id="field-currentCountry"
                   label="* Country"
                   value={currentCountry}
                   onChange={setCurrentCountry}
@@ -7521,6 +7663,7 @@ function StudentPersonalDetailsView({
                   placeholder="Select Country"
                 />
                 <SearchableSelect
+                  id="field-currentProvince"
                   label="* Province"
                   value={currentProvince}
                   onChange={setCurrentProvince}
@@ -7528,6 +7671,7 @@ function StudentPersonalDetailsView({
                   placeholder="Select Province"
                 />
                 <SearchableSelect
+                  id="field-currentCity"
                   label="* City / Municipality"
                   value={currentCity}
                   onChange={setCurrentCity}
@@ -7536,6 +7680,7 @@ function StudentPersonalDetailsView({
                 />
                 <Field label="* Postal Code">
                   <input
+                    id="field-currentPostalCode"
                     type="text"
                     value={currentPostalCode}
                     onChange={(e) => setCurrentPostalCode(e.target.value)}
@@ -7564,6 +7709,7 @@ function StudentPersonalDetailsView({
                 <div className="space-y-3">
                   <Field label="* Address">
                     <input
+                      id="field-permanentAddress"
                       type="text"
                       value={permanentAddress}
                       onChange={(e) => setPermanentAddress(e.target.value)}
@@ -7573,6 +7719,7 @@ function StudentPersonalDetailsView({
                   </Field>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <SearchableSelect
+                      id="field-permanentCountry"
                       label="* Country"
                       value={permanentCountry}
                       onChange={setPermanentCountry}
@@ -7580,6 +7727,7 @@ function StudentPersonalDetailsView({
                       placeholder="Select Country"
                     />
                     <SearchableSelect
+                      id="field-permanentProvince"
                       label="* Province"
                       value={permanentProvince}
                       onChange={setPermanentProvince}
@@ -7587,6 +7735,7 @@ function StudentPersonalDetailsView({
                       placeholder="Select Province"
                     />
                     <SearchableSelect
+                      id="field-permanentCity"
                       label="* City/Municipality"
                       value={permanentCity}
                       onChange={setPermanentCity}
@@ -7595,6 +7744,7 @@ function StudentPersonalDetailsView({
                     />
                     <Field label="* Postal Code">
                       <input
+                        id="field-permanentPostalCode"
                         type="text"
                         value={permanentPostalCode}
                         onChange={(e) => setPermanentPostalCode(e.target.value)}
@@ -7622,6 +7772,7 @@ function StudentPersonalDetailsView({
             <div className="space-y-4 text-xs">
               <Field label="* Degree / Academic Program">
                 <select
+                  id="field-course"
                   value={editCourse}
                   onChange={(e) => setEditCourse(e.target.value)}
                   className="field cursor-pointer"
@@ -7641,6 +7792,7 @@ function StudentPersonalDetailsView({
               </Field>
               <Field label="* Year Level / Status">
                 <select
+                  id="field-yearLevel"
                   value={editYearLevel}
                   onChange={(e) => setEditYearLevel(e.target.value)}
                   className="field cursor-pointer"
@@ -7699,6 +7851,7 @@ function StudentPersonalDetailsView({
                             type="text"
                             value={elemSchool}
                             onChange={(e) => setElemSchool(e.target.value)}
+                            id="field-elemSchool"
                             placeholder="Name of Elementary School *"
                             className="field h-8 text-xs"
                             required
@@ -7737,6 +7890,7 @@ function StudentPersonalDetailsView({
                             type="text"
                             value={juniorHighSchool}
                             onChange={(e) => setJuniorHighSchool(e.target.value)}
+                            id="field-juniorHighSchool"
                             placeholder="Name of Junior High School *"
                             className="field h-8 text-xs"
                             required
@@ -7775,6 +7929,7 @@ function StudentPersonalDetailsView({
                             type="text"
                             value={seniorHighSchool}
                             onChange={(e) => setSeniorHighSchool(e.target.value)}
+                            id="field-seniorHighSchool"
                             placeholder="Name of Senior High School"
                             className="field h-8 text-xs"
                           />
@@ -7807,35 +7962,12 @@ function StudentPersonalDetailsView({
           </div>
         )}
 
-        {/* Missing Fields Indicator */}
-        {missingFields.length > 0 && (
-          <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/8 p-3.5 animate-in fade-in duration-200">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-400 mb-2">
-              <AlertTriangle className="size-4 shrink-0" />
-              {missingFields.length} required {missingFields.length === 1 ? "field" : "fields"} still incomplete
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {missingFields.map((f) => (
-                <span
-                  key={f}
-                  className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-300"
-                >
-                  <X className="size-2.5" />
-                  {f}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Sticky Bottom Action Dock: Always visible on screen so user never has to scroll to save */}
         <div
           className={`sticky bottom-3 z-30 rounded-2xl border p-3.5 sm:p-4 shadow-2xl backdrop-blur-md transition-all ${
-            missingFields.length > 0
-              ? "border-amber-500/40 bg-card/95"
-              : termsError
-                ? "border-destructive/60 bg-card/95"
-                : "border-primary/30 bg-card/95"
+            termsError
+              ? "border-destructive/60 bg-card/95"
+              : "border-primary/30 bg-card/95"
           }`}
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -7896,7 +8028,7 @@ function StudentPersonalDetailsView({
               {saving ? (
                 <><Loader2 className="size-4 animate-spin" /> Saving...</>
               ) : (
-                <><CheckCircle2 className="size-4" /> {missingFields.length > 0 ? `Save Personal Details (${missingFields.length} fields left)` : "Save Personal Details"}</>
+                <><CheckCircle2 className="size-4" /> Save Personal Details</>
               )}
             </Button>
           </div>
@@ -8040,6 +8172,108 @@ function StudentPersonalDetailsView({
             >
               <CheckCircle2 className="size-4" /> {isRequiredGate ? "Enter Full Access Dashboard" : "Done — Return to Dashboard"}
             </Button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Missing Required Fields Pop-up Modal */}
+      {showMissingFieldsModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-lg max-h-[88vh] flex flex-col rounded-2xl border border-amber-500/40 bg-card shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-border bg-amber-500/10 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                  <AlertTriangle className="size-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Required Details Incomplete
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Please answer all required forms before proceeding.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setShowMissingFieldsModal(false)}
+                className="size-8 cursor-pointer"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            {/* Note */}
+            <div className="bg-muted/40 px-5 py-2.5 border-b border-border text-[11px] text-muted-foreground flex items-center justify-between">
+              <span>
+                {isStudent
+                  ? "Personal, Family, Address & Educational details are required (Phone is optional)."
+                  : "Personal, Family & Address details are required (Phone is optional)."}
+              </span>
+              <span className="font-bold text-amber-600 dark:text-amber-400 font-mono">
+                {getMissingFields().length} missing
+              </span>
+            </div>
+
+            {/* Scrollable List of Missing Fields */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-2.5 max-h-[50vh]">
+              {getMissingFields().map((item, idx) => (
+                <div
+                  key={item.id + idx}
+                  onClick={() => navigateToField(item.id, item.section)}
+                  className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-card/60 p-3 hover:border-amber-500/50 hover:bg-amber-500/5 transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 text-xs font-bold font-mono">
+                      {idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 transition truncate">
+                        {item.label}
+                      </p>
+                      <span className="text-[10px] text-muted-foreground">
+                        {item.sectionTitle}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-bold text-amber-600 dark:text-amber-400 group-hover:translate-x-0.5 transition-transform">
+                    <span>Fill up</span>
+                    <ChevronRight className="size-3.5" />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="border-t border-border bg-card p-4 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMissingFieldsModal(false)}
+                className="w-full sm:w-auto text-xs cursor-pointer"
+              >
+                Review Form
+              </Button>
+
+              {getMissingFields().length > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    const first = getMissingFields()[0];
+                    if (first) navigateToField(first.id, first.section);
+                  }}
+                  className="w-full sm:w-auto gap-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-md"
+                >
+                  <ExternalLink className="size-3.5" />
+                  Go to {getMissingFields()[0]?.label}
+                </Button>
+              )}
+            </div>
           </div>
         </div>,
         document.body
