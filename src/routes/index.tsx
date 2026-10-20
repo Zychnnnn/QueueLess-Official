@@ -16143,7 +16143,7 @@ function AdminOperationsAndArchivePanel({
   useEffect(() => {
     fetchAuditLogs();
     setBackupRecords(getClaimedBackupRecords(requests));
-  }, [requests]);
+  }, [requests, tab]);
 
   const handleOpenClearModal = () => {
     setClearReason("");
@@ -16250,14 +16250,15 @@ function AdminOperationsAndArchivePanel({
   const deletedUserLogs = auditLogs.filter((l) => {
     const act = (l.action || "").toLowerCase();
     const det = (l.details || "").toLowerCase();
+    const cat = (l.targetCategory || "").toLowerCase();
     return (
-      act.includes("delete") ||
-      act.includes("remove") ||
-      act.includes("reject") ||
+      cat === "users" ||
+      ((act.includes("delete") || act.includes("remove") || act.includes("reject")) &&
+        (act.includes("user") || act.includes("account") || det.includes("user") || det.includes("student"))) ||
       det.includes("deleted user") ||
       det.includes("removed account") ||
       det.includes("application rejected")
-    ) && (act.includes("user") || act.includes("account") || det.includes("user") || det.includes("student"));
+    );
   }).filter((l) => {
     if (!deletedSearch.trim()) return true;
     const q = deletedSearch.toLowerCase().trim();
@@ -16298,7 +16299,7 @@ function AdminOperationsAndArchivePanel({
     } catch {
       return [];
     }
-  }, []);
+  }, [tab, auditLogs]);
 
   const localDeletedRequestsBackup: any[] = useMemo(() => {
     try {
@@ -16306,7 +16307,7 @@ function AdminOperationsAndArchivePanel({
     } catch {
       return [];
     }
-  }, []);
+  }, [tab, auditLogs]);
 
   const combinedDeletedUsers = useMemo(() => {
     const map = new Map<string, any>();
@@ -16451,7 +16452,7 @@ function AdminOperationsAndArchivePanel({
             </div>
 
             {filteredBackup.length > 0 ? (
-              <div className="max-h-[380px] overflow-y-auto scrollbar-thin divide-y divide-border">
+              <div className="max-h-[460px] overflow-y-auto pr-1 divide-y divide-border">
                 {filteredBackup.map((rec) => {
                   const fullReq = requests.find((r) => r.id === rec.id) || {
                     id: rec.id,
@@ -16564,7 +16565,7 @@ function AdminOperationsAndArchivePanel({
             </div>
 
             {combinedDeletedUsers.length > 0 ? (
-              <div className="max-h-[380px] overflow-y-auto scrollbar-thin divide-y divide-border">
+              <div className="max-h-[460px] overflow-y-auto pr-1 divide-y divide-border">
                 {combinedDeletedUsers.map((log) => (
                   <div key={log._id} className="p-4 hover:bg-muted/30 transition text-xs space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -16621,7 +16622,7 @@ function AdminOperationsAndArchivePanel({
             </div>
 
             {combinedDeletedRequests.length > 0 ? (
-              <div className="max-h-[380px] overflow-y-auto scrollbar-thin divide-y divide-border">
+              <div className="max-h-[460px] overflow-y-auto pr-1 divide-y divide-border">
                 {combinedDeletedRequests.map((log) => (
                   <div key={log._id} className="p-4 hover:bg-muted/30 transition text-xs space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">

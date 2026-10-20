@@ -415,15 +415,20 @@ export const updateRequest = async (req, res) => {
       staffUser = await User.findById(req.user.id).lean();
     }
 
+    const isClaimed = request.status === "Claimed";
     recordAuditLog({
       actorName: staffUser?.name || req.body.assignedStaffName || req.user.name || "Registrar Staff",
       actorEmail: staffUser?.email || req.user.email || "",
       actorRole: staffUser?.role || req.user.role || "staff",
       actorId: staffUser?.studentId || staffUser?._id || req.body.assignedStaffId || String(req.user.id),
       actorPicture: staffUser?.picture || "",
-      targetCategory: "staff",
-      action: `Modified Ticket #${request.requestNumber || requestNumber}`,
-      details: `Updated request for student ${request.student} (${request.document}). Status: ${request.status}. Remarks: ${request.remarks || "No remarks"}.`,
+      targetCategory: isClaimed ? "requests" : "staff",
+      action: isClaimed
+        ? `Claimed & Completed Request #${request.requestNumber || requestNumber}`
+        : `Modified Ticket #${request.requestNumber || requestNumber}`,
+      details: isClaimed
+        ? `Document "${request.document}" for student ${request.student} (${request.studentId || "N/A"}) was claimed, released, and completed by staff ${staffUser?.name || req.body.assignedStaffName || "Registrar Staff"}. Remarks: ${request.remarks || "No remarks"}.`
+        : `Updated request for student ${request.student} (${request.document}). Status: ${request.status}. Remarks: ${request.remarks || "No remarks"}.`,
       requestNumber: request.requestNumber || requestNumber,
       status: "Success",
     });
@@ -528,9 +533,9 @@ export const rateRequest = async (req, res) => {
       actorEmail: req.user.email || "",
       actorRole: req.user.role || "student",
       actorId: req.user.studentId || String(req.user.id),
-      targetCategory: "student",
-      action: `Rated Request #${requestNumber} (${request.rating} Stars)`,
-      details: `Student rated staff "${request.assignedStaffName || "Registrar"}" with ${request.rating}/5 stars. Feedback/Thanks: "${request.feedback || "Thank you!"}"`,
+      targetCategory: "requests",
+      action: `Completed & Rated Request #${requestNumber} (${request.rating} Stars)`,
+      details: `Student ${req.user.name || "Student"} completed and rated staff "${request.assignedStaffName || "Registrar"}" with ${request.rating}/5 stars for document "${request.document || "N/A"}". Feedback: "${request.feedback || "Thank you!"}"`,
       requestNumber,
       status: "Success",
     });
