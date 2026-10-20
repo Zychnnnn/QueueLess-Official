@@ -548,8 +548,14 @@ function isPersonalDetailsComplete(u: AuthUser | null | undefined): boolean {
   const hasAcademic = Boolean((u.course || "").trim() && (u.yearLevel || "").trim());
   const hasElementary = Boolean((u.elemSchool || "").trim());
   const hasJuniorHigh = Boolean((u.juniorHighSchool || "").trim());
+  const hasGender = Boolean((u.gender || "").trim());
+  const hasBirthDate = Boolean((u.birthDate || "").trim());
+  const hasReligion = Boolean((u.religion || "").trim());
+  const hasFather = Boolean((u.fatherName || "").trim());
+  const hasMother = Boolean((u.motherName || "").trim());
+  const hasGuardian = Boolean((u.guardianName || "").trim());
 
-  return hasNames && hasAddress && hasAcademic && hasElementary && hasJuniorHigh;
+  return hasNames && hasAddress && hasAcademic && hasElementary && hasJuniorHigh && hasGender && hasBirthDate && hasReligion && hasFather && hasMother && hasGuardian;
 }
 
 function QueueLessApp() {
@@ -6717,6 +6723,26 @@ function StudentPersonalDetailsView({
       setFlash({ tone: "error", text: "Mother's occupation is required (*)." });
       return false;
     }
+    if (!editReligion.trim()) {
+      setFlash({ tone: "error", text: "Religion is required (*)." });
+      return false;
+    }
+    if (isStudent && !fatherName.trim()) {
+      setFlash({ tone: "error", text: "Father's name is required (*)." });
+      return false;
+    }
+    if (isStudent && !fatherOccupation.trim()) {
+      setFlash({ tone: "error", text: "Father's occupation is required (*)." });
+      return false;
+    }
+    if (isStudent && !guardianName.trim()) {
+      setFlash({ tone: "error", text: "Guardian / emergency contact name is required (*)." });
+      return false;
+    }
+    if (isStudent && !guardianRelationship.trim()) {
+      setFlash({ tone: "error", text: "Guardian relationship is required (*)." });
+      return false;
+    }
     if (isStudent && !seniorHighSchool.trim()) {
       setFlash({ tone: "error", text: "Senior High School name is required (*)." });
       return false;
@@ -6905,6 +6931,36 @@ function StudentPersonalDetailsView({
     if (!validateInputs()) return;
     setShowConfirmModal(true);
   };
+
+  // Compute missing required fields for visual indicator
+  const missingFields: string[] = (() => {
+    const m: string[] = [];
+    if (!isNameLocked && !lastName.trim()) m.push("Last Name");
+    if (!isNameLocked && !firstName.trim()) m.push("First Name");
+    if (isStudent && !isIdLocked && !editStudentId.trim()) m.push("Student ID");
+    if (!editGender) m.push("Gender");
+    if (!editBirthDate) m.push("Date of Birth");
+    if (!editNationality.trim()) m.push("Nationality");
+    if (!editReligion.trim()) m.push("Religion");
+    if (!editCivilStatus) m.push("Civil Status");
+    if (!currentAddress.trim()) m.push("Current Address");
+    if (!currentCity.trim()) m.push("City / Municipality");
+    if (!currentProvince.trim()) m.push("Province");
+    if (!currentPostalCode.trim()) m.push("Postal Code");
+    if (isStudent && !fatherName.trim()) m.push("Father's Name");
+    if (isStudent && !fatherOccupation.trim()) m.push("Father's Occupation");
+    if (isStudent && !motherName.trim()) m.push("Mother's Name");
+    if (isStudent && !motherOccupation.trim()) m.push("Mother's Occupation");
+    if (isStudent && !guardianName.trim()) m.push("Guardian Name");
+    if (isStudent && !guardianRelationship.trim()) m.push("Guardian Relationship");
+    if (isStudent && !editCourse.trim()) m.push("Course / Program");
+    if (isStudent && !editYearLevel.trim()) m.push("Year Level");
+    if (isStudent && !elemSchool.trim()) m.push("Elementary School");
+    if (isStudent && !juniorHighSchool.trim()) m.push("Junior High School");
+    if (isStudent && !seniorHighSchool.trim()) m.push("Senior High School");
+    if (!termsAgreed) m.push("Terms & Conditions Agreement");
+    return m;
+  })();
 
   const SectionHeading = ({ icon, title, subtitle, badge }: { icon: React.ReactNode; title: string; subtitle: string; badge?: string }) => (
     <div className="mb-4 flex items-start justify-between border-b border-border/70 pb-3">
@@ -7751,12 +7807,35 @@ function StudentPersonalDetailsView({
           </div>
         )}
 
+        {/* Missing Fields Indicator */}
+        {missingFields.length > 0 && (
+          <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/8 p-3.5 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-400 mb-2">
+              <AlertTriangle className="size-4 shrink-0" />
+              {missingFields.length} required {missingFields.length === 1 ? "field" : "fields"} still incomplete
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {missingFields.map((f) => (
+                <span
+                  key={f}
+                  className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 border border-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:text-amber-300"
+                >
+                  <X className="size-2.5" />
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Sticky Bottom Action Dock: Always visible on screen so user never has to scroll to save */}
         <div
           className={`sticky bottom-3 z-30 rounded-2xl border p-3.5 sm:p-4 shadow-2xl backdrop-blur-md transition-all ${
-            termsError
-              ? "border-destructive/60 bg-card/95"
-              : "border-primary/30 bg-card/95"
+            missingFields.length > 0
+              ? "border-amber-500/40 bg-card/95"
+              : termsError
+                ? "border-destructive/60 bg-card/95"
+                : "border-primary/30 bg-card/95"
           }`}
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -7817,7 +7896,7 @@ function StudentPersonalDetailsView({
               {saving ? (
                 <><Loader2 className="size-4 animate-spin" /> Saving...</>
               ) : (
-                <><CheckCircle2 className="size-4" /> Save Personal Details</>
+                <><CheckCircle2 className="size-4" /> {missingFields.length > 0 ? `Save Personal Details (${missingFields.length} fields left)` : "Save Personal Details"}</>
               )}
             </Button>
           </div>
@@ -7920,16 +7999,35 @@ function StudentPersonalDetailsView({
 
       {showSuccessModal && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-center">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-4">
-              <CheckCircle2 className="size-7" />
+          <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-center">
+            <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 mb-4 ring-4 ring-emerald-500/10">
+              <CheckCircle2 className="size-8" />
             </div>
-            <h3 className="font-display text-lg font-bold text-foreground">
-              Applied successfully!
+            <h3 className="font-display text-xl font-bold text-foreground">
+              Personal Details Saved!
             </h3>
-            <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-              Your personal details have been updated and applied to your official registrar records.
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+              Your official personal information has been successfully saved and applied to your registrar records.
             </p>
+
+            <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 text-left space-y-1.5">
+              <div className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400 font-bold">
+                <CheckCircle2 className="size-3.5 shrink-0" />
+                All required fields completed
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed pl-5.5">
+                Name: <strong className="text-foreground">{computedFullName}</strong>
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed pl-5.5">
+                Email: <strong className="text-foreground">{editEmail}</strong>
+              </p>
+              {isStudent && (
+                <p className="text-[11px] text-muted-foreground leading-relaxed pl-5.5">
+                  Student ID: <strong className="text-foreground">{editStudentId}</strong> · {editCourse} · {editYearLevel}
+                </p>
+              )}
+            </div>
+
             <Button
               onClick={() => {
                 setShowSuccessModal(false);
@@ -7937,9 +8035,10 @@ function StudentPersonalDetailsView({
                   onComplete();
                 }
               }}
-              className="mt-5 w-full gap-2 cursor-pointer font-bold"
+              className="mt-5 w-full gap-2 cursor-pointer font-bold shadow-md"
+              size="lg"
             >
-              <CheckCircle2 className="size-4" /> {isRequiredGate ? "Enter Full Access Dashboard" : "OK"}
+              <CheckCircle2 className="size-4" /> {isRequiredGate ? "Enter Full Access Dashboard" : "Done — Return to Dashboard"}
             </Button>
           </div>
         </div>,
