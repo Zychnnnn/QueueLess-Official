@@ -555,6 +555,7 @@ function isPersonalDetailsComplete(u: AuthUser | null | undefined): boolean {
 function QueueLessApp() {
   const [role, setRole] = useState<Role>("student");
   const [signedIn, setSignedIn] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   const [currentUser, setCurrentUser] =
     useState<AuthUser | null>(null);
@@ -773,6 +774,7 @@ function QueueLessApp() {
     if (!savedUser || !savedToken) {
       localStorage.removeItem("queueless_user");
       localStorage.removeItem("queueless_token");
+      setIsAuthChecking(false);
       return;
     }
 
@@ -921,6 +923,7 @@ function QueueLessApp() {
         "queueless_token"
       );
     }
+    setIsAuthChecking(false);
   }, []);
 
   /*
@@ -1627,6 +1630,30 @@ function QueueLessApp() {
     setShowInactivityModal(false);
     setInactivityCountdown(59);
   };
+
+  if (isAuthChecking) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background p-4">
+        <div className="relative flex flex-col items-center max-w-md text-center">
+          <div className="relative mb-6">
+            <div className="absolute -inset-4 rounded-full bg-primary/20 blur-xl animate-pulse" />
+            <div className="relative flex size-24 items-center justify-center rounded-2xl bg-card border-2 border-border shadow-2xl p-3">
+              <div className="absolute inset-0 rounded-2xl border-2 border-primary/30 border-t-primary animate-spin" />
+              <img src="/phinma.png" alt="QueueLess" className="size-14 object-contain drop-shadow" />
+            </div>
+          </div>
+          <p className="text-xs font-bold uppercase tracking-widest text-primary">PHINMA University of Pangasinan</p>
+          <h1 className="mt-2 font-display text-2xl font-bold text-foreground sm:text-3xl tracking-tight">QueueLess Registrar</h1>
+          <p className="mt-2 text-sm text-muted-foreground max-w-sm">Initializing system...</p>
+          <div className="mt-6 flex flex-col items-center gap-2 w-56">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full w-2/3 rounded-full bg-primary animate-[pulse_1s_ease-in-out_infinite]" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!signedIn) {
     return (
@@ -10093,11 +10120,10 @@ function StaffCalendarEditModal({
             <Field label="Queue Line #">
               <input
                 type="number"
-                min={1}
                 value={lineNumber}
-                onChange={(e) => setLineNumber(Number(e.target.value))}
-                className="field"
-                required
+                readOnly
+                disabled
+                className="field bg-muted/50 cursor-not-allowed opacity-70"
               />
             </Field>
 
@@ -12864,11 +12890,10 @@ function EditReceiptModal({
             <Field label="Line Number (Queue Position)">
               <input
                 type="number"
-                min={1}
                 value={lineNumber}
-                onChange={(e) => setLineNumber(Number(e.target.value))}
-                required
-                className="field"
+                readOnly
+                disabled
+                className="field bg-muted/50 cursor-not-allowed opacity-70"
               />
             </Field>
 
@@ -12912,71 +12937,39 @@ function EditReceiptModal({
           </div>
 
           <Field label="When to Claim (Release Schedule)">
-            <div className="space-y-1.5">
-              <input
-                type="text"
-                value={pickupDate}
-                onChange={(e) => setPickupDate(e.target.value)}
-                placeholder="e.g. Within the day (Today) • Window 2 (1:00 PM)"
-                className="field"
-              />
-              <div className="flex flex-wrap gap-1.5 text-[11px]">
-                {[
-                  "Within the day (Today)",
-                  "Tomorrow • Window 2",
-                  "Ready for Claiming Now",
-                  "Standard Schedule",
-                ].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setPickupDate(preset)}
-                    className={`rounded border px-2 py-0.5 font-medium transition-colors cursor-pointer ${
-                      pickupDate === preset
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted/40 hover:bg-muted text-muted-foreground border-border"
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <select
+              value={pickupDate}
+              onChange={(e) => setPickupDate(e.target.value)}
+              className="field cursor-pointer"
+            >
+              <option value="">Select window / schedule</option>
+              <option value="Window 1 (Requesting)">Window 1 — Requesting</option>
+              <option value="Window 2 (Requesting)">Window 2 — Requesting</option>
+              <option value="Window 3 (Requesting)">Window 3 — Requesting</option>
+              <option value="Window 4 (Requesting)">Window 4 — Requesting</option>
+              <option value="Window 5 (Releasing)">Window 5 — Releasing</option>
+              <option value="Window 6 (Releasing)">Window 6 — Releasing</option>
+              <option value="Window 7 (Releasing)">Window 7 — Releasing</option>
+              <option value="Within the day (Today)">Within the day (Today)</option>
+              <option value="Ready for Claiming Now">Ready for Claiming Now</option>
+              <option value="Standard Schedule">Standard Schedule</option>
+            </select>
           </Field>
 
           <Field label="Payment Requirement & Instruction">
-            <div className="space-y-1.5">
-              <input
-                type="text"
-                value={paymentStatus}
-                onChange={(e) => setPaymentStatus(e.target.value)}
-                placeholder="e.g. Prepare payment within the day"
-                className="field"
-              />
-              <div className="flex flex-wrap gap-1.5 text-[11px]">
-                {[
-                  "Prepare payment within the day",
-                  "Proceed to Registrar Staff",
-                  "Paid",
-                  "Pending Payment",
-                  "Pay upon claiming at Counter",
-                  "Exempted / Free of Charge",
-                ].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setPaymentStatus(preset)}
-                    className={`rounded border px-2 py-0.5 font-medium transition-colors cursor-pointer ${
-                      paymentStatus === preset
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted/40 hover:bg-muted text-muted-foreground border-border"
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <select
+              value={paymentStatus}
+              onChange={(e) => setPaymentStatus(e.target.value)}
+              className="field cursor-pointer"
+            >
+              <option value="">Select payment status</option>
+              <option value="Prepare payment within the day">Prepare payment within the day</option>
+              <option value="Proceed to Registrar Staff">Proceed to Registrar Staff</option>
+              <option value="Paid">Paid</option>
+              <option value="Pending Payment">Pending Payment</option>
+              <option value="Pay upon claiming at Counter">Pay upon claiming at Counter</option>
+              <option value="Exempted / Free of Charge">Exempted / Free of Charge</option>
+            </select>
           </Field>
 
           <Field label="Registrar Remarks / Notes to Student">
@@ -14541,30 +14534,19 @@ function ConfirmStatusModal({
               <label className="text-xs font-bold text-foreground block mb-1">
                 Payment Directive (Applied to Receipt & Emailed)
               </label>
-              <input
-                type="text"
+              <select
                 value={paymentStatus}
                 onChange={(e) => setPaymentStatus(e.target.value)}
-                placeholder="e.g., Prepare payment within the day"
-                className="field text-xs font-semibold"
-              />
-              {/* 1-click Preset Chips */}
-              <div className="mt-1 flex flex-wrap gap-1">
-                {paymentPresets.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setPaymentStatus(preset)}
-                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold border transition cursor-pointer ${
-                      paymentStatus === preset
-                        ? "border-primary bg-primary/15 text-primary font-bold"
-                        : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
+                className="field text-xs font-semibold cursor-pointer"
+              >
+                <option value="">Select payment directive</option>
+                <option value="Prepare payment within the day">Prepare payment within the day</option>
+                <option value="Pay upon claiming at Counter">Pay upon claiming at Counter</option>
+                <option value="Paid">Paid</option>
+                <option value="Pending Payment">Pending Payment</option>
+                <option value="Proceed to Registrar Staff">Proceed to Registrar Staff</option>
+                <option value="Exempted / Free of Charge">Exempted / Free of Charge</option>
+              </select>
             </div>
 
             {/* When to Claim / Schedule */}
@@ -14572,30 +14554,23 @@ function ConfirmStatusModal({
               <label className="text-xs font-bold text-foreground block mb-1">
                 When to Claim (Pickup Schedule)
               </label>
-              <input
-                type="text"
+              <select
                 value={pickupDate}
                 onChange={(e) => setPickupDate(e.target.value)}
-                placeholder="e.g., Within the day (Today) or Tomorrow • Window 2"
-                className="field text-xs font-semibold"
-              />
-              {/* Schedule Presets */}
-              <div className="mt-1 flex flex-wrap gap-1">
-                {schedulePresets.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setPickupDate(preset)}
-                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold border transition cursor-pointer ${
-                      pickupDate === preset
-                        ? "border-primary bg-primary/15 text-primary font-bold"
-                        : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
+                className="field text-xs font-semibold cursor-pointer"
+              >
+                <option value="">Select pickup schedule</option>
+                <option value="Window 1 (Requesting)">Window 1 — Requesting</option>
+                <option value="Window 2 (Requesting)">Window 2 — Requesting</option>
+                <option value="Window 3 (Requesting)">Window 3 — Requesting</option>
+                <option value="Window 4 (Requesting)">Window 4 — Requesting</option>
+                <option value="Window 5 (Releasing)">Window 5 — Releasing</option>
+                <option value="Window 6 (Releasing)">Window 6 — Releasing</option>
+                <option value="Window 7 (Releasing)">Window 7 — Releasing</option>
+                <option value="Within the day (Today)">Within the day (Today)</option>
+                <option value="Ready for Claiming Now">Ready for Claiming Now</option>
+                <option value="Standard Schedule">Standard Schedule</option>
+              </select>
             </div>
 
             {/* Remarks / Instructions */}
@@ -15556,15 +15531,7 @@ function ManageRequests({
                     <Eye className="size-3.5" />
                   </Button>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeletingReq(r)}
-                    className="h-8 w-8 p-0 cursor-pointer text-destructive border-border hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-                    title="Delete Request"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+
 
                   {isPendingUnassigned ? (
                     <Button
@@ -17185,16 +17152,7 @@ function AuditLogsPanel({
           text="Monitor staff queue processing, student priority requests, and guest activities."
         />
         <div className="flex items-center gap-2 shrink-0">
-          {logs.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearAllLogs}
-              className="h-8 gap-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 cursor-pointer"
-            >
-              <Trash2 className="size-3.5" /> Clear all logs
-            </Button>
-          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -18518,7 +18476,7 @@ function AdminOfficialRecordsPanel({
                     onClick={() => openEditModal(u)}
                     className="w-full h-8 text-xs font-bold gap-1.5 cursor-pointer hover:bg-primary hover:text-primary-foreground"
                   >
-                    <Pencil className="size-3" /> Edit Official Record
+                    <Eye className="size-3" /> View Official Record
                   </Button>
                 </div>
               </div>
@@ -18548,14 +18506,14 @@ function AdminOfficialRecordsPanel({
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-display text-sm font-bold text-foreground">
-                      Edit Official Institutional Record
+                      View Official Institutional Record
                     </h3>
-                    <span className="rounded bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-400">
-                      Admin Override
+                    <span className="rounded bg-primary/15 border border-primary/30 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                      Read Only
                     </span>
                   </div>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Modifying official record for <span className="font-semibold text-foreground">{editingUser.name}</span> ({editingUser.email})
+                    Viewing official record for <span className="font-semibold text-foreground">{editingUser.name}</span> ({editingUser.email})
                   </p>
                 </div>
               </div>
@@ -18585,20 +18543,18 @@ function AdminOfficialRecordsPanel({
                     <input
                       type="text"
                       value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="e.g. Dela Cruz"
-                      className="field"
-                      required
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                   <Field label="First Name *">
                     <input
                       type="text"
                       value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="e.g. Juan"
-                      className="field"
-                      required
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                 </div>
@@ -18608,16 +18564,16 @@ function AdminOfficialRecordsPanel({
                     <input
                       type="text"
                       value={middleName}
-                      onChange={(e) => setMiddleName(e.target.value)}
-                      placeholder="e.g. Santos"
-                      className="field"
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                   <Field label="Extension Name">
                     <select
                       value={extensionName}
-                      onChange={(e) => setExtensionName(e.target.value)}
-                      className="field cursor-pointer"
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     >
                       <option value="">None</option>
                       <option value="Jr.">Jr.</option>
@@ -18640,25 +18596,25 @@ function AdminOfficialRecordsPanel({
                     <input
                       type="text"
                       value={studentId}
-                      onChange={(e) => setStudentId(e.target.value)}
-                      placeholder={editingUser.role === "staff" ? "e.g. STAFF-001" : editingUser.role === "admin" ? "e.g. ADMIN-001" : editingUser.role === "guest" ? "e.g. GUEST-91726" : "Enter your Student Id"}
-                      className="field font-mono"
+                      readOnly
+                      disabled
+                      className="field font-mono bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                   <Field label="Degree / Academic Course">
                     <input
                       type="text"
                       value={course}
-                      onChange={(e) => setCourse(e.target.value)}
-                      placeholder="e.g. BS Information Technology"
-                      className="field"
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                   <Field label="Year Level">
                     <select
                       value={yearLevel}
-                      onChange={(e) => setYearLevel(e.target.value)}
-                      className="field cursor-pointer"
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     >
                       <option value="">N/A</option>
                       <option value="1st Year">1st Year</option>
@@ -18675,17 +18631,18 @@ function AdminOfficialRecordsPanel({
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="field"
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                   <Field label="Mobile Number">
                     <input
                       type="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="09XXXXXXXXX"
-                      className="field font-mono"
+                      readOnly
+                      disabled
+                      className="field font-mono bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                 </div>
@@ -18699,9 +18656,9 @@ function AdminOfficialRecordsPanel({
                   <input
                     type="text"
                     value={currentAddress}
-                    onChange={(e) => setCurrentAddress(e.target.value)}
-                    placeholder="e.g. 123 Arellano St."
-                    className="field"
+                    readOnly
+                    disabled
+                    className="field bg-muted/50 cursor-not-allowed"
                   />
                 </Field>
 
@@ -18709,21 +18666,21 @@ function AdminOfficialRecordsPanel({
                   <SearchableSelect
                     label="* Country"
                     value={currentCountry}
-                    onChange={setCurrentCountry}
+                    onChange={() => {}}
                     options={COUNTRIES_LIST}
                     placeholder="Select Country"
                   />
                   <SearchableSelect
                     label="* Province"
                     value={currentProvince}
-                    onChange={setCurrentProvince}
+                    onChange={() => {}}
                     options={PHILIPPINE_PROVINCES}
                     placeholder="Select Province"
                   />
                   <SearchableSelect
                     label="* City / Municipality"
                     value={currentCity}
-                    onChange={setCurrentCity}
+                    onChange={() => {}}
                     options={PHILIPPINE_CITIES}
                     placeholder="Select City / Municipality"
                   />
@@ -18731,9 +18688,9 @@ function AdminOfficialRecordsPanel({
                     <input
                       type="text"
                       value={currentPostalCode}
-                      onChange={(e) => setCurrentPostalCode(e.target.value)}
-                      placeholder="2400"
-                      className="field"
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                 </div>
@@ -18743,8 +18700,8 @@ function AdminOfficialRecordsPanel({
                     <input
                       type="checkbox"
                       checked={sameAsCurrentAddress}
-                      onChange={(e) => setSameAsCurrentAddress(e.target.checked)}
-                      className="rounded border-border size-3.5 text-primary"
+                      disabled
+                      className="rounded border-border size-3.5 text-primary cursor-not-allowed"
                     />
                     <span>Permanent address is same as current address</span>
                   </label>
@@ -18755,9 +18712,9 @@ function AdminOfficialRecordsPanel({
                         <input
                           type="text"
                           value={permanentAddress}
-                          onChange={(e) => setPermanentAddress(e.target.value)}
-                          placeholder="Permanent house and street address"
-                          className="field"
+                          readOnly
+                          disabled
+                          className="field bg-muted/50 cursor-not-allowed"
                         />
                       </Field>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -18786,9 +18743,9 @@ function AdminOfficialRecordsPanel({
                           <input
                             type="text"
                             value={permanentPostalCode}
-                            onChange={(e) => setPermanentPostalCode(e.target.value)}
-                            placeholder="2400"
-                            className="field"
+                            readOnly
+                            disabled
+                            className="field bg-muted/50 cursor-not-allowed"
                           />
                         </Field>
                       </div>
@@ -18801,29 +18758,11 @@ function AdminOfficialRecordsPanel({
             {/* Modal Footer */}
             <div className="border-t border-border p-3 bg-muted/20 flex items-center justify-end gap-2">
               <Button
-                variant="outline"
                 size="sm"
-                disabled={saving}
                 onClick={() => setEditingUser(null)}
-                className="cursor-pointer"
+                className="cursor-pointer gap-1.5"
               >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                disabled={saving}
-                onClick={handleSaveRecord}
-                className="gap-1.5 font-bold cursor-pointer"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" /> Saving...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="size-3.5" /> Save Official Record
-                  </>
-                )}
+                <X className="size-3.5" /> Close
               </Button>
             </div>
           </div>
@@ -18975,13 +18914,21 @@ function UsersPanel({
     const trimmedId = customAdminId.trim();
 
     if (!trimmedName || trimmedName.length < 2) {
-      setAdminValidationError("Administrator full name must contain at least 2 characters.");
+      setAdminValidationError("Administrator full name is required (minimum 2 characters).");
+      return;
+    }
+    if (/[0-9]/.test(trimmedName)) {
+      setAdminValidationError("Full name must not contain numbers.");
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
-      setAdminValidationError("Please enter a valid administrator email address.");
+    if (!trimmedEmail) {
+      setAdminValidationError("Administrator email address is required.");
+      return;
+    }
+    if (!emailRegex.test(trimmedEmail)) {
+      setAdminValidationError("Please enter a valid email address (e.g. admin@up.phinma.edu.ph).");
       return;
     }
 
@@ -19074,15 +19021,21 @@ function UsersPanel({
     const trimmedId = customStaffId.trim();
 
     if (!trimmedName || trimmedName.length < 2) {
-      setValidationError("Full name must contain at least 2 characters.");
+      setValidationError("Staff full name is required (minimum 2 characters).");
+      return;
+    }
+    if (/[0-9]/.test(trimmedName)) {
+      setValidationError("Full name must not contain numbers.");
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
-      setValidationError(
-        "Please enter a valid institutional or personal email address."
-      );
+    if (!trimmedEmail) {
+      setValidationError("Staff email address is required.");
+      return;
+    }
+    if (!emailRegex.test(trimmedEmail)) {
+      setValidationError("Please enter a valid email address (e.g. staff@up.phinma.edu.ph).");
       return;
     }
 
@@ -19192,18 +19145,30 @@ function UsersPanel({
     const trimmedId = customStudentId.trim();
 
     if (!trimmedName || trimmedName.length < 2) {
-      setStudentValidationError("Student full name must contain at least 2 characters.");
+      setStudentValidationError("Student full name is required (minimum 2 characters).");
+      return;
+    }
+    if (/[0-9]/.test(trimmedName)) {
+      setStudentValidationError("Student name must not contain numbers.");
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
-      setStudentValidationError("Please enter a valid student email address.");
+    if (!trimmedEmail) {
+      setStudentValidationError("Student email address is required.");
+      return;
+    }
+    if (!emailRegex.test(trimmedEmail)) {
+      setStudentValidationError("Please enter a valid email address (e.g. student@up.phinma.edu.ph).");
       return;
     }
 
     if (!trimmedId) {
       setStudentValidationError("Student ID is required (e.g. 02-2223-012345).");
+      return;
+    }
+    if (trimmedId.length < 5) {
+      setStudentValidationError("Student ID must be at least 5 characters long.");
       return;
     }
 
