@@ -593,6 +593,7 @@ function QueueLessApp() {
 
   const [notificationsOpen, setNotificationsOpen] =
     useState(false);
+  const [staffInboxOpen, setStaffInboxOpen] = useState(false);
   const [selectedNotificationModal, setSelectedNotificationModal] =
     useState<NotificationItem | null>(null);
 
@@ -1820,6 +1821,89 @@ function QueueLessApp() {
               >
                 <Bot className="size-5" />
               </Button>
+            )}
+
+            {signedIn && role === "admin" && (
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Staff Concerns Inbox"
+                  title="Staff Concerns & Messages"
+                  onClick={() => { setStaffInboxOpen(!staffInboxOpen); setNotificationsOpen(false); }}
+                  className="relative cursor-pointer text-muted-foreground hover:text-foreground"
+                >
+                  <MessageCircle className="size-5" />
+                  {(() => {
+                    try {
+                      const msgs = JSON.parse(localStorage.getItem("queueless_staff_admin_messages") || "[]");
+                      const unread = msgs.filter((m: any) => !m.read).length;
+                      if (unread > 0) return (
+                        <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white shadow ring-2 ring-card">
+                          {unread > 9 ? "9+" : unread}
+                        </span>
+                      );
+                    } catch { }
+                    return null;
+                  })()}
+                </Button>
+
+                {staffInboxOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setStaffInboxOpen(false)} />
+                    <div className="absolute right-0 top-12 z-40 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex items-center justify-between border-b border-border pb-3 mb-3">
+                        <div className="flex items-center gap-2">
+                          <MessageCircle className="size-4 text-primary" />
+                          <p className="font-display text-sm font-bold text-foreground">Staff Concerns</p>
+                        </div>
+                        <Button size="icon" variant="ghost" className="size-7 cursor-pointer" onClick={() => setStaffInboxOpen(false)}>
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto space-y-2">
+                        {(() => {
+                          try {
+                            const msgs = JSON.parse(localStorage.getItem("queueless_staff_admin_messages") || "[]");
+                            if (msgs.length === 0) return (
+                              <div className="text-center py-6">
+                                <MessageCircle className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                                <p className="text-xs text-muted-foreground">No staff concerns yet</p>
+                              </div>
+                            );
+                            return msgs.slice(0, 20).map((msg: any, idx: number) => (
+                              <div key={msg.id || idx} className={`rounded-lg border p-3 text-xs ${msg.read ? "border-border bg-card" : "border-primary/30 bg-primary/5"}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-bold text-foreground">{msg.staffName}</span>
+                                  <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${msg.priority === "Urgent" ? "bg-destructive/15 text-destructive" : msg.priority === "High" ? "bg-amber-500/15 text-amber-700" : "bg-muted text-muted-foreground"}`}>{msg.priority}</span>
+                                </div>
+                                <p className="font-semibold text-foreground">[{msg.category}] {msg.subject}</p>
+                                <p className="text-muted-foreground mt-1 line-clamp-2">{msg.message}</p>
+                                <p className="text-[10px] text-muted-foreground mt-1.5">{new Date(msg.createdAt).toLocaleString()} • {msg.staffEmail}</p>
+                                {!msg.read && (
+                                  <button
+                                    type="button"
+                                    className="mt-2 text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                                    onClick={() => {
+                                      try {
+                                        const all = JSON.parse(localStorage.getItem("queueless_staff_admin_messages") || "[]");
+                                        all[idx].read = true;
+                                        localStorage.setItem("queueless_staff_admin_messages", JSON.stringify(all));
+                                        setStaffInboxOpen(false);
+                                        setTimeout(() => setStaffInboxOpen(true), 50);
+                                      } catch {}
+                                    }}
+                                  >Mark as read</button>
+                                )}
+                              </div>
+                            ));
+                          } catch { return null; }
+                        })()}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
 
             <div className="relative">
@@ -14188,7 +14272,7 @@ function CampusRegistrarHelperModal({
         </div>
 
         {/* Chat Messages Scroll Container */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 pb-8 space-y-4 text-xs">
           {messages.map((m) => (
             <div
               key={m.id}
@@ -14717,6 +14801,7 @@ function ManageRequests({
   // Delete Request state and handler
   const [deletingReq, setDeletingReq] = useState<RequestItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const handleDeleteRequest = async (item: RequestItem) => {
     const token = localStorage.getItem("queueless_token");
@@ -14735,6 +14820,7 @@ function ManageRequests({
         {
           method: "DELETE",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         }
@@ -15407,7 +15493,7 @@ function ManageRequests({
       <div className="mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-xs">
         {/* Header row */}
         <div className="sticky top-0 z-10 grid items-center gap-3 border-b border-border bg-muted/60 px-4 py-2.5 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-          style={{ gridTemplateColumns: "88px 1fr 1fr auto auto" }}>
+          style={{ gridTemplateColumns: "96px 200px 220px 140px minmax(200px, 1fr)" }}>
           <span>Queue</span>
           <span>Student</span>
           <span>Document</span>
@@ -15453,7 +15539,7 @@ function ManageRequests({
               <div
                 key={r.id}
                 className={`grid items-center gap-3 border-l-4 px-4 py-3.5 transition-colors hover:bg-muted/25 ${accentColor}`}
-                style={{ gridTemplateColumns: "88px 1fr 1fr auto auto" }}
+                style={{ gridTemplateColumns: "96px 200px 220px 140px minmax(200px, 1fr)" }}
               >
                 {/* Queue line + priority */}
                 <div className="flex flex-col gap-1">
@@ -15994,7 +16080,7 @@ function AdminOperationsAndArchivePanel({
           >
             <UsersRound className="size-3.5" /> Deleted Users Audit
             <span className="ml-1 rounded-full bg-destructive/15 text-destructive px-1.5 py-0.2 text-[10px] font-bold">
-              {deletedUserLogs.length}
+              {combinedDeletedUsers.length}
             </span>
           </Button>
 
@@ -16006,7 +16092,7 @@ function AdminOperationsAndArchivePanel({
           >
             <Trash2 className="size-3.5" /> Deleted Requests Audit
             <span className="ml-1 rounded-full bg-destructive/15 text-destructive px-1.5 py-0.2 text-[10px] font-bold">
-              {deletedRequestLogs.length}
+              {combinedDeletedRequests.length}
             </span>
           </Button>
         </div>
@@ -16177,16 +16263,16 @@ function AdminOperationsAndArchivePanel({
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
             <div className="border-b border-border bg-muted/40 px-4 py-3 flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Deleted Users & Rejected Applications ({deletedUserLogs.length})
+                Deleted Users & Rejected Applications ({combinedDeletedUsers.length})
               </span>
               <span className="text-[11px] text-muted-foreground">
                 Real-time security audit trail of deleted/rejected accounts
               </span>
             </div>
 
-            {deletedUserLogs.length > 0 ? (
+            {combinedDeletedUsers.length > 0 ? (
               <div className="max-h-[380px] overflow-y-auto scrollbar-thin divide-y divide-border">
-                {deletedUserLogs.map((log) => (
+                {combinedDeletedUsers.map((log) => (
                   <div key={log._id} className="p-4 hover:bg-muted/30 transition text-xs space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
@@ -16234,16 +16320,16 @@ function AdminOperationsAndArchivePanel({
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
             <div className="border-b border-border bg-muted/40 px-4 py-3 flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Deleted Requests Audit ({deletedRequestLogs.length})
+                Deleted Requests Audit ({combinedDeletedRequests.length})
               </span>
               <span className="text-[11px] text-muted-foreground">
                 Permanent audit trail of deleted document requests
               </span>
             </div>
 
-            {deletedRequestLogs.length > 0 ? (
+            {combinedDeletedRequests.length > 0 ? (
               <div className="max-h-[380px] overflow-y-auto scrollbar-thin divide-y divide-border">
-                {deletedRequestLogs.map((log) => (
+                {combinedDeletedRequests.map((log) => (
                   <div key={log._id} className="p-4 hover:bg-muted/30 transition text-xs space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
@@ -16838,26 +16924,46 @@ function AuditLogsPanel({
     }
   };
 
-  const handleRemoveAccount = async (account: AccountAuditGroup, e?: React.MouseEvent) => {
+  const handleRemoveAccount = (account: AccountAuditGroup, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    const count = account.logs.length;
-    if (
-      !window.confirm(
-        `Are you sure you want to remove all ${count} audit activit${count > 1 ? "ies" : "y"} for ${account.actorName}? This will permanently remove their records from the audit trail.`
-      )
-    ) {
-      return;
-    }
+    setAccountToRemove(account);
+    setRemoveAccountReason("");
+  };
+
+  const handleConfirmRemoveAccount = async () => {
+    if (!accountToRemove) return;
+    const account = accountToRemove;
     const token = localStorage.getItem("queueless_token");
     try {
+      setRemovingAccount(true);
       saveDeletedActor(account);
       const identifier = account.actorEmail || account.actorId || account.actorName;
       if (token && identifier) {
         await fetch(`${API_URL}/api/audit-logs/actor/${encodeURIComponent(identifier)}`, {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ reason: removeAccountReason || "Audit maintenance" }),
         });
       }
+
+      try {
+        const existing = JSON.parse(localStorage.getItem("queueless_deleted_audit_backup") || "[]");
+        existing.unshift({
+          accountKey: account.key,
+          actorName: account.actorName,
+          actorEmail: account.actorEmail,
+          actorRole: account.actorRole,
+          actorId: account.actorId,
+          logsCount: account.logs.length,
+          reason: removeAccountReason || "Audit maintenance",
+          deletedAt: new Date().toISOString(),
+          sampleLogs: account.logs.slice(0, 10),
+        });
+        localStorage.setItem("queueless_deleted_audit_backup", JSON.stringify(existing));
+      } catch {}
 
       const logIdsToRemove = new Set(account.logs.map((l) => l._id));
       setLogs((prev) => prev.filter((l) => !logIdsToRemove.has(l._id)));
@@ -16870,11 +16976,14 @@ function AuditLogsPanel({
       }
       setFlash({
         tone: "success",
-        text: `Successfully removed all audit activities for ${account.actorName}. Changes saved.`,
+        text: `Removed all audit activities for ${account.actorName}. Reason: ${removeAccountReason || "Audit maintenance"}.`,
       });
+      setAccountToRemove(null);
     } catch (err) {
       console.error("Remove account activities error:", err);
       setFlash({ tone: "error", text: "Failed to remove audit activities for this user." });
+    } finally {
+      setRemovingAccount(false);
     }
   };
 
@@ -18097,6 +18206,96 @@ function AuditLogsPanel({
         </div>,
         document.body
       )}
+
+      {/* Remove Actor Audit Confirmation Modal */}
+      {accountToRemove && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={() => !removingAccount && setAccountToRemove(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                <AlertTriangle className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">
+                  Remove Actor Audit Trail
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  This action clears all recorded activities for this account.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-xs">
+              <p className="font-semibold text-destructive">
+                Are you sure you want to remove all {accountToRemove.logs.length} audit activit{accountToRemove.logs.length > 1 ? "ies" : "y"}?
+              </p>
+              <div className="mt-3 space-y-1.5 border-t border-destructive/10 pt-2.5 text-muted-foreground">
+                <p><strong className="text-foreground">Actor:</strong> {accountToRemove.actorName}</p>
+                <p><strong className="text-foreground">Role:</strong> <span className="capitalize">{accountToRemove.actorRole}</span></p>
+                {accountToRemove.actorEmail && <p><strong className="text-foreground">Email:</strong> {accountToRemove.actorEmail}</p>}
+                {accountToRemove.actorId && <p><strong className="text-foreground">ID:</strong> {accountToRemove.actorId}</p>}
+                <p><strong className="text-foreground">Activities:</strong> {accountToRemove.logs.length} logged actions</p>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="text-xs font-bold text-foreground block mb-1.5">
+                Reason for Removal *
+              </label>
+              <select
+                value={removeAccountReason}
+                onChange={(e) => setRemoveAccountReason(e.target.value)}
+                className="field text-xs cursor-pointer"
+                required
+              >
+                <option value="">Select a reason</option>
+                <option value="Archived / Transferred to Storage">Archived / Transferred to Storage</option>
+                <option value="Compliance / Data Retention Policy">Compliance / Data Retention Policy</option>
+                <option value="Routine Maintenance & Cleanup">Routine Maintenance & Cleanup</option>
+                <option value="Duplicate / Erroneous Test Entries">Duplicate / Erroneous Test Entries</option>
+                <option value="User Privacy / GDPR Request">User Privacy / GDPR Request</option>
+                <option value="Account Decommissioned">Account Decommissioned</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAccountToRemove(null)}
+                disabled={removingAccount}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmRemoveAccount}
+                disabled={removingAccount || !removeAccountReason}
+              >
+                {removingAccount ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  "Yes, Remove Activities"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -18111,7 +18310,7 @@ function AdminOfficialRecordsPanel({
   users?: AccountUser[];
 }) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "staff" | "guest">("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "staff" | "admin" | "guest">("all");
   const [editingUser, setEditingUser] = useState<AccountUser | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -18530,7 +18729,7 @@ function AdminOfficialRecordsPanel({
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 pb-8 space-y-4 text-xs">
               {/* Section: Legal Names */}
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
@@ -18756,7 +18955,7 @@ function AdminOfficialRecordsPanel({
             </div>
 
             {/* Modal Footer */}
-            <div className="border-t border-border p-3 bg-muted/20 flex items-center justify-end gap-2">
+            <div className="border-t border-border p-3 bg-muted/20 flex items-center justify-end gap-2 shrink-0">
               <Button
                 size="sm"
                 onClick={() => setEditingUser(null)}
@@ -18843,6 +19042,7 @@ function UsersPanel({
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<AccountUser | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   const [selectedUserForProfile, setSelectedUserForProfile] = useState<AccountUser | null>(null);
 
   // Current logged in user to prevent self-deletion
@@ -19276,6 +19476,7 @@ function UsersPanel({
   // Step 3: Trigger Delete Confirmation Modal
   const handlePromptDelete = (user: AccountUser) => {
     setUserToDelete(user);
+    setDeleteReason("");
     setShowDeleteConfirmModal(true);
   };
 
@@ -19300,6 +19501,7 @@ function UsersPanel({
         {
           method: "DELETE",
           headers: {
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         }
@@ -20428,7 +20630,28 @@ function UsersPanel({
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-2">
+            <div className="mt-4">
+              <label className="text-xs font-bold text-foreground block mb-1.5">Reason for Deletion *</label>
+              <select
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                className="field text-xs cursor-pointer"
+                required
+              >
+                <option value="">Select a reason</option>
+                <option value="Duplicate account">Duplicate account</option>
+                <option value="Graduated / No longer enrolled">Graduated / No longer enrolled</option>
+                <option value="Transferred to another institution">Transferred to another institution</option>
+                <option value="Inactive / Abandoned account">Inactive / Abandoned account</option>
+                <option value="Violated university policies">Violated university policies</option>
+                <option value="Staff resignation / Termination">Staff resignation / Termination</option>
+                <option value="Data cleanup / System maintenance">Data cleanup / System maintenance</option>
+                <option value="Requested by the user">Requested by the user</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -20441,7 +20664,7 @@ function UsersPanel({
                 type="button"
                 variant="destructive"
                 onClick={handleConfirmDelete}
-                disabled={deleteLoading}
+                disabled={deleteLoading || !deleteReason}
               >
                 {deleteLoading ? (
                   <>

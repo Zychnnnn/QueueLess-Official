@@ -957,6 +957,18 @@ export const deleteUser = async (req, res) => {
 
     await User.findByIdAndDelete(id);
 
+    const deleteReason = req.body?.reason || "Administrative removal";
+    recordAuditLog({
+      actorName: req.user?.name || "Administrator",
+      actorEmail: req.user?.email || "",
+      actorRole: req.user?.role || "admin",
+      actorId: req.user?.studentId || req.user?.id || "ADMIN",
+      targetCategory: "users",
+      action: `Deleted User Account:  ()`,
+      details: `User account for  (, , ID: ) was deleted. Reason: `,
+      status: "Warning",
+    });
+
     return res.status(200).json({
       message: `${user.name} (${user.role}) has been deleted.`,
       deletedUserId: id,
