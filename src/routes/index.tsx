@@ -17,6 +17,7 @@ import {
   ArchiveRestore,
   ArrowLeft,
   ArrowRight,
+  ExternalLink,
   Bell,
   Calendar,
   CalendarDays,
@@ -8085,14 +8086,7 @@ function StudentPersonalDetailsView({
                 </div>
               )}
             </div>
-            <div className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300">
-              <p className="font-bold flex items-center gap-1.5">
-                <AlertTriangle className="size-4 text-amber-600 shrink-0" /> Important Registration Notice
-              </p>
-              <p className="mt-1 leading-relaxed">
-                Once confirmed, your official legal name and institutional records will be saved and locked. Only an authorized Administrator can modify institutional records.
-              </p>
-            </div>
+
             <div className="mt-5 flex items-center justify-end gap-2.5">
               <Button
                 variant="outline"
@@ -8258,7 +8252,7 @@ function StudentPersonalDetailsView({
                   }}
                   className="w-full sm:w-auto gap-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white cursor-pointer shadow-md"
                 >
-                  <ExternalLink className="size-3.5" />
+                  <ArrowRight className="size-3.5" />
                   Go to {getMissingFields()[0]?.label}
                 </Button>
               )}
@@ -8388,6 +8382,8 @@ function StudentView({
   onPersonalDetailsComplete?: (isInitialGate?: boolean) => void;
 }) {
   const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
+  const [confirmClaimReq, setConfirmClaimReq] = useState<RequestItem | null>(null);
+  const [confirmingClaim, setConfirmingClaim] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
@@ -8803,31 +8799,9 @@ function StudentView({
             <Button
               size="sm"
               variant="outline"
-              onClick={async () => {
+              onClick={() => {
                 const readyReq = mine.find((r) => r.status === "Ready for Claiming");
-                if (!readyReq) return;
-                const updatedItem: RequestItem = { ...readyReq, status: "Claimed" };
-                const nextRequests = requests.map((r) => (r.id === readyReq.id ? updatedItem : r));
-                setRequests(nextRequests);
-                try {
-                  localStorage.setItem("queueless_requests", JSON.stringify(nextRequests));
-                } catch {}
-                const token = localStorage.getItem("queueless_token");
-                if (token) {
-                  try {
-                    await fetch(`${API_URL}/api/requests/${encodeURIComponent(readyReq.id)}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                      body: JSON.stringify({ status: "Claimed" }),
-                    });
-                  } catch {}
-                }
-                archiveClaimedRecord(updatedItem, readyReq.assignedStaffName || "Registrar Staff");
-                setFlash({
-                  tone: "success",
-                  text: `Document ${readyReq.id} marked as Done & Claimed! It is now recorded in your Done / Claimed tab.`,
-                });
-                setSelectedReceipt(updatedItem);
+                if (readyReq) setConfirmClaimReq(readyReq);
               }}
               className="bg-white/95 dark:bg-card hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 cursor-pointer font-bold gap-1.5 shadow-xs"
             >
@@ -8928,6 +8902,143 @@ function StudentView({
           )}
         </div>
       </section>
+
+      {/* Confirm Document Claim & Done Modal with Details */}
+      {confirmClaimReq && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-emerald-500/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-border pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
+                  <CheckCircle2 className="size-6" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Confirm Document Claim
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Save to official records before logging out
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => !confirmingClaim && setConfirmClaimReq(null)}
+                className="size-8 cursor-pointer"
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            {/* Document Details Card */}
+            <div className="mt-4 rounded-xl border border-border bg-muted/20 p-4 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                <span className="text-[11px] font-mono text-muted-foreground">Request Reference:</span>
+                <span className="font-mono font-bold text-foreground">{confirmClaimReq.id}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pb-2 border-b border-border/60">
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground block">Document:</span>
+                  <strong className="text-foreground text-xs">{confirmClaimReq.document}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground block">Quantity:</span>
+                  <span className="text-foreground font-semibold">{confirmClaimReq.copies || 1} copy</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pb-2 border-b border-border/60">
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground block">Student Name:</span>
+                  <span className="text-foreground font-medium">{confirmClaimReq.student}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground block">Student ID:</span>
+                  <span className="font-mono text-foreground font-medium">{confirmClaimReq.studentId}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pb-2 border-b border-border/60">
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground block">Releasing Staff:</span>
+                  <span className="text-foreground font-semibold">{confirmClaimReq.assignedStaffName || "Registrar Officer"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground block">Release Date:</span>
+                  <span className="text-foreground">{confirmClaimReq.pickupDate || confirmClaimReq.date}</span>
+                </div>
+              </div>
+              {confirmClaimReq.remarks && (
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground block">Staff Remarks:</span>
+                  <p className="text-muted-foreground italic text-[11px]">"{confirmClaimReq.remarks}"</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-muted-foreground leading-relaxed">
+              <p className="font-bold text-emerald-700 dark:text-emerald-400 mb-0.5">Permanent Claim Record</p>
+              Confirming will mark this request as <strong>Claimed & Done</strong>. Your records will be permanently saved before you log out and recorded in your <strong>Done / Claimed</strong> tab.
+            </div>
+
+            {/* Actions */}
+            <div className="mt-5 flex items-center justify-end gap-2.5 border-t border-border pt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmClaimReq(null)}
+                disabled={confirmingClaim}
+                className="cursor-pointer text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  if (!confirmClaimReq) return;
+                  setConfirmingClaim(true);
+                  try {
+                    const req = confirmClaimReq;
+                    const updatedItem: RequestItem = { ...req, status: "Claimed" };
+                    const nextRequests = requests.map((r) => (r.id === req.id ? updatedItem : r));
+                    setRequests(nextRequests);
+                    try {
+                      localStorage.setItem("queueless_requests", JSON.stringify(nextRequests));
+                    } catch {}
+
+                    const token = localStorage.getItem("queueless_token");
+                    if (token) {
+                      try {
+                        await fetch(`${API_URL}/api/requests/${encodeURIComponent(req.id)}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ status: "Claimed" }),
+                        });
+                      } catch {}
+                    }
+
+                    archiveClaimedRecord(updatedItem, req.assignedStaffName || "Registrar Staff");
+                    setFlash({
+                      tone: "success",
+                      text: `Document request #${req.id} (${req.document}) confirmed as Done & Claimed! Safely recorded in your history.`,
+                    });
+                    setConfirmClaimReq(null);
+                    setSelectedReceipt(updatedItem);
+                  } finally {
+                    setConfirmingClaim(false);
+                  }
+                }}
+                disabled={confirmingClaim}
+                className="gap-1.5 font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs"
+              >
+                {confirmingClaim ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                Confirm & Save as Done
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {selectedReceipt && (
         <DigitalReceiptModal
