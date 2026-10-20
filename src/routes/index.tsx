@@ -6656,9 +6656,72 @@ function StudentPersonalDetailsView({
       return false;
     }
     if (!isNameLocked && !firstName.trim()) {
-      setFlash({ tone: "error", text: "First name is required." });
+      setFlash({ tone: "error", text: "First name is required (*)." });
       return false;
     }
+    if (!editGender) {
+      setFlash({ tone: "error", text: "Gender selection is required (*)." });
+      return false;
+    }
+    if (!editBirthDate) {
+      setFlash({ tone: "error", text: "Date of Birth is required (*)." });
+      return false;
+    }
+    if (!editNationality.trim()) {
+      setFlash({ tone: "error", text: "Nationality is required (*)." });
+      return false;
+    }
+    if (!editCivilStatus) {
+      setFlash({ tone: "error", text: "Civil status is required (*)." });
+      return false;
+    }
+    if (!currentAddress.trim()) {
+      setFlash({ tone: "error", text: "Current residential street address is required (*)." });
+      return false;
+    }
+    if (!currentCity.trim()) {
+      setFlash({ tone: "error", text: "Current city / municipality is required (*)." });
+      return false;
+    }
+    if (!currentProvince.trim()) {
+      setFlash({ tone: "error", text: "Current province is required (*)." });
+      return false;
+    }
+    if (!currentPostalCode.trim()) {
+      setFlash({ tone: "error", text: "Current postal code is required (*)." });
+      return false;
+    }
+    if (!sameAsCurrentAddress) {
+      if (!permanentAddress.trim()) {
+        setFlash({ tone: "error", text: "Permanent street address is required (*)." });
+        return false;
+      }
+      if (!permanentCity.trim()) {
+        setFlash({ tone: "error", text: "Permanent city / municipality is required (*)." });
+        return false;
+      }
+      if (!permanentProvince.trim()) {
+        setFlash({ tone: "error", text: "Permanent province is required (*)." });
+        return false;
+      }
+      if (!permanentPostalCode.trim()) {
+        setFlash({ tone: "error", text: "Permanent postal code is required (*)." });
+        return false;
+      }
+    }
+    if (isStudent && !motherName.trim()) {
+      setFlash({ tone: "error", text: "Mother's maiden name is required (*)." });
+      return false;
+    }
+    if (isStudent && !motherOccupation.trim()) {
+      setFlash({ tone: "error", text: "Mother's occupation is required (*)." });
+      return false;
+    }
+    if (isStudent && !seniorHighSchool.trim()) {
+      setFlash({ tone: "error", text: "Senior High School name is required (*)." });
+      return false;
+    }
+    // Phone numbers are explicitly OPTIONAL: only validate format if provided
     if (editPhone.trim()) {
       const cleanDigits = normalizePhone(editPhone);
       if (cleanDigits.length !== 11 || !cleanDigits.startsWith("09")) {
@@ -7139,7 +7202,7 @@ function StudentPersonalDetailsView({
                   )}
                 </div>
               </Field>
-              <Field label="Email Address">
+              <Field label="* Email Address">
                 <input
                   type="email"
                   value={editEmail}
@@ -7151,14 +7214,14 @@ function StudentPersonalDetailsView({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Gender">
+              <Field label="* Gender">
                 <select value={editGender} onChange={(e) => setEditGender(e.target.value)} className="field cursor-pointer">
                   <option value="">Please Select</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                 </select>
               </Field>
-              <Field label="Date of Birth">
+              <Field label="* Date of Birth">
                 <input
                   type="date"
                   value={editBirthDate}
@@ -7170,7 +7233,7 @@ function StudentPersonalDetailsView({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="Nationality">
+              <Field label="* Nationality">
                 <input
                   type="text"
                   value={editNationality}
@@ -7179,7 +7242,7 @@ function StudentPersonalDetailsView({
                   className="field"
                 />
               </Field>
-              <Field label="Religion">
+              <Field label="* Religion">
                 <input
                   type="text"
                   value={editReligion}
@@ -7188,7 +7251,7 @@ function StudentPersonalDetailsView({
                   className="field"
                 />
               </Field>
-              <Field label="Civil Status">
+              <Field label="* Civil Status">
                 <select value={editCivilStatus} onChange={(e) => setEditCivilStatus(e.target.value)} className="field cursor-pointer">
                   <option value="Single">Single</option>
                   <option value="Married">Married</option>
@@ -7501,7 +7564,7 @@ function StudentPersonalDetailsView({
               badge="Section 4 of 4"
             />
             <div className="space-y-4 text-xs">
-              <Field label="Degree / Academic Program">
+              <Field label="* Degree / Academic Program">
                 <select
                   value={editCourse}
                   onChange={(e) => setEditCourse(e.target.value)}
@@ -7520,7 +7583,7 @@ function StudentPersonalDetailsView({
                   <option value="Other Program">Other Program</option>
                 </select>
               </Field>
-              <Field label="Year Level / Status">
+              <Field label="* Year Level / Status">
                 <select
                   value={editYearLevel}
                   onChange={(e) => setEditYearLevel(e.target.value)}
@@ -9126,13 +9189,24 @@ interface ClaimedRecordBackup {
   pickupDate?: string;
 }
 
+const getClearedClaimedIds = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem("queueless_cleared_claimed_ids");
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
 const getClaimedBackupRecords = (allRequests: RequestItem[]): ClaimedRecordBackup[] => {
   try {
+    const clearedIds = getClearedClaimedIds();
     const raw = localStorage.getItem("queueless_claimed_backup");
     let stored: ClaimedRecordBackup[] = raw ? JSON.parse(raw) : [];
 
-    // Clean ghost records so when user deletes requests, archive starts fresh at 0
-    const claimedInRequests = allRequests.filter((r) => r.status === "Claimed");
+    // Clean ghost records and filter out cleared IDs so deleted archive records never resurrect
+    stored = stored.filter((item) => !clearedIds.has(item.id));
+    const claimedInRequests = allRequests.filter((r) => r.status === "Claimed" && !clearedIds.has(r.id));
     const claimedIds = new Set(claimedInRequests.map((r) => r.id));
     stored = stored.filter((item) => claimedIds.has(item.id));
 
@@ -9961,6 +10035,155 @@ function StaffView({
           isStaff={true}
           onOpenCalendar={onOpenCalendar}
         />
+      )}
+
+      {/* Clear All Archive Slips Modal with Reason */}
+      {showClearModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between border-b border-border pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive border border-destructive/20">
+                  <Trash2 className="size-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Clear Archived Release Slips
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Vault count: {backupRecords.length} records
+                  </p>
+                </div>
+              </div>
+              <Button size="icon" variant="ghost" onClick={() => !clearing && setShowClearModal(false)} className="size-8 cursor-pointer">
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 p-3.5 text-xs text-muted-foreground leading-relaxed">
+              <p className="font-semibold text-destructive mb-1">Permanent Ledger Reset Warning</p>
+              Are you sure you want to clean and reset all archived release slips? This will permanently clear the vault records and reset the archive counter to (0). Deleted records will not return upon reload.
+            </div>
+
+            <div className="mt-4">
+              <label className="text-xs font-bold text-foreground block mb-1.5">
+                Reason for Clearing Archive Slips *
+              </label>
+              <select
+                value={clearReason}
+                onChange={(e) => setClearReason(e.target.value)}
+                className="field text-xs cursor-pointer"
+                required
+              >
+                <option value="">Select a reason</option>
+                <option value="Term / Semester archival reset">Term / Semester archival reset</option>
+                <option value="Data privacy compliance (DPA 10173)">Data privacy compliance (DPA 10173)</option>
+                <option value="Routine ledger maintenance">Routine ledger maintenance</option>
+                <option value="Audit preparation / Ledger sync">Audit preparation / Ledger sync</option>
+                <option value="Duplicate / Test records cleanup">Duplicate / Test records cleanup</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowClearModal(false)}
+                disabled={clearing}
+                className="h-8 text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmClearArchive}
+                disabled={clearing || !clearReason}
+                className="h-8 text-xs font-bold gap-1.5 cursor-pointer"
+              >
+                {clearing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                Yes, Clear All Slips
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Delete Single Archive Slip Modal with Reason */}
+      {slipToDelete && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between border-b border-border pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive border border-destructive/20">
+                  <Trash2 className="size-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Delete Archived Release Slip
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Slip #{slipToDelete.id}
+                  </p>
+                </div>
+              </div>
+              <Button size="icon" variant="ghost" onClick={() => !deletingSlip && setSlipToDelete(null)} className="size-8 cursor-pointer">
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-border bg-muted/30 p-3 text-xs space-y-1.5">
+              <p><strong className="text-foreground">Student:</strong> {slipToDelete.student} ({slipToDelete.studentId})</p>
+              <p><strong className="text-foreground">Document:</strong> {slipToDelete.document} ({slipToDelete.copies || 1} copy)</p>
+              <p><strong className="text-foreground">Purpose:</strong> {slipToDelete.purpose}</p>
+              <p><strong className="text-foreground">Released on:</strong> {slipToDelete.claimedAt}</p>
+            </div>
+
+            <div className="mt-4">
+              <label className="text-xs font-bold text-foreground block mb-1.5">
+                Reason for Deleting Slip *
+              </label>
+              <select
+                value={slipDeleteReason}
+                onChange={(e) => setSlipDeleteReason(e.target.value)}
+                className="field text-xs cursor-pointer"
+                required
+              >
+                <option value="">Select a reason</option>
+                <option value="Duplicate release slip recorded">Duplicate release slip recorded</option>
+                <option value="Testing / Demonstration slip">Testing / Demonstration slip</option>
+                <option value="Student requested data deletion">Student requested data deletion</option>
+                <option value="Administrative correction">Administrative correction</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSlipToDelete(null)}
+                disabled={deletingSlip}
+                className="h-8 text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmDeleteSingleSlip}
+                disabled={deletingSlip || !slipDeleteReason}
+                className="h-8 text-xs font-bold gap-1.5 cursor-pointer"
+              >
+                {deletingSlip ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                Yes, Delete Slip
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -13550,11 +13773,15 @@ function RateStaffModal({
 
       const updatedItem: RequestItem = {
         ...request,
+        status: "Claimed",
         rating,
         feedback: feedback.trim(),
         feedbackAt: new Date().toISOString(),
       };
 
+      try {
+        archiveClaimedRecord(updatedItem, request.assignedStaffName || "Registrar Counter Officer");
+      } catch {}
       onRated(updatedItem);
       if (setFlash) {
         setFlash({
@@ -13566,10 +13793,14 @@ function RateStaffModal({
     } catch {
       const updatedItem: RequestItem = {
         ...request,
+        status: "Claimed",
         rating,
         feedback: feedback.trim(),
         feedbackAt: new Date().toISOString(),
       };
+      try {
+        archiveClaimedRecord(updatedItem, request.assignedStaffName || "Registrar Counter Officer");
+      } catch {}
       onRated(updatedItem);
       onClose();
     } finally {
@@ -14739,7 +14970,7 @@ function ManageRequests({
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Active");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "priority-only">("all");
-  const [staffQueueTab, setStaffQueueTab] = useState<"all" | "my_assigned" | "unassigned">("all");
+  const [staffQueueTab, setStaffQueueTab] = useState<"all" | "my_assigned" | "unassigned" | "done">("all");
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [confirmingAcceptReq, setConfirmingAcceptReq] = useState<RequestItem | null>(null);
 
@@ -14938,7 +15169,9 @@ function ManageRequests({
       requests
         .filter((r) => {
           const statusMatch =
-            status === "Active"
+            staffQueueTab === "done"
+              ? true
+              : status === "Active"
               ? r.status !== "Claimed"
               : status === "All"
               ? true
@@ -14965,6 +15198,8 @@ function ManageRequests({
               ? isAssignedToMe
               : staffQueueTab === "unassigned"
               ? isUnassigned && r.status === "Pending"
+              : staffQueueTab === "done"
+              ? r.status === "Claimed" || Boolean(r.rating)
               : true;
 
           return statusMatch && priorityMatch && queryMatch && staffTabMatch;
@@ -15456,6 +15691,22 @@ function ManageRequests({
           <Clock3 className="size-3.5" />
           <span>Available to Accept ({stats.unassignedPending})</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setStaffQueueTab("done");
+            setStatus("All");
+          }}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+            staffQueueTab === "done"
+              ? "bg-emerald-600 text-white shadow-xs"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          <CheckCircle2 className="size-3.5" />
+          <span>Done / Claimed ({requests.filter((r) => r.status === "Claimed" || Boolean(r.rating)).length})</span>
+        </button>
       </div>
 
       {/* Filter and search */}
@@ -15632,6 +15883,20 @@ function ManageRequests({
                     title="View Receipt"
                   >
                     <Eye className="size-3.5" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingReq(r);
+                      setDeleteReason("");
+                    }}
+                    className="h-8 w-8 p-0 cursor-pointer text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                    title="Delete Request from Queue"
+                  >
+                    <Trash2 className="size-3.5" />
                   </Button>
 
 
@@ -15921,6 +16186,25 @@ function ManageRequests({
               </div>
             </div>
 
+            <div className="mb-3">
+              <label className="text-xs font-bold text-foreground block mb-1">Reason for Deletion *</label>
+              <select
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                className="field text-xs cursor-pointer"
+                required
+              >
+                <option value="">Select a reason</option>
+                <option value="Duplicate document request">Duplicate document request</option>
+                <option value="Cancelled by student request">Cancelled by student request</option>
+                <option value="Unclaimed beyond holding period (expired)">Unclaimed beyond holding period (expired)</option>
+                <option value="Invalid / Ineligible credentials provided">Invalid / Ineligible credentials provided</option>
+                <option value="Error in document details / re-submission required">Error in document details / re-submission required</option>
+                <option value="Queue cleanup / system maintenance">Queue cleanup / system maintenance</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
             <div className="flex items-center justify-end gap-2">
               <Button
                 variant="outline"
@@ -15934,7 +16218,7 @@ function ManageRequests({
               <Button
                 size="sm"
                 variant="destructive"
-                disabled={deleteLoading}
+                disabled={deleteLoading || !deleteReason}
                 onClick={() => handleDeleteRequest(deletingReq)}
                 className="h-8 cursor-pointer text-xs font-bold gap-1.5"
               >
@@ -15973,6 +16257,12 @@ function AdminOperationsAndArchivePanel({
     getClaimedBackupRecords(requests)
   );
   const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearReason, setClearReason] = useState("");
+  const [clearing, setClearing] = useState(false);
+  const [slipToDelete, setSlipToDelete] = useState<ClaimedRecordBackup | null>(null);
+  const [slipDeleteReason, setSlipDeleteReason] = useState("");
+  const [deletingSlip, setDeletingSlip] = useState(false);
 
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [deletedSearch, setDeletedSearch] = useState("");
@@ -15998,14 +16288,92 @@ function AdminOperationsAndArchivePanel({
     setBackupRecords(getClaimedBackupRecords(requests));
   }, [requests]);
 
-  const handleClearArchive = () => {
-    if (window.confirm("Are you sure you want to clean and reset all archived release slips? This will reset the archive counter to 0.")) {
+  const handleOpenClearModal = () => {
+    setClearReason("");
+    setShowClearModal(true);
+  };
+
+  const handleConfirmClearArchive = async () => {
+    if (!clearReason) return;
+    setClearing(true);
+    try {
+      const cleared = getClearedClaimedIds();
+      backupRecords.forEach((b) => cleared.add(b.id));
+      requests.forEach((r) => {
+        if (r.status === "Claimed") cleared.add(r.id);
+      });
+      localStorage.setItem("queueless_cleared_claimed_ids", JSON.stringify(Array.from(cleared)));
       localStorage.removeItem("queueless_claimed_backup");
       setBackupRecords([]);
+      setShowClearModal(false);
+
+      const token = localStorage.getItem("queueless_token");
+      if (token) {
+        try {
+          await fetch(`${API_URL}/api/audit-logs`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              action: "Cleared Archived Release Slips",
+              details: `All archived release slips (${backupRecords.length} records) were reset and cleared from vault. Reason: ${clearReason}`,
+              targetCategory: "archive",
+              status: "Warning",
+            }),
+          });
+        } catch {}
+      }
+
       setFlash({
         tone: "success",
-        text: "Archived release slips cleared. Archive starts fresh at (0).",
+        text: `Archived release slips cleared. Reason: ${clearReason}. Vault starts fresh at (0).`,
       });
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const handleConfirmDeleteSingleSlip = async () => {
+    if (!slipToDelete || !slipDeleteReason) return;
+    setDeletingSlip(true);
+    const slip = slipToDelete;
+    try {
+      const cleared = getClearedClaimedIds();
+      cleared.add(slip.id);
+      localStorage.setItem("queueless_cleared_claimed_ids", JSON.stringify(Array.from(cleared)));
+
+      const next = backupRecords.filter((b) => b.id !== slip.id);
+      setBackupRecords(next);
+      localStorage.setItem("queueless_claimed_backup", JSON.stringify(next));
+      setSlipToDelete(null);
+
+      const token = localStorage.getItem("queueless_token");
+      if (token) {
+        try {
+          await fetch(`${API_URL}/api/audit-logs`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              action: `Deleted Archived Release Slip: #${slip.id}`,
+              details: `Archived release slip for ${slip.student} (${slip.document}) was permanently deleted from vault. Reason: ${slipDeleteReason}`,
+              targetCategory: "archive",
+              status: "Warning",
+            }),
+          });
+        } catch {}
+      }
+
+      setFlash({
+        tone: "success",
+        text: `Archived release slip ${slip.id} removed. Reason: ${slipDeleteReason}.`,
+      });
+    } finally {
+      setDeletingSlip(false);
     }
   };
 
@@ -16191,7 +16559,7 @@ function AdminOperationsAndArchivePanel({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={handleClearArchive}
+                onClick={handleOpenClearModal}
                 disabled={backupRecords.length === 0}
                 className="gap-1.5 text-xs h-9 cursor-pointer font-medium text-destructive hover:bg-destructive/10 hover:text-destructive border-border hover:border-destructive/30"
               >
@@ -16284,6 +16652,18 @@ function AdminOperationsAndArchivePanel({
                           className="h-8 text-xs cursor-pointer gap-1.5"
                         >
                           <Receipt className="size-3.5" /> View Receipt
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSlipToDelete(rec);
+                            setSlipDeleteReason("");
+                          }}
+                          className="h-8 text-xs cursor-pointer gap-1.5 text-destructive border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                          title="Delete this archived slip"
+                        >
+                          <Trash2 className="size-3.5" /> Delete
                         </Button>
                       </div>
                     </div>
@@ -18901,6 +19281,75 @@ function AdminOfficialRecordsPanel({
                       readOnly
                       disabled
                       className="field font-mono bg-muted/50 cursor-not-allowed"
+                    />
+                  </Field>
+                </div>
+              </div>
+
+              {/* Section: Official Personal & Demographic Details (Read Only) */}
+              <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
+                <p className="text-xs font-bold text-foreground">Official Personal & Demographic Details</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <Field label="Date of Birth">
+                    <input
+                      type="text"
+                      value={birthDate ? new Date(birthDate).toLocaleDateString() : (birthDate || "Not provided")}
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
+                    />
+                  </Field>
+                  <Field label="Gender">
+                    <input
+                      type="text"
+                      value={gender || "Not specified"}
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed capitalize"
+                    />
+                  </Field>
+                  <Field label="Civil Status">
+                    <input
+                      type="text"
+                      value={civilStatus || "Single"}
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
+                    />
+                  </Field>
+                  <Field label="Nationality">
+                    <input
+                      type="text"
+                      value={nationality || "Filipino"}
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Religion / Faith">
+                    <input
+                      type="text"
+                      value={religion || "None specified"}
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
+                    />
+                  </Field>
+                  <Field label="Emergency Contact Person & Number">
+                    <input
+                      type="text"
+                      value={
+                        editingUser.emergencyContact ||
+                        (editingUser.motherName ? `${editingUser.motherName} (${editingUser.motherMobile || "No mobile"})` : "") ||
+                        (editingUser.fatherName ? `${editingUser.fatherName} (${editingUser.fatherMobile || "No mobile"})` : "") ||
+                        (editingUser.guardianName ? `${editingUser.guardianName} (${editingUser.guardianMobile || "No mobile"})` : "") ||
+                        "None on file"
+                      }
+                      readOnly
+                      disabled
+                      className="field bg-muted/50 cursor-not-allowed"
                     />
                   </Field>
                 </div>

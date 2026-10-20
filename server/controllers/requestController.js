@@ -517,6 +517,10 @@ export const rateRequest = async (req, res) => {
     request.rating = Number(rating) || 5;
     request.feedback = (feedback || "").trim();
     request.feedbackAt = new Date();
+    // Mark request as Claimed/Done when rated
+    if (request.status !== "Claimed") {
+      request.status = "Claimed";
+    }
     await request.save();
 
     recordAuditLog({
