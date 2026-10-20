@@ -20,6 +20,8 @@ import {
   sendSecurityOtp,
   sendContactOtp,
   verifyContactOtp,
+  verifyLoginOtp,
+  resendLoginOtp,
 } from "../controllers/authController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 import roleMiddleware from "../middleware/roleMiddleware.js";
@@ -29,6 +31,8 @@ const router = express.Router();
 router.post("/register", register);
 router.post("/register-guest", registerGuest);
 router.post("/login", login);
+router.post("/verify-login-otp", verifyLoginOtp);
+router.post("/resend-login-otp", resendLoginOtp);
 router.post("/google", googleLogin);
 router.post("/forgot-password", requestPasswordResetOtp);
 router.post("/verify-otp", verifyPasswordResetOtp);

@@ -35,7 +35,7 @@ export const getTransporter = () => {
   return transporter;
 };
 
-export const sendOtpEmail = async (toEmail, otp) => {
+export const sendOtpEmail = async (toEmail, otp, customSubject) => {
   const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
   const emailPass =
     process.env.EMAIL_PASS ||
@@ -54,7 +54,7 @@ export const sendOtpEmail = async (toEmail, otp) => {
   const mailOptions = {
     from: `"QueueLess Registrar" <${emailUser}>`,
     to: toEmail,
-    subject: `QueueLess - Verification Code: ${otp}`,
+    subject: customSubject || `QueueLess - Verification Code: ${otp}`,
     html: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -63,7 +63,7 @@ export const sendOtpEmail = async (toEmail, otp) => {
         </div>
         
         <div style="background-color: #f9fafb; border-radius: 8px; padding: 24px; text-align: center; border: 1px solid #f3f4f6;">
-          <p style="color: #374151; font-size: 14px; margin: 0 0 12px; font-weight: 500;">Your 6-digit password reset verification code is:</p>
+          <p style="color: #374151; font-size: 14px; margin: 0 0 12px; font-weight: 500;">Your 6-digit verification code is:</p>
           <div style="font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #183d22; background: #ffffff; padding: 12px 20px; border-radius: 8px; display: inline-block; border: 2px dashed #183d22; font-family: monospace;">
             ${otp}
           </div>
@@ -71,7 +71,7 @@ export const sendOtpEmail = async (toEmail, otp) => {
         </div>
 
         <p style="color: #9ca3af; font-size: 12px; margin: 24px 0 0; text-align: center;">
-          If you did not request a password reset, you can safely ignore this email.
+          If you did not request this code, you can safely ignore this email.
         </p>
       </div>
     `,

@@ -10,6 +10,8 @@ import {
 } from "../services/emailService.js";
 import { recordAuditLog } from "./auditController.js";
 
+export const JWT_SECRET = process.env.JWT_SECRET || "queueless-production-secret-key-2026-auth";
+
 export const isSchoolCredential = (email = "", studentId = "") => {
   const cleanEmail = email.toLowerCase().trim();
   const cleanId = studentId ? studentId.trim() : "";
@@ -280,7 +282,7 @@ export const registerGuest = async (req, res) => {
         id: user._id,
         role: user.role,
       },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       {
         expiresIn: "1d",
       }
@@ -382,56 +384,37 @@ export const login = async (req, res) => {
       });
     }
 
-    // Reset failed login attempts on successful authentication
+    // Reset failed login attempts on successful credentials match
     user.failedLoginAttempts = 0;
     user.lockUntil = undefined;
-
-    const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "1d",
-      }
-    );
-
-    let isPriority = user.isPriority;
-    let userType = user.userType;
-    if (isPriority === undefined || !userType) {
-      isPriority = isSchoolCredential(user.email, user.studentId);
-      userType = isPriority ? "priority" : "normal";
-      user.isPriority = isPriority;
-      user.userType = userType;
-    }
-
-    user.lastLogin = new Date();
-    if (req.body.termsAccepted) {
-      user.termsAccepted = true;
-      if (!user.termsAcceptedAt) {
-        user.termsAcceptedAt = new Date();
-      }
-    }
     await user.save();
 
-    const isGuest = isGuestAccount(user);
-    recordAuditLog({
-      actorName: user.name,
-      actorEmail: user.email,
-      actorRole: isGuest ? "guest" : user.role,
-      actorId: user.studentId || String(user._id),
-      actorPicture: user.picture || "",
-      targetCategory: user.role === "staff" ? "staff" : isGuest ? "guest" : (user.isPriority || user.userType === "priority") ? "priority" : "student",
-      action: `${user.role === "staff" ? "Staff" : user.role === "admin" ? "Admin" : isGuest ? "Guest" : "Student"} Portal Sign In`,
-      details: `${isGuest ? "Guest " : ""}${user.name} signed into QueueLess portal.`,
-      status: "Success",
-    });
+    // 2FA Security: Generate 6-digit OTP code before entering the system
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes validity
+
+    await PasswordResetOtp.findOneAndUpdate(
+      { email: user.email.toLowerCase().trim() },
+      { otp, expiresAt, verified: false },
+      { upsert: true, new: true }
+    );
+
+    sendOtpEmail(user.email, otp, "QueueLess Login Authentication Code").catch((err) =>
+      console.error("Login OTP email error:", err)
+    );
+    console.log(`[QueueLess 2FA Login OTP] Generated code for ${user.email} (${user.name}): ${otp}`);
+
+    const atIndex = user.email.indexOf("@");
+    const maskedEmail =
+      atIndex > 2
+        ? `${user.email.slice(0, 2)}***${user.email.slice(atIndex)}`
+        : user.email;
 
     return res.status(200).json({
-      message: "Login successful.",
-      token,
-      user: formatUserObject(user),
+      requiresOtp: true,
+      email: user.email,
+      maskedEmail,
+      message: `A 6-digit verification code has been sent to ${maskedEmail}. Please enter the code to access your account.`,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -447,6 +430,126 @@ export const login = async (req, res) => {
         ? "Database connection error. Please ensure your current IP address is whitelisted in MongoDB Atlas."
         : "Server error during login.",
     });
+  }
+};
+
+export const verifyLoginOtp = async (req, res) => {
+  try {
+    const { email, otp, termsAccepted } = req.body;
+    const cleanEmail = (email || "").toLowerCase().trim();
+    const cleanOtp = (otp || "").toString().trim();
+
+    if (!cleanEmail || !cleanOtp) {
+      return res.status(400).json({ message: "Email and verification code are required." });
+    }
+
+    const otpRecord = await PasswordResetOtp.findOne({
+      email: cleanEmail,
+      otp: cleanOtp,
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({ message: "Invalid verification code. Please check your email and try again." });
+    }
+
+    if (new Date() > otpRecord.expiresAt) {
+      return res.status(400).json({ message: "Verification code has expired. Please request a new code." });
+    }
+
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      return res.status(404).json({ message: "User account not found." });
+    }
+
+    await PasswordResetOtp.deleteOne({ _id: otpRecord._id });
+
+    // Reset failed login attempts on successful authentication
+    user.failedLoginAttempts = 0;
+    user.lockUntil = undefined;
+    user.lastLogin = new Date();
+
+    if (termsAccepted) {
+      user.termsAccepted = true;
+      if (!user.termsAcceptedAt) {
+        user.termsAcceptedAt = new Date();
+      }
+    }
+    await user.save();
+
+    const token = jwt.sign(
+      {
+        id: user._id,
+        role: user.role,
+      },
+      JWT_SECRET,
+      {
+        expiresIn: "1d",
+      }
+    );
+
+    const isGuest = isGuestAccount(user);
+    recordAuditLog({
+      actorName: user.name,
+      actorEmail: user.email,
+      actorRole: isGuest ? "guest" : user.role,
+      actorId: user.studentId || String(user._id),
+      actorPicture: user.picture || "",
+      targetCategory: user.role === "staff" ? "staff" : isGuest ? "guest" : (user.isPriority || user.userType === "priority") ? "priority" : "student",
+      action: `${user.role === "staff" ? "Staff" : user.role === "admin" ? "Admin" : isGuest ? "Guest" : "Student"} OTP Sign In Verified`,
+      details: `${isGuest ? "Guest " : ""}${user.name} successfully verified OTP authentication and entered QueueLess.`,
+      status: "Success",
+    });
+
+    return res.status(200).json({
+      message: "Authentication successful! Welcome to QueueLess.",
+      token,
+      user: formatUserObject(user),
+    });
+  } catch (error) {
+    console.error("verifyLoginOtp error:", error);
+    return res.status(500).json({ message: "Server error while verifying login code." });
+  }
+};
+
+export const resendLoginOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const cleanEmail = (email || "").toLowerCase().trim();
+    if (!cleanEmail) {
+      return res.status(400).json({ message: "Email is required." });
+    }
+
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      return res.status(404).json({ message: "User account not found." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+    await PasswordResetOtp.findOneAndUpdate(
+      { email: cleanEmail },
+      { otp, expiresAt, verified: false },
+      { upsert: true, new: true }
+    );
+
+    sendOtpEmail(cleanEmail, otp, "QueueLess Login Authentication Code").catch((err) =>
+      console.error("Resend login OTP email error:", err)
+    );
+    console.log(`[QueueLess Resend 2FA Login] OTP for ${cleanEmail}: ${otp}`);
+
+    const atIndex = cleanEmail.indexOf("@");
+    const maskedEmail =
+      atIndex > 2
+        ? `${cleanEmail.slice(0, 2)}***${cleanEmail.slice(atIndex)}`
+        : cleanEmail;
+
+    return res.status(200).json({
+      message: `A fresh 6-digit verification code has been sent to ${maskedEmail}.`,
+    });
+  } catch (error) {
+    console.error("resendLoginOtp error:", error);
+    return res.status(500).json({ message: "Server error while resending verification code." });
   }
 };
 
@@ -1070,7 +1173,7 @@ export const googleLogin = async (req, res) => {
         id: user._id,
         role: user.role,
       },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       {
         expiresIn: "1d",
       }
@@ -1483,23 +1586,22 @@ export const sendSecurityOtp = async (req, res) => {
     let recipientEmail = user.email.toLowerCase().trim();
 
     if (action === "change_password") {
-      if (!currentPassword) {
-        return res.status(400).json({
-          message: "Current password is required. Please enter your accurate old password.",
-        });
-      }
       const userWithPw = await User.findById(userId).select("+password");
-      if (!userWithPw || !userWithPw.password) {
-        return res.status(400).json({
-          message: "Your account uses Google Sign-In and does not have a password configured.",
-        });
+      // If user has an existing password, verify the current password
+      if (userWithPw && userWithPw.password) {
+        if (!currentPassword) {
+          return res.status(400).json({
+            message: "Current password is required. Please enter your accurate old password.",
+          });
+        }
+        const isMatch = await bcrypt.compare(currentPassword, userWithPw.password);
+        if (!isMatch) {
+          return res.status(401).json({
+            message: "Current password is incorrect. Please enter your accurate old password.",
+          });
+        }
       }
-      const isMatch = await bcrypt.compare(currentPassword, userWithPw.password);
-      if (!isMatch) {
-        return res.status(401).json({
-          message: "Current password is incorrect. Please enter your accurate old password.",
-        });
-      }
+      // If user has no password configured yet (Google Sign-In), allow them to set their password with OTP
     }
 
     if (action === "change_email") {
@@ -1551,9 +1653,9 @@ export const changePassword = async (req, res) => {
     const userId = req.user.id;
     const { currentPassword, newPassword, otp } = req.body;
 
-    if (!currentPassword || !newPassword) {
+    if (!newPassword) {
       return res.status(400).json({
-        message: "Current password and new password are required.",
+        message: "New password is required.",
       });
     }
 
@@ -1564,7 +1666,7 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    if (currentPassword === newPassword) {
+    if (currentPassword && currentPassword === newPassword) {
       return res.status(400).json({
         message: "New password cannot be the same as your current password.",
       });
@@ -1582,14 +1684,23 @@ export const changePassword = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
-    if (!user.password) {
-      return res.status(400).json({
-        message: "Your account uses Google Sign-In and does not have a password. Set one from the forgot password page.",
-      });
+    if (user.password) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          message: "Current password is required.",
+        });
+      }
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return res.status(401).json({
+          message: "Current password is incorrect. Please enter your accurate old password.",
+        });
+      }
     }
 
-    // 3-day password change cooldown
-    if (user.passwordLastChanged) {
+    // Admin and Staff can change their password anytime!
+    const isAdminOrStaff = user.role === "admin" || user.role === "staff";
+    if (!isAdminOrStaff && user.passwordLastChanged) {
       const lastChange = new Date(user.passwordLastChanged).getTime();
       const diffMs = Date.now() - lastChange;
       const cooldownMs = 3 * 24 * 60 * 60 * 1000;
@@ -1600,13 +1711,6 @@ export const changePassword = async (req, res) => {
           message: `Password can only be changed once every 3 days. Please wait ${remainingDays > 1 ? `${remainingDays} days` : `${remainingHours} hours`} before updating your password again.`,
         });
       }
-    }
-
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(401).json({
-        message: "Current password is incorrect. Please enter your accurate old password.",
-      });
     }
 
     // Verify OTP code

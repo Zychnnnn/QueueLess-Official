@@ -2721,9 +2721,12 @@ function AuthScreen({
   }, []);
 
   const [mode, setMode] =
-    useState<"login" | "register" | "guest-register" | "forgot-password" | "activate-account">(
+    useState<"login" | "login-otp" | "register" | "guest-register" | "forgot-password" | "activate-account">(
       "login"
     );
+
+  const [loginOtpEmail, setLoginOtpEmail] = useState("");
+  const [loginOtpMaskedEmail, setLoginOtpMaskedEmail] = useState("");
 
   const [registrationNotice, setRegistrationNotice] =
     useState<string | null>(null);
@@ -3018,6 +3021,14 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
           result.message ||
             "Login failed."
         );
+        return;
+      }
+
+      if (result.requiresOtp) {
+        setLoginOtpEmail(result.email || identity);
+        setLoginOtpMaskedEmail(result.maskedEmail || identity);
+        setMode("login-otp");
+        setError("");
         return;
       }
 
@@ -3585,6 +3596,16 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
                 </Button>
               </div>
             </>
+          ) : mode === "login-otp" ? (
+            <LoginOtpVerificationForm
+              email={loginOtpEmail}
+              maskedEmail={loginOtpMaskedEmail}
+              onSuccess={(user) => onSignIn(user)}
+              onBack={() => {
+                setMode("login");
+                setError("");
+              }}
+            />
           ) : mode === "register" ? (
             <Registration
               onBack={() => {
@@ -4188,6 +4209,184 @@ function PasswordStrengthMeter({ password }: { password: string }) {
       <p className="text-[10px] text-muted-foreground leading-tight">
         Must be at least 8 characters with uppercase, lowercase, numbers & symbols (no spaces).
       </p>
+    </div>
+  );
+}
+
+function LoginOtpVerificationForm({
+  email,
+  maskedEmail,
+  onSuccess,
+  onBack,
+}: {
+  email: string;
+  maskedEmail: string;
+  onSuccess: (user: AuthUser) => void;
+  onBack: () => void;
+}) {
+  const [otpCode, setOtpCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(30);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => setResendCooldown((prev) => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!otpCode.trim() || otpCode.trim().length < 6) {
+      setError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      const res = await fetch(`${API_URL}/api/auth/verify-login-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          otp: otpCode.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to verify OTP code.");
+      }
+
+      if (data.token) {
+        localStorage.setItem("queueless_token", data.token);
+      }
+      if (data.user) {
+        localStorage.setItem("queueless_user", JSON.stringify(data.user));
+        onSuccess(data.user);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to verify verification code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || loading) return;
+    try {
+      setLoading(true);
+      setError("");
+      const res = await fetch(`${API_URL}/api/auth/resend-login-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to resend code.");
+      setSuccessMsg(data.message || "A fresh verification code has been dispatched to your email.");
+      setResendCooldown(45);
+      setTimeout(() => setSuccessMsg(""), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resend verification code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="w-full text-left animate-in fade-in duration-200">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex size-9 items-center justify-center rounded-xl bg-primary/15 text-primary">
+          <ShieldCheck className="size-5" />
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Security Verification</p>
+          <h2 className="font-display text-2xl font-bold text-foreground">Two-Factor Authentication</h2>
+        </div>
+      </div>
+
+      <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+        To keep your account secure, enter the 6-digit verification code sent to{" "}
+        <strong className="text-foreground font-mono">{maskedEmail || email}</strong>.
+      </p>
+
+      <form onSubmit={handleVerifyOtp} className="mt-6 space-y-4">
+        <div>
+          <label className="block text-xs font-bold text-foreground mb-1.5">
+            Enter 6-Digit OTP Code
+          </label>
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            autoFocus
+            value={otpCode}
+            onChange={(e) => {
+              const cleaned = e.target.value.replace(/[^0-9]/g, "");
+              setOtpCode(cleaned);
+              setError("");
+            }}
+            placeholder="000000"
+            className="w-full h-12 rounded-xl border-2 border-border bg-background px-4 text-center font-mono text-2xl font-black tracking-[0.4em] text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground/30 placeholder:tracking-normal"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground text-center">
+            Valid for 10 minutes. Check your Spam or Junk folder if not received.
+          </p>
+        </div>
+
+        {error && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-2.5 text-xs font-semibold text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+            {successMsg}
+          </div>
+        )}
+
+        <Button
+          size="lg"
+          className="w-full font-bold cursor-pointer gap-2"
+          type="submit"
+          disabled={loading || otpCode.length < 6}
+        >
+          {loading ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              <span>Verifying code...</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="size-4" />
+              <span>Verify & Enter System</span>
+            </>
+          )}
+        </Button>
+      </form>
+
+      <div className="mt-5 flex items-center justify-between border-t border-border pt-4 text-xs">
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resendCooldown > 0 || loading}
+          className="font-semibold text-primary hover:underline cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend 6-digit code"}
+        </button>
+
+        <button
+          type="button"
+          onClick={onBack}
+          className="font-semibold text-muted-foreground hover:text-foreground cursor-pointer flex items-center gap-1"
+        >
+          <ArrowLeft className="size-3.5" /> Back to sign in
+        </button>
+      </div>
     </div>
   );
 }
@@ -4943,8 +5142,11 @@ function StudentProfileView({
     return Math.max(0, nameCooldownDays - diffDays);
   })();
 
-  // 3-day password change cooldown
+  const isAdminOrStaff = currentUser.role === "admin" || currentUser.role === "staff";
+
+  // 3-day password change cooldown (Admin and Staff can change password anytime!)
   const pwChangeAllowed = (() => {
+    if (isAdminOrStaff) return true;
     if (!currentUser.passwordLastChanged) return true;
     const lastChanged = new Date(currentUser.passwordLastChanged);
     const now = new Date();
@@ -4953,6 +5155,7 @@ function StudentProfileView({
   })();
 
   const daysUntilPwChange = (() => {
+    if (isAdminOrStaff) return 0;
     if (!currentUser.passwordLastChanged) return 0;
     const lastChanged = new Date(currentUser.passwordLastChanged);
     const now = new Date();
@@ -5208,7 +5411,7 @@ function StudentProfileView({
     setPwError("");
     setPwSuccess("");
 
-    if (!pwChangeAllowed) {
+    if (!isAdminOrStaff && !pwChangeAllowed) {
       setPwError(`Password can only be changed once every 3 days. Please wait ${daysUntilPwChange} day${daysUntilPwChange !== 1 ? "s" : ""} before changing it again.`);
       return;
     }
@@ -5225,12 +5428,13 @@ function StudentProfileView({
       return;
     }
 
-    if (!currentPassword.trim()) {
+    const hasConfiguredPassword = Boolean(currentUser.passwordLastChanged || !currentUser.googleId);
+    if (hasConfiguredPassword && !currentPassword.trim()) {
       setPwError("Current password is required. Please enter your accurate old password.");
       return;
     }
 
-    if (currentPassword === newPassword) {
+    if (currentPassword && currentPassword === newPassword) {
       setPwError("New password cannot be the same as your old current password. Please choose a new password.");
       return;
     }
@@ -5252,7 +5456,12 @@ function StudentProfileView({
         body: JSON.stringify({ action: "change_password", currentPassword }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Current password is incorrect. Please enter your accurate old password.");
+      if (!res.ok) {
+        if (data.message && data.message.includes("signature")) {
+          throw new Error("Your login session has expired. Please sign out and sign in again to change your password securely.");
+        }
+        throw new Error(data.message || "Current password is incorrect. Please enter your accurate old password.");
+      }
 
       setPwOtpMaskedEmail(data.maskedEmail || currentUser.email || "");
       setPwOtpCode("");
@@ -5665,34 +5874,43 @@ function StudentProfileView({
             <p className="text-xs text-muted-foreground mt-0.5">Update your password to keep your account secure.</p>
 
             <form onSubmit={handleChangePassword} className="mt-5 space-y-4">
-              {!pwChangeAllowed && (
+              {!pwChangeAllowed && !isAdminOrStaff && (
                 <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5 text-xs text-amber-700 dark:text-amber-400 font-semibold leading-relaxed">
                   ⚠️ Password change is in cooldown. You can change your password again in <strong>{daysUntilPwChange} day{daysUntilPwChange !== 1 ? "s" : ""}</strong>. (Password updates are limited to once every 3 days).
                 </div>
               )}
 
-              <Field label="Current Password">
-                <div className="relative">
-                  <input
-                    type={showCurrentPw ? "text" : "password"}
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Enter current password"
-                    className="field pr-10"
-                    required
-                    disabled={!pwChangeAllowed || changingPassword}
-                  />
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    onClick={() => setShowCurrentPw(!showCurrentPw)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-                    disabled={!pwChangeAllowed}
-                  >
-                    {showCurrentPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
+              {currentUser.googleId && !currentUser.passwordLastChanged && (
+                <div className="rounded-lg bg-primary/10 border border-primary/20 p-2.5 text-xs text-primary font-semibold leading-relaxed flex items-center gap-2">
+                  <ShieldCheck className="size-4 shrink-0" />
+                  <span>Your account uses Google Sign-In. Set a password below to also enable email and password login.</span>
                 </div>
-              </Field>
+              )}
+
+              {Boolean(currentUser.passwordLastChanged || !currentUser.googleId) && (
+                <Field label="Current Password">
+                  <div className="relative">
+                    <input
+                      type={showCurrentPw ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      className="field pr-10"
+                      required
+                      disabled={(!pwChangeAllowed && !isAdminOrStaff) || changingPassword}
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowCurrentPw(!showCurrentPw)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                      disabled={!pwChangeAllowed && !isAdminOrStaff}
+                    >
+                      {showCurrentPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </Field>
+              )}
 
               <Field label="New Password">
                 <div className="relative">
@@ -13425,11 +13643,20 @@ function CampusRegistrarHelperModal({
 }) {
   const CHAT_HISTORY_KEY = "queueless_chatbot_history";
 
+  const defaultQuestions = [
+    "What are your office hours & location?",
+    "How to request TOR or Diploma?",
+    "What are the requirements to claim?",
+    "CSDL Announcements & activities",
+    "How does Queue Line work?",
+  ];
+
   const getWelcomeMessage = (): HelperChatMessage => ({
     id: "welcome",
     sender: "bot",
-    text: "Mabuhay! I am your **Campus Registrar Helper** at PHINMA University of Pangasinan.\n\nYou can ask me about:\n• Campus Facilities, learning spaces & labs (https://up.phinma.edu.ph/facilities/)\n• CSDL Announcements & student activities (https://www.facebook.com/up.csdl)\n• Document request procedures, credentials & claiming\n• General school information, office hours & directory\n• QueueLess Registrar project research & guidelines\n\nPlease type your question below to get started!",
+    text: "Mabuhay! I am your **Campus Registrar Helper** at PHINMA University of Pangasinan.\n\nYou can ask me about:\n• Campus Facilities, learning spaces & labs (https://up.phinma.edu.ph/facilities/)\n• CSDL Announcements & student activities (https://www.facebook.com/up.csdl)\n• Document request procedures, credentials & claiming\n• General school information, office hours & directory\n• QueueLess Registrar project research & guidelines\n\nPlease select a question bubble below or type your question!",
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    chips: defaultQuestions,
   });
 
   const loadChatHistory = (): HelperChatMessage[] => {
@@ -13838,6 +14065,7 @@ function CampusRegistrarHelperModal({
         sender: "bot",
         text: "New conversation started! How can I assist you today with PHINMA UPang campus facilities, CSDL announcements, or registrar procedures?",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        chips: defaultQuestions,
       },
     ];
     setMessages(fresh);
@@ -13854,8 +14082,9 @@ function CampusRegistrarHelperModal({
       {
         id: "deleted_" + Date.now(),
         sender: "bot",
-        text: "Chat history deleted. Start a new conversation by typing your question below.",
+        text: "Chat history deleted. Start a new conversation by selecting a question bubble below or typing your question.",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        chips: defaultQuestions,
       },
     ];
     setMessages(fresh);
@@ -13982,6 +14211,22 @@ function CampusRegistrarHelperModal({
                 {m.text}
               </div>
 
+              {m.chips && m.chips.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2 max-w-[90%]">
+                  {m.chips.map((chip, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSend(chip)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/25 hover:bg-primary hover:text-primary-foreground shadow-2xs hover:shadow-xs transition-all duration-150 cursor-pointer active:scale-95 text-left"
+                    >
+                      <HelpCircle className="size-3 shrink-0" />
+                      <span>{chip}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <span className="mt-1 px-1 text-[9px] text-muted-foreground font-medium">
                 {m.time}
               </span>
@@ -13996,6 +14241,23 @@ function CampusRegistrarHelperModal({
           )}
 
           <div ref={messagesEndRef} />
+        </div>
+
+        {/* Quick Suggestion Question Bubbles Bar */}
+        <div className="flex items-center gap-1.5 overflow-x-auto px-3.5 py-2 border-t border-border/60 bg-muted/20 scrollbar-none">
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0 flex items-center gap-1">
+            <Sparkles className="size-3 text-primary" /> Questions:
+          </span>
+          {defaultQuestions.map((q, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleSend(q)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-card border border-border text-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition cursor-pointer whitespace-nowrap shadow-2xs shrink-0 active:scale-95"
+            >
+              <span>{q}</span>
+            </button>
+          ))}
         </div>
 
         {/* Chat Input Form - User types question directly */}
@@ -15316,12 +15578,48 @@ function ManageRequests({
                       Accept Request
                     </Button>
                   ) : isAcceptedByOther ? (
-                    <span
-                      className="inline-flex items-center gap-1 rounded-md bg-muted px-2.5 py-1 text-[11px] font-bold text-muted-foreground border border-border whitespace-nowrap select-none"
-                      title={`Accepted and in-progress by ${r.assignedStaffName}`}
-                    >
-                      <Lock className="size-3" /> Accepted by {r.assignedStaffName}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setConfirmingAcceptReq(r)}
+                        disabled={acceptingId === r.id}
+                        className="h-8 px-2.5 text-xs font-bold cursor-pointer gap-1 text-primary border-primary/30 hover:bg-primary/10 whitespace-nowrap"
+                        title={`Handled by ${r.assignedStaffName}. Click to reassign to yourself.`}
+                      >
+                        <UserCheck className="size-3.5" /> Reassign to Me
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingReceipt(r);
+                        }}
+                        className="h-8 w-8 p-0 cursor-pointer text-foreground hover:text-primary hover:border-primary/40"
+                        title="Edit Receipt & Line"
+                      >
+                        <Edit3 className="size-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const nextStatus: Status =
+                            r.status === "Pending"
+                              ? "Processing"
+                              : r.status === "Processing"
+                              ? "Ready for Claiming"
+                              : r.status === "Ready for Claiming"
+                              ? "Claimed"
+                              : "Processing";
+                          setPendingStatusChange({ request: r, nextStatus });
+                        }}
+                        className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs whitespace-nowrap"
+                        title="Process Request"
+                      >
+                        <ClipboardCheck className="size-3.5" /> Process
+                      </Button>
+                    </div>
                   ) : (
                     <>
                       <Button
