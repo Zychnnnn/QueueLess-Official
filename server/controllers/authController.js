@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+﻿import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import PasswordResetOtp from "../models/PasswordResetOtp.js";
@@ -964,8 +964,8 @@ export const deleteUser = async (req, res) => {
       actorRole: req.user?.role || "admin",
       actorId: req.user?.studentId || req.user?.id || "ADMIN",
       targetCategory: "users",
-      action: `Deleted User Account:  ()`,
-      details: `User account for  (, , ID: ) was deleted. Reason: `,
+      action: `Deleted User Account: ${user.name} (${user.role})`,
+      details: `User account for ${user.name} (${user.role}, ${user.email}, ID: ${user.studentId || "N/A"}) was deleted. Reason: ${deleteReason}`,
       status: "Warning",
     });
 

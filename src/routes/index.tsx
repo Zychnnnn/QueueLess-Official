@@ -2687,7 +2687,7 @@ function QueueLessApp() {
           onClose={() => setActiveReceiptModal(null)}
           isStaff={currentUser?.role === "staff" || currentUser?.role === "admin"}
           onEdit={() => {
-            fetchRequests();
+            loadSavedRequests();
           }}
           onOpenCalendar={() => {
             setActiveReceiptModal(null);
@@ -3364,7 +3364,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
       );
     } catch (error) {
       console.warn("Backend unavailable, registering student locally:", error);
-      const isPriority = isSchoolCredential(email, studentId);
+      const isPriority = email.toLowerCase().includes("phinmaed.com") || email.toLowerCase().includes(".edu.ph") || Boolean(studentId && studentId.trim());
       const registeredStudent: AuthUser = {
         id: `local-student-${Date.now()}`,
         name: fullName.trim(),
@@ -8739,7 +8739,7 @@ function NewRequest({
         student: currentUser.name || "Student",
         studentId: currentUser.studentId || (currentUser.role === "guest" ? "" : "03-2425-012345"),
         phone: (currentUser.phone || "").trim(),
-        document: docType.trim(),
+        document: doc.trim(),
         purpose: purpose.trim(),
         remarks: remarks.trim(),
         date,
@@ -14846,6 +14846,23 @@ function ManageRequests({
       try {
         localStorage.setItem("queueless_requests", JSON.stringify(resequenced));
       } catch {}
+
+      // Save deleted request backup
+      try {
+        const existing = JSON.parse(localStorage.getItem("queueless_deleted_requests_backup") || "[]");
+        existing.unshift({
+          _id: `backup-req-${Date.now()}-${item.id}`,
+          action: `Deleted Request #${item.id}`,
+          details: `Request for "${item.document}" (Student: ${item.student}, ID: ${item.studentId}) was permanently removed from active queue. Reason: ${deleteReason || "Queue management"}`,
+          actorName: currentUser?.name || "Staff",
+          actorRole: currentUser?.role || "staff",
+          requestNumber: item.id,
+          createdAt: new Date().toISOString(),
+          reason: deleteReason || "Queue management",
+        });
+        localStorage.setItem("queueless_deleted_requests_backup", JSON.stringify(existing.slice(0, 100)));
+      } catch {}
+
       setDeletingReq(null);
       setFlash({
         tone: "success",
@@ -16049,6 +16066,45 @@ function AdminOperationsAndArchivePanel({
     );
   });
 
+  // Local backups for deleted users & requests
+  const localDeletedUsersBackup: any[] = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("queueless_deleted_users_backup") || "[]");
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const localDeletedRequestsBackup: any[] = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("queueless_deleted_requests_backup") || "[]");
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const combinedDeletedUsers = useMemo(() => {
+    const map = new Map<string, any>();
+    deletedUserLogs.forEach((l) => map.set(l._id, l));
+    localDeletedUsersBackup.forEach((b) => {
+      if (b._id && !map.has(b._id)) {
+        map.set(b._id, b);
+      }
+    });
+    return Array.from(map.values());
+  }, [deletedUserLogs, localDeletedUsersBackup]);
+
+  const combinedDeletedRequests = useMemo(() => {
+    const map = new Map<string, any>();
+    deletedRequestLogs.forEach((l) => map.set(l._id, l));
+    localDeletedRequestsBackup.forEach((b) => {
+      if (b._id && !map.has(b._id)) {
+        map.set(b._id, b);
+      }
+    });
+    return Array.from(map.values());
+  }, [deletedRequestLogs, localDeletedRequestsBackup]);
+
   return (
     <div className="animate-rise space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -16767,16 +16823,19 @@ function AuditLogsPanel({
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
   const [selectedUserDetails, setSelectedUserDetails] = useState<{ account: AccountAuditGroup; user?: AccountUser } | null>(null);
+  const [accountToRemove, setAccountToRemove] = useState<AccountAuditGroup | null>(null);
+  const [removeAccountReason, setRemoveAccountReason] = useState<string>("");
+  const [removingAccount, setRemovingAccount] = useState<boolean>(false);
 
   useEffect(() => {
-    if (selectedAccountModal || selectedUserDetails || selectedLog) {
+    if (selectedAccountModal || selectedUserDetails || selectedLog || accountToRemove) {
       const orig = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = orig;
       };
     }
-  }, [selectedAccountModal, selectedUserDetails, selectedLog]);
+  }, [selectedAccountModal, selectedUserDetails, selectedLog, accountToRemove]);
 
   // Persistence helpers for audit log deletions so they stay deleted across logout & reload
   const getDeletedLogIds = (): Set<string> => {
@@ -19504,6 +19563,7 @@ function UsersPanel({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({ reason: deleteReason }),
         }
       );
 
@@ -19512,6 +19572,22 @@ function UsersPanel({
       if (!response.ok) {
         throw new Error(result.message || "Failed to delete user account.");
       }
+
+      // Save deleted user backup
+      try {
+        const existing = JSON.parse(localStorage.getItem("queueless_deleted_users_backup") || "[]");
+        existing.unshift({
+          _id: `backup-user-${Date.now()}-${userToDelete.id}`,
+          action: `Deleted User Account: ${userToDelete.name} (${userToDelete.role})`,
+          details: `User account for ${userToDelete.name} (${userToDelete.role}, ${userToDelete.email || userToDelete.studentId || "No ID"}) was permanently deleted. Reason: ${deleteReason || "Administrative removal"}`,
+          actorName: currentUser?.name || "Administrator",
+          actorRole: currentUser?.role || "admin",
+          actorEmail: currentUser?.email || "",
+          createdAt: new Date().toISOString(),
+          reason: deleteReason || "Administrative removal",
+        });
+        localStorage.setItem("queueless_deleted_users_backup", JSON.stringify(existing.slice(0, 100)));
+      } catch {}
 
       // Remove from list
       setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
