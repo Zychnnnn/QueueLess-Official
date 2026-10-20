@@ -2141,18 +2141,7 @@ function QueueLessApp() {
               )}
             </button>
 
-            {signedIn && (role === "student" || role === "guest") && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden size-9 text-primary hover:bg-primary/10 cursor-pointer"
-                aria-label="Campus Registrar Helper"
-                title="Campus Registrar Helper"
-                onClick={() => setShowAiHelper(true)}
-              >
-                <Bot className="size-5" />
-              </Button>
-            )}
+
 
             <Button
               variant="ghost"
@@ -8788,7 +8777,7 @@ function StudentView({
 
       {/* Ready for Claiming Highlight Banner */}
       {mine.filter((r) => r.status === "Ready for Claiming").length > 0 && (
-        <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-800 dark:text-emerald-300">
+        <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-800 dark:text-emerald-300 shadow-xs">
           <div className="flex items-center gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
               <CheckCircle2 className="size-5" />
@@ -8800,16 +8789,51 @@ function StudentView({
               </p>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={() => {
-              const readyReq = mine.find((r) => r.status === "Ready for Claiming");
-              if (readyReq) setSelectedReceipt(readyReq);
-            }}
-            className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-          >
-            View Release Pass & Receipt
-          </Button>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              size="sm"
+              onClick={() => {
+                const readyReq = mine.find((r) => r.status === "Ready for Claiming");
+                if (readyReq) setSelectedReceipt(readyReq);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold shadow-xs"
+            >
+              View Release Pass & Receipt
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                const readyReq = mine.find((r) => r.status === "Ready for Claiming");
+                if (!readyReq) return;
+                const updatedItem: RequestItem = { ...readyReq, status: "Claimed" };
+                const nextRequests = requests.map((r) => (r.id === readyReq.id ? updatedItem : r));
+                setRequests(nextRequests);
+                try {
+                  localStorage.setItem("queueless_requests", JSON.stringify(nextRequests));
+                } catch {}
+                const token = localStorage.getItem("queueless_token");
+                if (token) {
+                  try {
+                    await fetch(`${API_URL}/api/requests/${encodeURIComponent(readyReq.id)}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ status: "Claimed" }),
+                    });
+                  } catch {}
+                }
+                archiveClaimedRecord(updatedItem, readyReq.assignedStaffName || "Registrar Staff");
+                setFlash({
+                  tone: "success",
+                  text: `Document ${readyReq.id} marked as Done & Claimed! It is now recorded in your Done / Claimed tab.`,
+                });
+                setSelectedReceipt(updatedItem);
+              }}
+              className="bg-white/95 dark:bg-card hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 cursor-pointer font-bold gap-1.5 shadow-xs"
+            >
+              <CheckCircle2 className="size-3.5" /> Done / Claimed
+            </Button>
+          </div>
         </div>
       )}
 
@@ -12346,8 +12370,51 @@ function DigitalReceiptModal({
   const [internalSaving, setInternalSaving] = useState(false);
   const [editFlash, setEditFlash] = useState("");
   const [receiptMode, setReceiptMode] = useState<"staff_release" | "user_queue_slip">(() =>
-    isStaff ? "staff_release" : "user_queue_slip"
+    isStaff || request.status === "Ready for Claiming" || request.status === "Claimed"
+      ? "staff_release"
+      : "user_queue_slip"
   );
+
+  const handleMarkAsClaimed = async () => {
+    try {
+      setInternalSaving(true);
+      const token = localStorage.getItem("queueless_token");
+      const updatedItem: RequestItem = {
+        ...currentReq,
+        status: "Claimed",
+      };
+
+      if (token) {
+        try {
+          await fetch(
+            `${API_URL}/api/requests/${encodeURIComponent(currentReq.id)}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ status: "Claimed" }),
+            }
+          );
+        } catch (e) {
+          console.error("Mark claimed fetch error:", e);
+        }
+      }
+
+      archiveClaimedRecord(updatedItem, currentReq.assignedStaffName || "Registrar Staff");
+      setCurrentReq(updatedItem);
+      onUpdateRequest?.(updatedItem);
+
+      setEditFlash("Document officially marked as Claimed & Done! Recorded in history.");
+      setTimeout(() => setEditFlash(""), 3500);
+
+      // Offer rating to say thanks to staff
+      setShowRatingModal(true);
+    } finally {
+      setInternalSaving(false);
+    }
+  };
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -12886,12 +12953,29 @@ function DigitalReceiptModal({
                 </div>
               </div>
 
-              <div className="pt-1">
-                <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">Payment Requirement:</span>
-                <span className="font-semibold text-foreground print:text-black">
-                  {currentReq.paymentStatus || "Proceed to Registrar Staff"}
-                </span>
+              <div className="grid grid-cols-2 gap-3 border-b border-border/60 pb-2.5 print:border-gray-300">
+                <div>
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">Assigned Releasing Staff:</span>
+                  <strong className="text-foreground font-semibold print:text-black">
+                    {currentReq.assignedStaffName || "Registrar Window 2"}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">Payment Status:</span>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 print:border-black print:text-black">
+                    {currentReq.paymentStatus || "Paid / Cleared"}
+                  </span>
+                </div>
               </div>
+
+              {currentReq.remarks && (
+                <div className="pt-1">
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">Staff Notes & Instructions:</span>
+                  <p className="text-xs text-foreground italic print:text-black mt-0.5">
+                    "{currentReq.remarks}"
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Checklist for Registrar Counter */}
@@ -13163,6 +13247,17 @@ function DigitalReceiptModal({
               className="gap-1.5 cursor-pointer text-xs h-8"
             >
               <Edit3 className="size-3.5" /> Edit Details & Line
+            </Button>
+          )}
+          {currentReq.status === "Ready for Claiming" && (
+            <Button
+              size="sm"
+              onClick={handleMarkAsClaimed}
+              disabled={internalSaving}
+              className="gap-1.5 cursor-pointer font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs text-xs h-8"
+            >
+              {internalSaving ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+              Done / Mark as Claimed
             </Button>
           )}
           <Button
@@ -22484,7 +22579,7 @@ function RequestList({
           requests={filtered}
           onSelect={setSelected}
           scrollable={true}
-          maxHeight="max-h-[315px] sm:max-h-[320px]"
+          maxHeight={filtered.length >= 4 ? "max-h-[310px] sm:max-h-[320px]" : "max-h-[520px]"}
         />
       </div>
 
@@ -22529,9 +22624,10 @@ function RequestCards({
     <div
       className={`rounded-xl border border-border bg-card shadow-xs ${
         scrollable
-          ? `${maxHeight} overflow-y-auto overflow-x-hidden scrollbar-thin`
+          ? `${maxHeight} overflow-y-auto overflow-x-hidden scrollbar-thin pr-0.5`
           : "overflow-hidden"
       }`}
+      style={{ scrollbarWidth: "thin" }}
     >
       {requests.length ? (
         requests.map((r) => (
