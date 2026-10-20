@@ -10037,154 +10037,11 @@ function StaffView({
         />
       )}
 
-      {/* Clear All Archive Slips Modal with Reason */}
-      {showClearModal && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex items-start justify-between border-b border-border pb-3.5">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive border border-destructive/20">
-                  <Trash2 className="size-5" />
-                </div>
-                <div>
-                  <h3 className="font-display text-base font-bold text-foreground">
-                    Clear Archived Release Slips
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Vault count: {backupRecords.length} records
-                  </p>
-                </div>
-              </div>
-              <Button size="icon" variant="ghost" onClick={() => !clearing && setShowClearModal(false)} className="size-8 cursor-pointer">
-                <X className="size-4" />
-              </Button>
-            </div>
 
-            <div className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 p-3.5 text-xs text-muted-foreground leading-relaxed">
-              <p className="font-semibold text-destructive mb-1">Permanent Ledger Reset Warning</p>
-              Are you sure you want to clean and reset all archived release slips? This will permanently clear the vault records and reset the archive counter to (0). Deleted records will not return upon reload.
-            </div>
 
-            <div className="mt-4">
-              <label className="text-xs font-bold text-foreground block mb-1.5">
-                Reason for Clearing Archive Slips *
-              </label>
-              <select
-                value={clearReason}
-                onChange={(e) => setClearReason(e.target.value)}
-                className="field text-xs cursor-pointer"
-                required
-              >
-                <option value="">Select a reason</option>
-                <option value="Term / Semester archival reset">Term / Semester archival reset</option>
-                <option value="Data privacy compliance (DPA 10173)">Data privacy compliance (DPA 10173)</option>
-                <option value="Routine ledger maintenance">Routine ledger maintenance</option>
-                <option value="Audit preparation / Ledger sync">Audit preparation / Ledger sync</option>
-                <option value="Duplicate / Test records cleanup">Duplicate / Test records cleanup</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowClearModal(false)}
-                disabled={clearing}
-                className="h-8 text-xs cursor-pointer"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleConfirmClearArchive}
-                disabled={clearing || !clearReason}
-                className="h-8 text-xs font-bold gap-1.5 cursor-pointer"
-              >
-                {clearing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-                Yes, Clear All Slips
-              </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
-      {/* Delete Single Archive Slip Modal with Reason */}
-      {slipToDelete && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex items-start justify-between border-b border-border pb-3.5">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive border border-destructive/20">
-                  <Trash2 className="size-5" />
-                </div>
-                <div>
-                  <h3 className="font-display text-base font-bold text-foreground">
-                    Delete Archived Release Slip
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Slip #{slipToDelete.id}
-                  </p>
-                </div>
-              </div>
-              <Button size="icon" variant="ghost" onClick={() => !deletingSlip && setSlipToDelete(null)} className="size-8 cursor-pointer">
-                <X className="size-4" />
-              </Button>
-            </div>
 
-            <div className="mt-4 rounded-xl border border-border bg-muted/30 p-3 text-xs space-y-1.5">
-              <p><strong className="text-foreground">Student:</strong> {slipToDelete.student} ({slipToDelete.studentId})</p>
-              <p><strong className="text-foreground">Document:</strong> {slipToDelete.document} ({slipToDelete.copies || 1} copy)</p>
-              <p><strong className="text-foreground">Purpose:</strong> {slipToDelete.purpose}</p>
-              <p><strong className="text-foreground">Released on:</strong> {slipToDelete.claimedAt}</p>
-            </div>
-
-            <div className="mt-4">
-              <label className="text-xs font-bold text-foreground block mb-1.5">
-                Reason for Deleting Slip *
-              </label>
-              <select
-                value={slipDeleteReason}
-                onChange={(e) => setSlipDeleteReason(e.target.value)}
-                className="field text-xs cursor-pointer"
-                required
-              >
-                <option value="">Select a reason</option>
-                <option value="Duplicate release slip recorded">Duplicate release slip recorded</option>
-                <option value="Testing / Demonstration slip">Testing / Demonstration slip</option>
-                <option value="Student requested data deletion">Student requested data deletion</option>
-                <option value="Administrative correction">Administrative correction</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setSlipToDelete(null)}
-                disabled={deletingSlip}
-                className="h-8 text-xs cursor-pointer"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleConfirmDeleteSingleSlip}
-                disabled={deletingSlip || !slipDeleteReason}
-                className="h-8 text-xs font-bold gap-1.5 cursor-pointer"
-              >
-                {deletingSlip ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-                Yes, Delete Slip
-              </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }
@@ -17150,6 +17007,155 @@ function AdminView({
           isStaff={true}
           onOpenCalendar={onOpenCalendar}
         />
+      )}
+
+      {/* Clear All Archive Slips Modal with Reason */}
+      {showClearModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between border-b border-border pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive border border-destructive/20">
+                  <Trash2 className="size-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Clear Archived Release Slips
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Vault count: {backupRecords.length} records
+                  </p>
+                </div>
+              </div>
+              <Button size="icon" variant="ghost" onClick={() => !clearing && setShowClearModal(false)} className="size-8 cursor-pointer">
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 p-3.5 text-xs text-muted-foreground leading-relaxed">
+              <p className="font-semibold text-destructive mb-1">Permanent Ledger Reset Warning</p>
+              Are you sure you want to clean and reset all archived release slips? This will permanently clear the vault records and reset the archive counter to (0). Deleted records will not return upon reload.
+            </div>
+
+            <div className="mt-4">
+              <label className="text-xs font-bold text-foreground block mb-1.5">
+                Reason for Clearing Archive Slips *
+              </label>
+              <select
+                value={clearReason}
+                onChange={(e) => setClearReason(e.target.value)}
+                className="field text-xs cursor-pointer"
+                required
+              >
+                <option value="">Select a reason</option>
+                <option value="Term / Semester archival reset">Term / Semester archival reset</option>
+                <option value="Data privacy compliance (DPA 10173)">Data privacy compliance (DPA 10173)</option>
+                <option value="Routine ledger maintenance">Routine ledger maintenance</option>
+                <option value="Audit preparation / Ledger sync">Audit preparation / Ledger sync</option>
+                <option value="Duplicate / Test records cleanup">Duplicate / Test records cleanup</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowClearModal(false)}
+                disabled={clearing}
+                className="h-8 text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmClearArchive}
+                disabled={clearing || !clearReason}
+                className="h-8 text-xs font-bold gap-1.5 cursor-pointer"
+              >
+                {clearing ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                Yes, Clear All Slips
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Delete Single Archive Slip Modal with Reason */}
+      {slipToDelete && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-destructive/30 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between border-b border-border pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-destructive/15 text-destructive border border-destructive/20">
+                  <Trash2 className="size-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Delete Archived Release Slip
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Slip #{slipToDelete.id}
+                  </p>
+                </div>
+              </div>
+              <Button size="icon" variant="ghost" onClick={() => !deletingSlip && setSlipToDelete(null)} className="size-8 cursor-pointer">
+                <X className="size-4" />
+              </Button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-border bg-muted/30 p-3 text-xs space-y-1.5">
+              <p><strong className="text-foreground">Student:</strong> {slipToDelete.student} ({slipToDelete.studentId})</p>
+              <p><strong className="text-foreground">Document:</strong> {slipToDelete.document} ({slipToDelete.copies || 1} copy)</p>
+              <p><strong className="text-foreground">Purpose:</strong> {slipToDelete.purpose}</p>
+              <p><strong className="text-foreground">Released on:</strong> {slipToDelete.claimedAt}</p>
+            </div>
+
+            <div className="mt-4">
+              <label className="text-xs font-bold text-foreground block mb-1.5">
+                Reason for Deleting Slip *
+              </label>
+              <select
+                value={slipDeleteReason}
+                onChange={(e) => setSlipDeleteReason(e.target.value)}
+                className="field text-xs cursor-pointer"
+                required
+              >
+                <option value="">Select a reason</option>
+                <option value="Duplicate release slip recorded">Duplicate release slip recorded</option>
+                <option value="Testing / Demonstration slip">Testing / Demonstration slip</option>
+                <option value="Student requested data deletion">Student requested data deletion</option>
+                <option value="Administrative correction">Administrative correction</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSlipToDelete(null)}
+                disabled={deletingSlip}
+                className="h-8 text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmDeleteSingleSlip}
+                disabled={deletingSlip || !slipDeleteReason}
+                className="h-8 text-xs font-bold gap-1.5 cursor-pointer"
+              >
+                {deletingSlip ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                Yes, Delete Slip
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
