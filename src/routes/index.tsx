@@ -7039,7 +7039,9 @@ function StudentPersonalDetailsView({
 
   const navigateToField = (fieldId: string, section: "personal" | "family" | "address" | "course") => {
     setShowMissingFieldsModal(false);
-    setActiveSectionTab(section);
+    if (activeSectionTab !== "all") {
+      setActiveSectionTab(section);
+    }
 
     setTimeout(() => {
       const el = document.getElementById(fieldId);
