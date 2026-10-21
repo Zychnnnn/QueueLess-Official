@@ -17397,8 +17397,10 @@ function AdminView({
   currentUser?: AuthUser | null;
   setCurrentUser?: (u: AuthUser | null) => void;
 }) {
+  // --- 1. ALL REACT HOOKS AT TOP LEVEL (Zero early returns before hooks) ---
   const [selectedReceipt, setSelectedReceipt] = useState<RequestItem | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [claimedArchiveTick, setClaimedArchiveTick] = useState<number>(0);
 
   useEffect(() => {
     const fetchAudit = async () => {
@@ -17418,6 +17420,48 @@ function AdminView({
     };
     fetchAudit();
   }, []);
+
+  useEffect(() => {
+    const onSync = () => setClaimedArchiveTick((t) => t + 1);
+    window.addEventListener("storage", onSync);
+    const interval = setInterval(onSync, 1200);
+    return () => {
+      window.removeEventListener("storage", onSync);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const safeUsers = Array.isArray(users) ? users : [];
+  const safeRequests = Array.isArray(requests) ? requests : [];
+  const safeDocs = Array.isArray(docTypes) ? docTypes : [];
+
+  const pendingCount = safeUsers.filter((u) => u.approvalStatus === "pending").length;
+
+  const activeRequestsCount = safeRequests.filter((r) =>
+    ["Pending", "Processing", "Ready for Claiming", "In Progress", "Needs Correction", "Submitted"].includes(r.status as string)
+  ).length;
+
+  const completedRequestsCount = useMemo(() => {
+    const finishedIds = new Set<string>();
+    safeRequests.forEach((r) => {
+      const s = String(r.status || "").toLowerCase().trim();
+      if (s === "claimed" || s === "completed" || s === "released" || s === "done") {
+        finishedIds.add(r.id);
+      }
+    });
+    try {
+      const raw = localStorage.getItem("queueless_claimed_backup");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((b: any) => {
+            if (b && b.id) finishedIds.add(b.id);
+          });
+        }
+      }
+    } catch {}
+    return finishedIds.size;
+  }, [safeRequests, claimedArchiveTick]);
 
   const auditCounts = useMemo(() => {
     let staff = 0;
@@ -17454,6 +17498,7 @@ function AdminView({
     };
   }, [auditLogs]);
 
+  // --- 2. SUB-PANEL ROUTING (Only AFTER all hooks are called) ---
   if (view === "profile" && currentUser && setCurrentUser) {
     return (
       <StudentProfileView
@@ -17514,50 +17559,6 @@ function AdminView({
       />
     );
   }
-
-  const safeUsers = Array.isArray(users) ? users : [];
-  const safeRequests = Array.isArray(requests) ? requests : [];
-  const safeDocs = Array.isArray(docTypes) ? docTypes : [];
-
-  const pendingCount = safeUsers.filter((u) => u.approvalStatus === "pending").length;
-
-  const [claimedArchiveTick, setClaimedArchiveTick] = useState<number>(0);
-
-  useEffect(() => {
-    const onSync = () => setClaimedArchiveTick((t) => t + 1);
-    window.addEventListener("storage", onSync);
-    const interval = setInterval(onSync, 1200);
-    return () => {
-      window.removeEventListener("storage", onSync);
-      clearInterval(interval);
-    };
-  }, []);
-
-  const activeRequestsCount = safeRequests.filter((r) =>
-    ["Pending", "Processing", "Ready for Claiming", "In Progress", "Needs Correction", "Submitted"].includes(r.status as string)
-  ).length;
-
-  const completedRequestsCount = useMemo(() => {
-    const finishedIds = new Set<string>();
-    safeRequests.forEach((r) => {
-      const s = String(r.status || "").toLowerCase().trim();
-      if (s === "claimed" || s === "completed" || s === "released" || s === "done") {
-        finishedIds.add(r.id);
-      }
-    });
-    try {
-      const raw = localStorage.getItem("queueless_claimed_backup");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((b: any) => {
-            if (b && b.id) finishedIds.add(b.id);
-          });
-        }
-      }
-    } catch {}
-    return finishedIds.size;
-  }, [safeRequests, claimedArchiveTick]);
 
   const handleExportSystemOverviewCSV = () => {
     const headers = ["Metric", "Value"];
