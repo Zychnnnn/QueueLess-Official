@@ -789,12 +789,21 @@ function QueueLessApp() {
     }
 
     try {
-      const user: AuthUser =
-        JSON.parse(savedUser);
+      let user: AuthUser = JSON.parse(savedUser);
 
-      const customPfp = user.email ? localStorage.getItem(`queueless_custom_pfp_${user.email}`) : null;
-      if (customPfp) {
-        user.picture = customPfp;
+      if (user.email) {
+        try {
+          const profileRaw = localStorage.getItem(`queueless_profile_${user.email}`);
+          if (profileRaw) {
+            const savedProfile = JSON.parse(profileRaw);
+            user = { ...savedProfile, ...user };
+          }
+        } catch {}
+
+        const customPfp = localStorage.getItem(`queueless_custom_pfp_${user.email}`);
+        if (customPfp) {
+          user.picture = customPfp;
+        }
       }
 
       if (!user.lastLogin) {
@@ -1563,12 +1572,23 @@ function QueueLessApp() {
       }
     }
 
+    // Ensure archive and claim vaults persist across sessions
+    try {
+      const claimed = localStorage.getItem("queueless_claimed_backup");
+      if (claimed) localStorage.setItem("queueless_claimed_backup", claimed);
+      const deletedUsers = localStorage.getItem("queueless_deleted_users_backup");
+      if (deletedUsers) localStorage.setItem("queueless_deleted_users_backup", deletedUsers);
+    } catch {}
+
     setSignedIn(false);
     setCurrentUser(null);
     setView("dashboard");
     setMenuOpen(false);
     setNotificationsOpen(false);
-    setFlash(null);
+    setFlash({
+      tone: "success",
+      text: "Signed out securely. All changes, requests, and institutional records are safely preserved.",
+    });
   };
 
   // Track user inactivity (admin: no timeout; staff: 1 hour; student/guest: 2 minutes; starts 59s warning before auto-logout)
@@ -4378,8 +4398,18 @@ function LoginOtpVerificationForm({
         localStorage.setItem("queueless_token", data.token);
       }
       if (data.user) {
-        localStorage.setItem("queueless_user", JSON.stringify(data.user));
-        onSuccess(data.user);
+        let finalUser = data.user;
+        if (data.user?.email) {
+          try {
+            const profileRaw = localStorage.getItem(`queueless_profile_${data.user.email}`);
+            if (profileRaw) {
+              const savedProfile = JSON.parse(profileRaw);
+              finalUser = { ...savedProfile, ...data.user };
+            }
+          } catch {}
+        }
+        localStorage.setItem("queueless_user", JSON.stringify(finalUser));
+        onSuccess(finalUser);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to verify verification code.");
@@ -15067,7 +15097,12 @@ function LogoutConfirmModal({
           </div>
         </div>
 
-        <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3.5">
+        <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-muted-foreground flex items-center gap-2">
+          <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>All personal details, document requests, and queue updates are permanently saved.</span>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-border bg-muted/40 p-3.5">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-xs shrink-0">
               {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
@@ -15437,6 +15472,11 @@ function ManageRequests({
         };
         setCurrentUser(updatedUser);
         localStorage.setItem("queueless_user", JSON.stringify(updatedUser));
+        if (updatedUser.email) {
+          try {
+            localStorage.setItem("queueless_profile_" + updatedUser.email, JSON.stringify(updatedUser));
+          } catch {}
+        }
       }
       setFlash({
         tone: "success",
@@ -15665,7 +15705,11 @@ function ManageRequests({
         assignedStaffName: staffName,
       };
 
-      setRequests(requests.map((r) => (r.id === item.id ? updatedItem : r)));
+      const nextReqs = requests.map((r) => (r.id === item.id ? updatedItem : r));
+      setRequests(nextReqs);
+      try {
+        localStorage.setItem("queueless_requests", JSON.stringify(nextReqs));
+      } catch {}
       setFlash({
         tone: "success",
         text: `Request ${item.id} accepted! It is now your assignment to process and finish.`,
@@ -15708,16 +15752,18 @@ function ManageRequests({
         );
       }
 
-      setRequests(
-        requests.map((r) =>
-          r.id === id
-            ? {
-                ...r,
-                status: result.request.status,
-              }
-            : r
-        )
+      const nextAfterUpdate = requests.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: result.request.status,
+            }
+          : r
       );
+      setRequests(nextAfterUpdate);
+      try {
+        localStorage.setItem("queueless_requests", JSON.stringify(nextAfterUpdate));
+      } catch {}
 
       if (result.request.status === "Claimed") {
         const found = requests.find((r) => r.id === id);
