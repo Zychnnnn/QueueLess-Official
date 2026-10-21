@@ -16664,6 +16664,17 @@ function AdminOperationsAndArchivePanel({
 
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [deletedSearch, setDeletedSearch] = useState("");
+  const [backupSyncTick, setBackupSyncTick] = useState(0);
+
+  useEffect(() => {
+    const onStorageSync = () => setBackupSyncTick((t) => t + 1);
+    window.addEventListener("storage", onStorageSync);
+    const interval = setInterval(onStorageSync, 1500);
+    return () => {
+      window.removeEventListener("storage", onStorageSync);
+      clearInterval(interval);
+    };
+  }, []);
 
   const fetchAuditLogs = async () => {
     const token = localStorage.getItem("queueless_token");
@@ -16840,7 +16851,7 @@ function AdminOperationsAndArchivePanel({
     } catch {
       return [];
     }
-  }, [tab, auditLogs]);
+  }, [tab, auditLogs, backupSyncTick]);
 
   const localDeletedRequestsBackup: any[] = useMemo(() => {
     try {
@@ -16848,17 +16859,23 @@ function AdminOperationsAndArchivePanel({
     } catch {
       return [];
     }
-  }, [tab, auditLogs]);
+  }, [tab, auditLogs, backupSyncTick]);
 
   const combinedDeletedUsers = useMemo(() => {
     const map = new Map<string, any>();
-    deletedUserLogs.forEach((l) => map.set(l._id, l));
+    deletedUserLogs.forEach((l) => {
+      const key = l._id || (l as any).id || (l.action && l.details ? `${l.action}-${l.details}` : String(Math.random()));
+      map.set(key, l);
+    });
     localDeletedUsersBackup.forEach((b) => {
-      if (b._id && !map.has(b._id)) {
-        map.set(b._id, b);
+      const key = b._id || b.id || (b.action && b.details ? `${b.action}-${b.details}` : String(Math.random()));
+      if (key && !map.has(key)) {
+        map.set(key, b);
       }
     });
-    return Array.from(map.values());
+    const result = Array.from(map.values());
+    result.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return result;
   }, [deletedUserLogs, localDeletedUsersBackup]);
 
   const combinedDeletedRequests = useMemo(() => {
@@ -16993,7 +17010,7 @@ function AdminOperationsAndArchivePanel({
             </div>
 
             {filteredBackup.length > 0 ? (
-              <div className="max-h-[460px] overflow-y-auto pr-1 divide-y divide-border">
+              <div className="max-h-[360px] overflow-y-auto pr-1 divide-y divide-border scrollbar-thin">
                 {filteredBackup.map((rec) => {
                   const fullReq = requests.find((r) => r.id === rec.id) || {
                     id: rec.id,
@@ -17106,7 +17123,7 @@ function AdminOperationsAndArchivePanel({
             </div>
 
             {combinedDeletedUsers.length > 0 ? (
-              <div className="max-h-[460px] overflow-y-auto pr-1 divide-y divide-border">
+              <div className="max-h-[360px] overflow-y-auto pr-1 divide-y divide-border scrollbar-thin">
                 {combinedDeletedUsers.map((log) => (
                   <div key={log._id} className="p-4 hover:bg-muted/30 transition text-xs space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -17163,7 +17180,7 @@ function AdminOperationsAndArchivePanel({
             </div>
 
             {combinedDeletedRequests.length > 0 ? (
-              <div className="max-h-[460px] overflow-y-auto pr-1 divide-y divide-border">
+              <div className="max-h-[360px] overflow-y-auto pr-1 divide-y divide-border scrollbar-thin">
                 {combinedDeletedRequests.map((log) => (
                   <div key={log._id} className="p-4 hover:bg-muted/30 transition text-xs space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">
@@ -17483,6 +17500,7 @@ function AdminView({
         setFlash={setFlash}
         onUsersUpdated={onUsersUpdated}
         users={users}
+        requests={requests}
       />
     );
   }
@@ -17503,13 +17521,43 @@ function AdminView({
 
   const pendingCount = safeUsers.filter((u) => u.approvalStatus === "pending").length;
 
+  const [claimedArchiveTick, setClaimedArchiveTick] = useState<number>(0);
+
+  useEffect(() => {
+    const onSync = () => setClaimedArchiveTick((t) => t + 1);
+    window.addEventListener("storage", onSync);
+    const interval = setInterval(onSync, 1200);
+    return () => {
+      window.removeEventListener("storage", onSync);
+      clearInterval(interval);
+    };
+  }, []);
+
   const activeRequestsCount = safeRequests.filter((r) =>
     ["Pending", "Processing", "Ready for Claiming", "In Progress", "Needs Correction", "Submitted"].includes(r.status as string)
   ).length;
 
-  const completedRequestsCount = safeRequests.filter((r) =>
-    ["Claimed", "Completed"].includes(r.status as string)
-  ).length;
+  const completedRequestsCount = useMemo(() => {
+    const finishedIds = new Set<string>();
+    safeRequests.forEach((r) => {
+      const s = String(r.status || "").toLowerCase().trim();
+      if (s === "claimed" || s === "completed" || s === "released" || s === "done") {
+        finishedIds.add(r.id);
+      }
+    });
+    try {
+      const raw = localStorage.getItem("queueless_claimed_backup");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((b: any) => {
+            if (b && b.id) finishedIds.add(b.id);
+          });
+        }
+      }
+    } catch {}
+    return finishedIds.size;
+  }, [safeRequests, claimedArchiveTick]);
 
   const handleExportSystemOverviewCSV = () => {
     const headers = ["Metric", "Value"];
@@ -19293,10 +19341,12 @@ function AdminOfficialRecordsPanel({
   setFlash,
   onUsersUpdated,
   users = [],
+  requests = [],
 }: {
   setFlash: (f: Flash) => void;
   onUsersUpdated?: () => void;
   users?: AccountUser[];
+  requests?: RequestItem[];
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "staff" | "admin" | "guest">("all");
@@ -19341,6 +19391,17 @@ function AdminOfficialRecordsPanel({
   const [permanentProvince, setPermanentProvince] = useState("Pangasinan");
   const [permanentCity, setPermanentCity] = useState("Dagupan City");
   const [permanentPostalCode, setPermanentPostalCode] = useState("2400");
+
+  const studentRequests = useMemo(() => {
+    if (!editingUser) return [];
+    const email = (editingUser.email || "").toLowerCase().trim();
+    const sId = (editingUser.studentId || "").toLowerCase().trim();
+    return (requests || []).filter((r) => {
+      const rEmail = (r.email || (r as any).studentEmail || "").toLowerCase().trim();
+      const rId = (r.studentId || "").toLowerCase().trim();
+      return (email && rEmail === email) || (sId && rId === sId);
+    });
+  }, [editingUser, requests]);
 
   const openEditModal = (u: AccountUser) => {
     setEditingUser(u);
@@ -19673,35 +19734,35 @@ function AdminOfficialRecordsPanel({
         </div>
       )}
 
-      {/* Edit Record Modal (Admin Override) */}
+      {/* Official Institutional Record Modal (Read-Only Operational View) */}
       {editingUser && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150"
-          onClick={() => !saving && setEditingUser(null)}
+          onClick={() => setEditingUser(null)}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
+            className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-border p-3.5 bg-muted/20">
+            <div className="flex items-start justify-between border-b border-border p-4 bg-muted/20">
               <div className="flex items-center gap-3">
-                <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold shrink-0">
-                  <UserCog className="size-4.5" />
+                <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold shrink-0">
+                  <UserCog className="size-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-display text-sm font-bold text-foreground">
-                      View Official Institutional Record
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-display text-base font-bold text-foreground">
+                      Official Institutional Record
                     </h3>
-                    <span className="rounded bg-primary/15 border border-primary/30 px-1.5 py-0.5 text-[9px] font-bold text-primary">
-                      Read Only
+                    <span className="rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-[10px] font-bold text-primary">
+                      Read-Only Observer Mode
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Viewing official record for <span className="font-semibold text-foreground">{editingUser.name}</span> ({editingUser.email})
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Inspecting institutional data and request history for <span className="font-semibold text-foreground">{editingUser.name}</span> ({editingUser.email})
                   </p>
                 </div>
               </div>
@@ -19709,183 +19770,90 @@ function AdminOfficialRecordsPanel({
               <Button
                 size="icon"
                 variant="ghost"
-                className="size-7 cursor-pointer shrink-0"
-                disabled={saving}
+                className="size-8 cursor-pointer shrink-0"
                 onClick={() => setEditingUser(null)}
               >
                 <X className="size-4" />
               </Button>
             </div>
 
+            {/* Read-only notice banner */}
+            <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
+              <Lock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>
+                <strong>System Governance Notice:</strong> Administrators can inspect system records and queue operations. Student official details and submitted requests cannot be altered.
+              </span>
+            </div>
+
             {/* Modal Body */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 pb-8 space-y-4 text-xs">
-              {/* Section: Legal Names */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 pb-8 space-y-6 text-xs scrollbar-thin">
+              {/* Section 1: Legal Names & Identification */}
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <Lock className="size-3.5 text-amber-500" />
-                  <span>Protected Legal Name Details (Registrar Official)</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-foreground text-xs">
+                    <Lock className="size-3.5 text-primary" />
+                    <span>Official Identity & Institutional Identification</span>
+                  </div>
+                  <span className="font-mono text-[11px] text-muted-foreground">ID: {studentId || "N/A"}</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="Last Name *">
-                    <input
-                      type="text"
-                      value={lastName}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <Field label="Last Name">
+                    <input type="text" value={lastName} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
-                  <Field label="First Name *">
-                    <input
-                      type="text"
-                      value={firstName}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                  <Field label="First Name">
+                    <input type="text" value={firstName} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Middle Name">
-                    <input
-                      type="text"
-                      value={middleName}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                    <input type="text" value={middleName || "None"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
                   <Field label="Extension Name">
-                    <select
-                      value={extensionName}
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    >
-                      <option value="">None</option>
-                      <option value="Jr.">Jr.</option>
-                      <option value="Sr.">Sr.</option>
-                      <option value="I">I</option>
-                      <option value="II">II</option>
-                      <option value="III">III</option>
-                      <option value="IV">IV</option>
-                    </select>
+                    <input type="text" value={extensionName || "None"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
                 </div>
-              </div>
 
-              {/* Section: Institutional ID & Academic Program */}
-              <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
-                <p className="text-xs font-bold text-foreground">Institutional Details</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <Field label={editingUser.role === "staff" ? "Staff Employee ID" : editingUser.role === "admin" ? "Admin Employee ID" : editingUser.role === "guest" ? "Guest Identifier" : "UPang Student ID"}>
-                    <input
-                      type="text"
-                      value={studentId}
-                      readOnly
-                      disabled
-                      className="field font-mono bg-muted/50 cursor-not-allowed"
-                    />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
+                  <Field label={editingUser.role === "staff" ? "Staff Employee ID" : editingUser.role === "admin" ? "Admin Employee ID" : editingUser.role === "guest" ? "User Identifier" : "UPang Student ID"}>
+                    <input type="text" value={studentId || "N/A"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
                   </Field>
-                  <Field label="Degree / Academic Course">
-                    <input
-                      type="text"
-                      value={course}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                  <Field label="Degree / Program">
+                    <input type="text" value={course || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
                   <Field label="Year Level">
-                    <select
-                      value={yearLevel}
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    >
-                      <option value="">N/A</option>
-                      <option value="1st Year">1st Year</option>
-                      <option value="2nd Year">2nd Year</option>
-                      <option value="3rd Year">3rd Year</option>
-                      <option value="4th Year">4th Year</option>
-                      <option value="Graduated / Alumnus">Graduated / Alumnus</option>
-                    </select>
+                    <input type="text" value={yearLevel || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="Official Email">
-                    <input
-                      type="email"
-                      value={email}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-border/50">
+                  <Field label="Institutional Email">
+                    <input type="email" value={email} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
-                  <Field label="Mobile Number">
-                    <input
-                      type="tel"
-                      value={phone}
-                      readOnly
-                      disabled
-                      className="field font-mono bg-muted/50 cursor-not-allowed"
-                    />
+                  <Field label="Contact Phone Number">
+                    <input type="text" value={phone || "Not provided (optional)"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
                   </Field>
                 </div>
               </div>
 
-              {/* Section: Official Personal & Demographic Details (Read Only) */}
+              {/* Section 2: Personal & Demographic Background */}
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
-                <p className="text-xs font-bold text-foreground">Official Personal & Demographic Details</p>
+                <p className="text-xs font-bold text-foreground">Personal & Demographic Details</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <Field label="Date of Birth">
-                    <input
-                      type="text"
-                      value={birthDate ? new Date(birthDate).toLocaleDateString() : (birthDate || "Not provided")}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                    <input type="text" value={birthDate ? new Date(birthDate).toLocaleDateString() : (birthDate || "Not provided")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
                   <Field label="Gender">
-                    <input
-                      type="text"
-                      value={gender || "Not specified"}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed capitalize"
-                    />
+                    <input type="text" value={gender || "Not specified"} readOnly disabled className="field bg-muted/50 cursor-not-allowed capitalize" />
                   </Field>
                   <Field label="Civil Status">
-                    <input
-                      type="text"
-                      value={civilStatus || "Single"}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                    <input type="text" value={civilStatus || "Single"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
                   <Field label="Nationality">
-                    <input
-                      type="text"
-                      value={nationality || "Filipino"}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                    <input type="text" value={nationality || "Filipino"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-border/50">
                   <Field label="Religion / Faith">
-                    <input
-                      type="text"
-                      value={religion || "None specified"}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                    <input type="text" value={religion || "None specified"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
                   </Field>
                   <Field label="Emergency Contact Person & Number">
                     <input
@@ -19905,121 +19873,210 @@ function AdminOfficialRecordsPanel({
                 </div>
               </div>
 
-              {/* Section: Addresses (Searchable Dropdowns) */}
+              {/* Section 3: Family & Guardian Details */}
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
-                <p className="text-xs font-bold text-foreground">Current Residential Address</p>
-
-                <Field label="* Street Address (House No., Street, Barangay)">
-                  <input
-                    type="text"
-                    value={currentAddress}
-                    readOnly
-                    disabled
-                    className="field bg-muted/50 cursor-not-allowed"
-                  />
-                </Field>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <SearchableSelect
-                    label="* Country"
-                    value={currentCountry}
-                    onChange={() => {}}
-                    options={COUNTRIES_LIST}
-                    placeholder="Select Country"
-                  />
-                  <SearchableSelect
-                    label="* Province"
-                    value={currentProvince}
-                    onChange={() => {}}
-                    options={PHILIPPINE_PROVINCES}
-                    placeholder="Select Province"
-                  />
-                  <SearchableSelect
-                    label="* City / Municipality"
-                    value={currentCity}
-                    onChange={() => {}}
-                    options={PHILIPPINE_CITIES}
-                    placeholder="Select City / Municipality"
-                  />
-                  <Field label="* Postal Code">
-                    <input
-                      type="text"
-                      value={currentPostalCode}
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
+                <p className="text-xs font-bold text-foreground">Family & Guardian Details</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <Field label="Father's Full Name">
+                    <input type="text" value={editingUser.fatherName || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                  </Field>
+                  <Field label="Father's Occupation">
+                    <input type="text" value={editingUser.fatherOccupation || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                  </Field>
+                  <Field label="Father's Mobile">
+                    <input type="text" value={editingUser.fatherMobile || "Not provided"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
                   </Field>
                 </div>
 
-                <div className="pt-3 border-t border-border">
-                  <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-foreground mb-3">
-                    <input
-                      type="checkbox"
-                      checked={sameAsCurrentAddress}
-                      disabled
-                      className="rounded border-border size-3.5 text-primary cursor-not-allowed"
-                    />
-                    <span>Permanent address is same as current address</span>
-                  </label>
-
-                  {!sameAsCurrentAddress && (
-                    <div className="space-y-3 pt-2">
-                      <Field label="* Permanent Street Address">
-                        <input
-                          type="text"
-                          value={permanentAddress}
-                          readOnly
-                          disabled
-                          className="field bg-muted/50 cursor-not-allowed"
-                        />
-                      </Field>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <SearchableSelect
-                          label="* Country"
-                          value={permanentCountry}
-                          onChange={setPermanentCountry}
-                          options={COUNTRIES_LIST}
-                          placeholder="Select Country"
-                        />
-                        <SearchableSelect
-                          label="* Province"
-                          value={permanentProvince}
-                          onChange={setPermanentProvince}
-                          options={PHILIPPINE_PROVINCES}
-                          placeholder="Select Province"
-                        />
-                        <SearchableSelect
-                          label="* City/Municipality"
-                          value={permanentCity}
-                          onChange={setPermanentCity}
-                          options={PHILIPPINE_CITIES}
-                          placeholder="Select City / Municipality"
-                        />
-                        <Field label="* Postal Code">
-                          <input
-                            type="text"
-                            value={permanentPostalCode}
-                            readOnly
-                            disabled
-                            className="field bg-muted/50 cursor-not-allowed"
-                          />
-                        </Field>
-                      </div>
-                    </div>
-                  )}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
+                  <Field label="Mother's Maiden Name">
+                    <input type="text" value={editingUser.motherName || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                  </Field>
+                  <Field label="Mother's Occupation">
+                    <input type="text" value={editingUser.motherOccupation || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                  </Field>
+                  <Field label="Mother's Mobile">
+                    <input type="text" value={editingUser.motherMobile || "Not provided"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
+                  </Field>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
+                  <Field label="Guardian's Name">
+                    <input type="text" value={editingUser.guardianName || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                  </Field>
+                  <Field label="Guardian Relationship">
+                    <input type="text" value={editingUser.guardianRelationship || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                  </Field>
+                  <Field label="Guardian Mobile">
+                    <input type="text" value={editingUser.guardianMobile || "Not provided"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
+                  </Field>
+                </div>
+              </div>
+
+              {/* Section 4: Current & Permanent Residential Addresses */}
+              <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
+                <p className="text-xs font-bold text-foreground">Current Residential Address</p>
+                <Field label="Street Address / Barangay">
+                  <input type="text" value={currentAddress || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                </Field>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <Field label="Country"><input type="text" value={currentCountry || "Philippines"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                  <Field label="Province"><input type="text" value={currentProvince || "Pangasinan"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                  <Field label="City / Municipality"><input type="text" value={currentCity || "Dagupan City"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                  <Field label="Postal Code"><input type="text" value={currentPostalCode || "2400"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                </div>
+
+                <div className="pt-3 border-t border-border/50">
+                  <p className="text-xs font-bold text-foreground mb-2">Permanent Address</p>
+                  <Field label="Permanent Street Address">
+                    <input type="text" value={sameAsCurrentAddress ? (currentAddress || "Same as current address") : (permanentAddress || "Not provided")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                  </Field>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
+                    <Field label="Country"><input type="text" value={sameAsCurrentAddress ? currentCountry : (permanentCountry || "Philippines")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                    <Field label="Province"><input type="text" value={sameAsCurrentAddress ? currentProvince : (permanentProvince || "Pangasinan")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                    <Field label="City / Municipality"><input type="text" value={sameAsCurrentAddress ? currentCity : (permanentCity || "Dagupan City")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                    <Field label="Postal Code"><input type="text" value={sameAsCurrentAddress ? currentPostalCode : (permanentPostalCode || "2400")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 5: Educational Background */}
+              {editingUser.role === "student" && (
+                <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
+                  <p className="text-xs font-bold text-foreground">Educational Background</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Field label="Elementary School">
+                      <input type="text" value={editingUser.elemSchool || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                    <Field label="Year Graduated">
+                      <input type="text" value={editingUser.elemYearGrad || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                    <Field label="School Type">
+                      <input type="text" value={editingUser.elemType || "Public"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
+                    <Field label="Junior High School">
+                      <input type="text" value={editingUser.juniorHighSchool || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                    <Field label="Year Graduated">
+                      <input type="text" value={editingUser.juniorHighYearGrad || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                    <Field label="School Type">
+                      <input type="text" value={editingUser.juniorHighType || "Public"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
+                    <Field label="Senior High School">
+                      <input type="text" value={editingUser.seniorHighSchool || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                    <Field label="Year Graduated">
+                      <input type="text" value={editingUser.seniorHighYearGrad || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                    <Field label="School Type">
+                      <input type="text" value={editingUser.seniorHighType || "Public"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
+                    </Field>
+                  </div>
+                </div>
+              )}
+
+              {/* Section 6: Official Document Requests & Queue History ("their reqs also") */}
+              <div className="rounded-xl border border-border bg-card p-4 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="size-4 text-primary" />
+                    <span className="font-bold text-foreground text-xs">
+                      Official Document Requests & Transactions History
+                    </span>
+                  </div>
+                  <span className="rounded-full bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 text-[10px] font-bold">
+                    {studentRequests.length} Requests on Record
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Complete ledger of queue transactions submitted by this student.
+                </p>
+
+                {studentRequests.length > 0 ? (
+                  <div className="max-h-[300px] overflow-y-auto pr-1 divide-y divide-border border border-border rounded-lg scrollbar-thin">
+                    {studentRequests.map((req) => {
+                      const statusColor =
+                        req.status === "Claimed" || req.status === "Completed"
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                          : req.status === "Ready for Claiming"
+                          ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                          : req.status === "Processing" || req.status === "In Progress"
+                          ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                          : req.status === "Needs Correction"
+                          ? "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/30"
+                          : "bg-muted text-muted-foreground border-border";
+
+                      return (
+                        <div key={req.id} className="p-3 hover:bg-muted/30 transition text-xs space-y-1.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-foreground">{req.id}</span>
+                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold border ${statusColor}`}>
+                                {req.status}
+                              </span>
+                              <span className="text-[11px] font-medium text-foreground">{req.document}</span>
+                              <span className="text-[10px] text-muted-foreground">({req.copies || 1} copy)</span>
+                            </div>
+                            <span className="text-muted-foreground text-[10px] font-mono">
+                              Filed: {req.date}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] text-muted-foreground grid grid-cols-1 sm:grid-cols-2 gap-1">
+                            <div>Purpose: <strong className="text-foreground">{req.purpose}</strong></div>
+                            {req.pickupDate && <div>Pickup Date: <strong className="text-foreground">{req.pickupDate}</strong></div>}
+                          </div>
+
+                          {req.assignedStaffName && (
+                            <div className="text-[10px] text-muted-foreground">
+                              Assigned Officer: <strong className="text-foreground">{req.assignedStaffName}</strong>
+                            </div>
+                          )}
+
+                          {req.remarks && (
+                            <div className="text-[10px] text-muted-foreground bg-muted/40 p-1.5 rounded border border-border/50">
+                              Remarks: {req.remarks}
+                            </div>
+                          )}
+
+                          {req.rating && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 font-semibold">
+                              <span>★ Rating: {req.rating}/5</span>
+                              {req.feedback && <span className="text-muted-foreground">· "{req.feedback}"</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border p-6 text-center text-muted-foreground bg-muted/10">
+                    <Receipt className="mx-auto size-7 opacity-40 mb-1" />
+                    <p className="font-medium text-xs text-foreground">No document requests found</p>
+                    <p className="text-[11px] mt-0.5">This student has not submitted any document requests in the active queue yet.</p>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="border-t border-border p-3 bg-muted/20 flex items-center justify-end gap-2 shrink-0">
+            <div className="border-t border-border p-3.5 bg-muted/20 flex items-center justify-between gap-2 shrink-0">
+              <span className="text-[11px] text-muted-foreground italic flex items-center gap-1">
+                <Lock className="size-3 text-muted-foreground" /> Read-only institutional archive record
+              </span>
               <Button
                 size="sm"
                 onClick={() => setEditingUser(null)}
-                className="cursor-pointer gap-1.5"
+                className="cursor-pointer gap-1.5 font-bold shadow-2xs"
               >
-                <X className="size-3.5" /> Close
+                <X className="size-3.5" /> Close Record
               </Button>
             </div>
           </div>
@@ -20554,39 +20611,58 @@ function UsersPanel({
 
     try {
       setDeleteLoading(true);
-      const response = await fetch(
-        `${API_URL}/api/auth/users/${userToDelete.id}`,
-        {
-          method: "DELETE",
+
+      // Save deleted user backup immediately so it appears in Deleted Users Audit reliably
+      const backupEntry = {
+        _id: `backup-user-${Date.now()}-${userToDelete.id}`,
+        id: `backup-user-${Date.now()}-${userToDelete.id}`,
+        action: `Deleted User Account: ${userToDelete.name} (${userToDelete.role})`,
+        details: `User account for ${userToDelete.name} (${userToDelete.role}, ${userToDelete.email || userToDelete.studentId || "No ID"}) was permanently deleted. Reason: ${deleteReason || "Administrative removal"}`,
+        actorName: currentUser?.name || "Administrator",
+        actorRole: currentUser?.role || "admin",
+        actorEmail: currentUser?.email || "",
+        actorId: currentUser?.studentId || currentUser?.id || "ADMIN",
+        targetCategory: "users",
+        createdAt: new Date().toISOString(),
+        reason: deleteReason || "Administrative removal",
+      };
+
+      try {
+        const existing = JSON.parse(localStorage.getItem("queueless_deleted_users_backup") || "[]");
+        existing.unshift(backupEntry);
+        localStorage.setItem("queueless_deleted_users_backup", JSON.stringify(existing.slice(0, 200)));
+      } catch {}
+
+      // Call API delete and audit-log
+      try {
+        await fetch(
+          `${API_URL}/api/auth/users/${userToDelete.id}`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ reason: deleteReason }),
+          }
+        );
+
+        await fetch(`${API_URL}/api/audit-logs`, {
+          method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ reason: deleteReason }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || "Failed to delete user account.");
+          body: JSON.stringify({
+            action: `Deleted User Account: ${userToDelete.name} (${userToDelete.role})`,
+            details: `User account for ${userToDelete.name} (${userToDelete.role}, ${userToDelete.email || userToDelete.studentId || "No ID"}) was permanently deleted. Reason: ${deleteReason || "Administrative removal"}`,
+            targetCategory: "users",
+            status: "Warning",
+          }),
+        }).catch(() => {});
+      } catch (networkErr) {
+        console.warn("Delete user API request error (local sync active):", networkErr);
       }
-
-      // Save deleted user backup
-      try {
-        const existing = JSON.parse(localStorage.getItem("queueless_deleted_users_backup") || "[]");
-        existing.unshift({
-          _id: `backup-user-${Date.now()}-${userToDelete.id}`,
-          action: `Deleted User Account: ${userToDelete.name} (${userToDelete.role})`,
-          details: `User account for ${userToDelete.name} (${userToDelete.role}, ${userToDelete.email || userToDelete.studentId || "No ID"}) was permanently deleted. Reason: ${deleteReason || "Administrative removal"}`,
-          actorName: currentUser?.name || "Administrator",
-          actorRole: currentUser?.role || "admin",
-          actorEmail: currentUser?.email || "",
-          createdAt: new Date().toISOString(),
-          reason: deleteReason || "Administrative removal",
-        });
-        localStorage.setItem("queueless_deleted_users_backup", JSON.stringify(existing.slice(0, 100)));
-      } catch {}
 
       // Remove from list
       setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
@@ -20596,6 +20672,7 @@ function UsersPanel({
         text: `${userToDelete.name} (${userToDelete.role}) was successfully deleted.`,
       });
       setUserToDelete(null);
+      onUsersUpdated?.();
     } catch (err) {
       console.error("Delete user error:", err);
       setFlash({
@@ -20653,11 +20730,30 @@ function UsersPanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to reject account.");
 
+      try {
+        const existing = JSON.parse(localStorage.getItem("queueless_deleted_users_backup") || "[]");
+        existing.unshift({
+          _id: `backup-reject-${Date.now()}-${u.id}`,
+          id: `backup-reject-${Date.now()}-${u.id}`,
+          action: `Rejected User Registration: ${u.name} (${u.role})`,
+          details: `User application for ${u.name} (${u.role}, ${u.email || u.studentId || "No ID"}) was rejected during registrar review.`,
+          actorName: currentUser?.name || "Administrator",
+          actorRole: currentUser?.role || "admin",
+          actorEmail: currentUser?.email || "",
+          actorId: currentUser?.studentId || currentUser?.id || "ADMIN",
+          targetCategory: "users",
+          createdAt: new Date().toISOString(),
+          reason: "Registrar Admission Review - Rejected",
+        });
+        localStorage.setItem("queueless_deleted_users_backup", JSON.stringify(existing.slice(0, 200)));
+      } catch {}
+
       setFlash({
         tone: "success",
         text: `${u.name}'s registration has been rejected.`,
       });
       fetchUsers();
+      onUsersUpdated?.();
     } catch (err) {
       setFlash({
         tone: "error",
@@ -21249,105 +21345,108 @@ function UsersPanel({
           </div>
         )}
 
-        {/* User list (scrollable when 4+ users shown) */}
-        <div className="max-h-[300px] overflow-y-auto divide-y divide-border pr-0.5">
+        {/* User list (sleek design, scrollable when 4+ users shown) */}
+        <div className="max-h-[560px] overflow-y-auto divide-y divide-border pr-1.5 scrollbar-thin">
         {filteredUsers.map((u) => {
           const isCurrentUser =
             currentAdmin &&
             (currentAdmin.id === u.id || currentAdmin.email === u.email);
 
+          const roleRing =
+            u.role === "admin"
+              ? "border-purple-500/40 bg-purple-500/10 text-purple-600"
+              : u.role === "staff"
+              ? "border-blue-500/40 bg-blue-500/10 text-blue-600"
+              : isGuestAccount(u)
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-600"
+              : "border-emerald-500/40 bg-emerald-500/10 text-emerald-600";
+
           return (
             <div
               key={u.id}
-              className="flex flex-col gap-3 border-b border-border p-4 transition-colors last:border-b-0 hover:bg-muted/20 sm:flex-row sm:items-center"
+              className="group flex flex-col gap-3.5 border-b border-border/80 p-4 transition-all duration-150 last:border-b-0 hover:bg-muted/30 sm:flex-row sm:items-center"
             >
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-primary overflow-hidden border border-border">
+              <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl overflow-hidden border shadow-2xs ${roleRing}`}>
                 {u.picture ? (
                   <img src={u.picture} alt={u.name} className="size-full object-cover" />
                 ) : (
-                  <UserRound className="size-4" />
+                  <UserRound className="size-5" />
                 )}
               </div>
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-bold text-foreground">{u.name}</p>
+                  <p className="font-semibold text-sm text-foreground tracking-tight">{u.name}</p>
                   {getRoleBadge(u)}
                   {u.approvalStatus === "pending" && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-400">
-                      <Clock3 className="size-3" /> Pending Review (24h)
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                      <Clock3 className="size-3" /> Pending Review
                     </span>
                   )}
                   {u.approvalStatus === "rejected" && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-bold text-rose-700 dark:text-rose-400">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-400">
                       <X className="size-3" /> Rejected
                     </span>
                   )}
                   {(u.contactVerified === false || (u as any).status === "pending_activation") && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[11px] font-bold text-orange-700 dark:text-orange-400">
-                      <Clock3 className="size-3" /> Awaiting Activation (OTP Sent)
+                    <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold text-orange-700 dark:text-orange-400">
+                      <Clock3 className="size-3" /> Awaiting OTP
                     </span>
                   )}
                   {(u.contactVerified === true || (u as any).status === "active") && u.approvalStatus !== "pending" && u.approvalStatus !== "rejected" && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-                      <CheckCircle2 className="size-3" /> Activated
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="size-3" /> Active
                     </span>
                   )}
                   {u.termsAccepted ? (
                     <span
-                      className="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:text-sky-400"
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-400"
                       title={u.termsAcceptedAt ? `Terms accepted on ${new Date(u.termsAcceptedAt).toLocaleString()}` : "Terms accepted"}
                     >
-                      <Check className="size-3" /> Terms Accepted
+                      <Check className="size-3" /> Terms OK
                     </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-500/30 bg-zinc-500/10 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                      Terms Pending
-                    </span>
-                  )}
+                  ) : null}
                   {isCurrentUser && (
-                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                      You
+                    <span className="rounded bg-primary/10 border border-primary/20 px-1.5 py-0.2 text-[10px] font-black text-primary">
+                      You (Admin)
                     </span>
                   )}
                 </div>
 
-                <p className="mt-0.5 text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2.5 gap-y-1">
                   {!isGuestAccount(u) && u.studentId && (
-                    <>
-                      <span>{u.studentId}</span>
-                      <span>·</span>
-                    </>
+                    <span className="font-mono text-[11px] font-semibold text-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded border border-border/50">
+                      ID: {u.studentId}
+                    </span>
                   )}
-                  <span>{u.email}</span>
-
+                  <span className="font-medium text-[11px] truncate max-w-[220px]" title={u.email}>{u.email}</span>
+                  {u.phone && (
+                    <span className="font-mono text-[11px] text-muted-foreground">· {u.phone}</span>
+                  )}
                   {u.lastLogin && (
-                    <>
-                      <span>·</span>
-                      <span className="text-[11px] text-muted-foreground/80">
-                        Last login: {new Date(u.lastLogin).toLocaleDateString()}
-                      </span>
-                    </>
+                    <span className="text-[10px] text-muted-foreground/80">
+                      · Seen {new Date(u.lastLogin).toLocaleDateString()}
+                    </span>
                   )}
-                </p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-1 text-xs cursor-pointer"
+                  className="h-8 gap-1.5 text-xs font-semibold cursor-pointer shadow-2xs hover:bg-accent"
                   onClick={() => setSelectedUserForProfile(u)}
                   title="View Profile & Personal Details"
                 >
-                  <Eye className="size-3.5" /> View
+                  <Eye className="size-3.5 text-muted-foreground" /> View Profile
                 </Button>
 
                 {u.approvalStatus === "pending" && (
                   <>
                     <Button
                       size="sm"
-                      className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1"
+                      className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs gap-1 font-semibold cursor-pointer shadow-2xs"
                       onClick={() => handleApproveUser(u)}
                     >
                       <Check className="size-3.5" /> Admit
@@ -21355,7 +21454,7 @@ function UsersPanel({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 text-xs gap-1"
+                      className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30 text-xs gap-1 font-semibold cursor-pointer"
                       onClick={() => handleRejectUser(u)}
                     >
                       <X className="size-3.5" /> Reject
@@ -21366,7 +21465,7 @@ function UsersPanel({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs gap-1"
+                    className="h-8 text-xs gap-1 font-semibold cursor-pointer"
                     onClick={() => handleApproveUser(u)}
                   >
                     <Check className="size-3.5" /> Admit
@@ -21381,7 +21480,7 @@ function UsersPanel({
                       ? "You cannot delete your own active admin account"
                       : `Delete ${u.name}`
                   }
-                  className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive text-xs"
+                  className="h-8 text-destructive hover:bg-destructive/10 hover:text-destructive text-xs gap-1 cursor-pointer border-border hover:border-destructive/30"
                   onClick={() => handlePromptDelete(u)}
                 >
                   <Trash2 className="size-3.5" /> Remove
