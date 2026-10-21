@@ -149,6 +149,44 @@ type Status =
 
 type Priority = "Regular" | "Priority" | "Urgent";
 
+function getReleasingCounter(req?: Partial<RequestItem> | null): { full: string; short: string } {
+  if (!req) return { full: "Counter Window 2 (Releasing Desk)", short: "Counter Window 2" };
+
+  let raw = (req.counterWindow || "").trim();
+
+  if (!raw && req.pickupDate) {
+    const m = req.pickupDate.match(/(?:counter\s*)?(window\s*\d+|counter\s*\d+)/i);
+    if (m) {
+      raw = req.pickupDate;
+    }
+  }
+  if (!raw && req.remarks) {
+    const m = req.remarks.match(/(?:counter\s*)?(window\s*\d+|counter\s*\d+)/i);
+    if (m) {
+      raw = m[0];
+    }
+  }
+
+  if (!raw) {
+    raw = "Counter Window 2 (Releasing Desk)";
+  }
+
+  let short = raw.replace(/\s*\([^)]*\)/g, "").trim();
+  if (/^window\s*\d+/i.test(short) && !/^counter/i.test(short)) {
+    short = `Counter ${short}`;
+  }
+  if (/^counter\s*\d+/i.test(short) && !/window/i.test(short)) {
+    short = short.replace(/^counter\s*/i, "Counter Window ");
+  }
+
+  let full = raw;
+  if (!full.includes("(") && !/desk/i.test(full)) {
+    full = `${short} (Releasing Desk)`;
+  }
+
+  return { full, short };
+}
+
 type RequestItem = {
   id: string;
   student: string;
@@ -172,6 +210,7 @@ type RequestItem = {
   userDetails?: Partial<AuthUser>;
   assignedStaffId?: string;
   assignedStaffName?: string;
+  counterWindow?: string;
   rating?: number;
   feedback?: string;
   feedbackAt?: string;
@@ -618,7 +657,13 @@ function QueueLessApp() {
   const [showStaffContactModal, setShowStaffContactModal] = useState(false);
   const [showAiHelper, setShowAiHelper] = useState(false);
 
-  const [adminUsers, setAdminUsers] = useState<AccountUser[]>([]);
+  const [adminUsers, setAdminUsers] = useState<AccountUser[]>(() => {
+    try {
+      const saved = localStorage.getItem("queueless_admin_users_backup");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
   const [docTypes, setDocTypes] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("queueless_document_types");
@@ -771,6 +816,9 @@ function QueueLessApp() {
       const result = await response.json();
       if (response.ok && result.users) {
         setAdminUsers(result.users);
+        try {
+          localStorage.setItem("queueless_admin_users_backup", JSON.stringify(result.users));
+        } catch {}
       }
     } catch (err) {
       console.error("Fetch admin users error:", err);
@@ -797,6 +845,13 @@ function QueueLessApp() {
           if (profileRaw) {
             const savedProfile = JSON.parse(profileRaw);
             user = { ...savedProfile, ...user };
+          }
+          if (user.role === "admin") {
+            const adminProfileRaw = localStorage.getItem(`queueless_admin_profile_${user.email}`);
+            if (adminProfileRaw) {
+              const savedAdminProfile = JSON.parse(adminProfileRaw);
+              user = { ...savedAdminProfile, ...user };
+            }
           }
         } catch {}
 
@@ -1544,6 +1599,17 @@ function QueueLessApp() {
         `queueless_profile_${userToSave.email}`,
         JSON.stringify(userToSave)
       );
+      if (userToSave.role === "admin") {
+        try {
+          localStorage.setItem(`queueless_admin_profile_${userToSave.email}`, JSON.stringify(userToSave));
+          if (adminUsers && adminUsers.length > 0) {
+            localStorage.setItem("queueless_admin_users_backup", JSON.stringify(adminUsers));
+          }
+          if (docTypes && docTypes.length > 0) {
+            localStorage.setItem("queueless_document_types", JSON.stringify(docTypes));
+          }
+        } catch {}
+      }
       if (userToSave.picture) {
         localStorage.setItem(
           `queueless_custom_pfp_${userToSave.email}`,
@@ -1585,9 +1651,12 @@ function QueueLessApp() {
     setView("dashboard");
     setMenuOpen(false);
     setNotificationsOpen(false);
+    const isLoggingOutAdmin = userToSave?.role === "admin";
     setFlash({
       tone: "success",
-      text: "Signed out securely. All changes, requests, and institutional records are safely preserved.",
+      text: isLoggingOutAdmin
+        ? "Administrator signed out securely. All user accounts, system settings, and institutional queue data are safely preserved."
+        : "Signed out securely. All changes, requests, and institutional records are safely preserved.",
     });
   };
 
@@ -10621,6 +10690,7 @@ function StaffCalendarEditModal({
   const [lineNumber, setLineNumber] = useState<number>(request.lineNumber ?? 1);
   const [priority, setPriority] = useState<Priority>(request.priority || "Regular");
   const [remarks, setRemarks] = useState(request.remarks || "");
+  const [counterWindow, setCounterWindow] = useState(request.counterWindow || getReleasingCounter(request).full);
   const [confirming, setConfirming] = useState(false);
 
   const handleFormSubmit = (e: FormEvent) => {
@@ -10711,6 +10781,10 @@ function StaffCalendarEditModal({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status:</span>
                   <span className="font-bold text-primary">{status}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Claiming Counter:</span>
+                  <span className="font-bold text-primary">{counterWindow}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">When to Claim:</span>
@@ -12539,6 +12613,7 @@ function DigitalReceiptModal({
       ? "staff_release"
       : "user_queue_slip"
   );
+  const counterInfo = getReleasingCounter(currentReq);
 
   const handleMarkAsClaimed = async () => {
     try {
@@ -12692,6 +12767,7 @@ function DigitalReceiptModal({
     document: string;
     purpose: string;
     paymentStatus: string;
+    counterWindow?: string;
   }) => {
     try {
       setInternalSaving(true);
@@ -13034,7 +13110,7 @@ function DigitalReceiptModal({
                 STUDENT QUEUE SLIP & CLAIM STUB
               </h2>
               <p className="text-[10px] text-muted-foreground print:text-gray-700 mt-0.5">
-                Present this slip at Registrar Counter Window 2 regarding your queue & document claim
+                Present this slip at Registrar {counterInfo.short} regarding your queue & document claim
               </p>
             </div>
 
@@ -13107,12 +13183,14 @@ function DigitalReceiptModal({
 
               <div className="grid grid-cols-2 gap-3 border-b border-border/60 pb-2.5 print:border-gray-300">
                 <div>
-                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">Purpose:</span>
-                  <span className="text-foreground font-medium print:text-black">{currentReq.purpose || "Official Record"}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">Claiming Counter / Window:</span>
+                  <strong className="text-primary font-bold print:text-black">
+                    {counterInfo.full}
+                  </strong>
                 </div>
                 <div>
-                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">When to Claim / Target Release:</span>
-                  <strong className="text-foreground font-bold text-primary print:text-black">
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">When to Claim / Release:</span>
+                  <strong className="text-foreground font-bold print:text-black">
                     {currentReq.pickupDate || "Within the day"}
                   </strong>
                 </div>
@@ -13120,9 +13198,9 @@ function DigitalReceiptModal({
 
               <div className="grid grid-cols-2 gap-3 border-b border-border/60 pb-2.5 print:border-gray-300">
                 <div>
-                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">Assigned Releasing Staff:</span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold block print:text-black">Assigned Releasing Desk / Staff:</span>
                   <strong className="text-foreground font-semibold print:text-black">
-                    {currentReq.assignedStaffName || "Registrar Window 2"}
+                    {currentReq.assignedStaffName ? `${currentReq.assignedStaffName} (${counterInfo.short})` : counterInfo.full}
                   </strong>
                 </div>
                 <div>
@@ -13167,14 +13245,14 @@ function DigitalReceiptModal({
             {/* Instructions */}
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[10px] text-amber-900 dark:text-amber-200 leading-relaxed print:border-black print:bg-white print:text-black">
               <strong className="block font-bold mb-0.5">CLAIMING INSTRUCTIONS:</strong>
-              1. Present this slip along with your original valid PHINMA Student ID to <strong>Counter Window 2 (Releasing Desk)</strong>.<br />
+              1. Present this slip along with your original valid PHINMA Student ID to <strong>{counterInfo.full}</strong>.<br />
               2. If represented by an authorized person, submit a signed authorization letter, photocopy of student ID with 3 signatures, and valid ID of the representative.
             </div>
 
             {/* Perforated cut line */}
             <div className="my-3 border-t-2 border-dashed border-border/80 relative text-center print:border-black">
               <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-card px-2 text-[9px] text-muted-foreground font-mono uppercase tracking-widest print:bg-white print:text-black">
-                ✂ Present this stub at Counter Window 2
+                ✂ Present this stub at {counterInfo.short}
               </span>
             </div>
 
@@ -13488,6 +13566,7 @@ function EditReceiptModal({
     document: string;
     purpose: string;
     paymentStatus: string;
+    counterWindow?: string;
   }) => void;
   loading?: boolean;
 }) {
@@ -13497,6 +13576,9 @@ function EditReceiptModal({
   );
   const [status, setStatus] = useState<Status>(request.status);
   const [remarks, setRemarks] = useState<string>(request.remarks || "");
+  const [counterWindow, setCounterWindow] = useState<string>(
+    request.counterWindow || getReleasingCounter(request).full
+  );
   const [pickupDate, setPickupDate] = useState<string>(request.pickupDate || "");
   const [copies, setCopies] = useState<number>(request.copies || 1);
   const [docName, setDocName] = useState<string>(request.document);
@@ -13530,6 +13612,7 @@ function EditReceiptModal({
       document: docName,
       purpose,
       paymentStatus: paymentStatus.trim(),
+      counterWindow: counterWindow.trim(),
     });
   };
 
@@ -13692,6 +13775,22 @@ function EditReceiptModal({
               />
             </Field>
           </div>
+
+          <Field label="Claiming Counter / Window (Student Claim Desk)">
+            <select
+              value={counterWindow}
+              onChange={(e) => setCounterWindow(e.target.value)}
+              className="field cursor-pointer"
+            >
+              <option value="Counter Window 1 (Requesting & Receiving)">Counter Window 1 (Requesting & Receiving)</option>
+              <option value="Counter Window 2 (Releasing Desk)">Counter Window 2 (Releasing Desk)</option>
+              <option value="Counter Window 3 (Transcripts & Certifications)">Counter Window 3 (Transcripts & Certifications)</option>
+              <option value="Counter Window 4 (Clearance & Records)">Counter Window 4 (Clearance & Records)</option>
+              <option value="Counter Window 5 (Releasing Desk)">Counter Window 5 (Releasing Desk)</option>
+              <option value="Counter Window 6 (Releasing Desk)">Counter Window 6 (Releasing Desk)</option>
+              <option value="Counter Window 7 (Releasing Desk)">Counter Window 7 (Releasing Desk)</option>
+            </select>
+          </Field>
 
           <Field label="When to Claim (Release Schedule)">
             <select
@@ -15099,7 +15198,11 @@ function LogoutConfirmModal({
 
         <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-muted-foreground flex items-center gap-2">
           <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span>All personal details, document requests, and queue updates are permanently saved.</span>
+          <span>
+            {user?.role === "admin"
+              ? "All administrator configurations, user directory changes, and queue records are permanently saved."
+              : "All personal details, document requests, and queue updates are permanently saved."}
+          </span>
         </div>
 
         <div className="mt-3 rounded-xl border border-border bg-muted/40 p-3.5">
@@ -15163,6 +15266,7 @@ function ConfirmStatusModal({
     paymentStatus: string;
     pickupDate: string;
     remarks: string;
+    counterWindow?: string;
   }) => void;
   loading?: boolean;
   onViewStudentDetails?: () => void;
@@ -15199,6 +15303,7 @@ function ConfirmStatusModal({
       paymentStatus: paymentStatus.trim() || "Proceed to Registrar Staff",
       pickupDate: pickupDate.trim() || "Standard Schedule",
       remarks: remarks.trim(),
+      counterWindow: counterWindow.trim(),
     });
   };
 
@@ -15316,6 +15421,26 @@ function ConfirmStatusModal({
                 <option value="Pending Payment">Pending Payment</option>
                 <option value="Proceed to Registrar Staff">Proceed to Registrar Staff</option>
                 <option value="Exempted / Free of Charge">Exempted / Free of Charge</option>
+              </select>
+            </div>
+
+            {/* Claiming Counter / Window */}
+            <div>
+              <label className="text-xs font-bold text-foreground block mb-1">
+                Claiming Counter / Window (Accurate Location for Student)
+              </label>
+              <select
+                value={counterWindow}
+                onChange={(e) => setCounterWindow(e.target.value)}
+                className="field text-xs font-semibold cursor-pointer"
+              >
+                <option value="Counter Window 1 (Requesting & Receiving)">Counter Window 1 (Requesting & Receiving)</option>
+                <option value="Counter Window 2 (Releasing Desk)">Counter Window 2 (Releasing Desk)</option>
+                <option value="Counter Window 3 (Transcripts & Certifications)">Counter Window 3 (Transcripts & Certifications)</option>
+                <option value="Counter Window 4 (Clearance & Records)">Counter Window 4 (Clearance & Records)</option>
+                <option value="Counter Window 5 (Releasing Desk)">Counter Window 5 (Releasing Desk)</option>
+                <option value="Counter Window 6 (Releasing Desk)">Counter Window 6 (Releasing Desk)</option>
+                <option value="Counter Window 7 (Releasing Desk)">Counter Window 7 (Releasing Desk)</option>
               </select>
             </div>
 
@@ -15796,6 +15921,7 @@ function ManageRequests({
     paymentStatus: string;
     pickupDate: string;
     remarks: string;
+    counterWindow?: string;
   }) => {
     if (!pendingStatusChange) return;
     const reqId = pendingStatusChange.request.id;

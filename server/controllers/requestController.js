@@ -292,6 +292,18 @@ export const updateRequestStatus = async (req, res) => {
     if (req.body.assignedStaffName !== undefined) {
       updatePayload.assignedStaffName = req.body.assignedStaffName;
     }
+    if (req.body.counterWindow !== undefined) {
+      updatePayload.counterWindow = req.body.counterWindow;
+    }
+    if (req.body.pickupDate !== undefined) {
+      updatePayload.pickupDate = req.body.pickupDate;
+    }
+    if (req.body.paymentStatus !== undefined) {
+      updatePayload.paymentStatus = req.body.paymentStatus;
+    }
+    if (req.body.remarks !== undefined) {
+      updatePayload.remarks = req.body.remarks;
+    }
 
     const request = await Request.findOneAndUpdate(
       { requestNumber },
@@ -356,6 +368,7 @@ const notifyStudentOfUpdate = async (request) => {
         pickupDate: request.pickupDate,
         paymentStatus: request.paymentStatus,
         remarks: request.remarks,
+        counterWindow: request.counterWindow,
         lineNumber: request.lineNumber,
         copies: request.copies,
       });
@@ -404,6 +417,7 @@ export const updateRequest = async (req, res) => {
       updateFields.copies = Number(copies);
     }
     if (paymentStatus !== undefined) updateFields.paymentStatus = paymentStatus;
+    if (req.body.counterWindow !== undefined) updateFields.counterWindow = req.body.counterWindow;
     if (req.body.assignedStaffId !== undefined) updateFields.assignedStaffId = req.body.assignedStaffId;
     if (req.body.assignedStaffName !== undefined) updateFields.assignedStaffName = req.body.assignedStaffName;
 

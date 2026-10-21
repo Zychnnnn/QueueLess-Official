@@ -52,6 +52,10 @@ const requestSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    counterWindow: {
+      type: String,
+      default: "",
+    },
     date: {
       type: String,
       required: true,
