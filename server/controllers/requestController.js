@@ -261,7 +261,25 @@ export const updateRequestStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid request status." });
     }
 
-    if (req.user.role !== "staff" && req.user.role !== "admin") {
+    const isStudentOrGuest = req.user.role === "student" || req.user.role === "guest";
+    if (isStudentOrGuest) {
+      const existingReq = await Request.findOne({ requestNumber });
+      const userEmail = (req.user.email || "").toLowerCase().trim();
+      const userStudentId = (req.user.studentId || "").trim();
+      const isOwner =
+        existingReq &&
+        ((existingReq.email && existingReq.email.toLowerCase().trim() === userEmail) ||
+          (existingReq.studentEmail && existingReq.studentEmail.toLowerCase().trim() === userEmail) ||
+          (existingReq.studentId && existingReq.studentId.trim() === userStudentId));
+
+      if (status === "Claimed" && isOwner) {
+        // Allowed: Student confirming receipt of their prepared document
+      } else {
+        return res.status(403).json({
+          message: "Only staff and admin can update request status.",
+        });
+      }
+    } else if (req.user.role !== "staff" && req.user.role !== "admin") {
       return res.status(403).json({
         message: "Only staff and admin can update request status.",
       });

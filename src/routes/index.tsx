@@ -3312,7 +3312,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
 
     if (!isStrongPassword(password)) {
       setError(
-        "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+        "Password must be at least 12 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (no common passwords or spaces)."
       );
       return;
     }
@@ -3411,7 +3411,7 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
 
     if (!isStrongPassword(password)) {
       setError(
-        "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+        "Password must be at least 12 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (no common passwords or spaces)."
       );
       return;
     }
@@ -4247,77 +4247,82 @@ function GuestRegistration({
   );
 }
 
+const COMMON_COMPROMISED_PASSWORDS = new Set([
+  "password1234", "password12345", "password123456", "123456789012", "1234567890123",
+  "qwerty123456", "admin1234567", "admin12345678", "queueless1234",
+  "queueless12345", "password@1234", "p@ssword1234", "welcome12345!",
+  "administrator1", "phinmaupang123", "iloveyou12345", "changeme12345",
+  "upangpassword1", "password2026!", "secret123456"
+]);
+
 function isStrongPassword(pass: string): boolean {
-  if (typeof pass !== "string" || pass.length < 8) return false;
+  if (typeof pass !== "string" || pass.length < 12) return false;
   if (/\s/.test(pass)) return false; // Absolutely no spaces allowed
   const hasUpper = /[A-Z]/.test(pass);
   const hasLower = /[a-z]/.test(pass);
   const hasNumber = /[0-9]/.test(pass);
   const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(pass);
-  return hasUpper && hasLower && hasNumber && hasSpecial;
+  if (!hasUpper || !hasLower || !hasNumber || !hasSpecial) return false;
+  if (COMMON_COMPROMISED_PASSWORDS.has(pass.toLowerCase().trim())) return false;
+  return true;
 }
 
-function PasswordStrengthMeter({ password }: { password: string }) {
-  const getStrength = (pass: string) => {
-    if (!pass) {
-      return { score: 0, label: "Enter password", color: "bg-muted", textTone: "text-muted-foreground" };
-    }
-
-    // Explicitly reject passwords with whitespace
-    if (/\s/.test(pass)) {
-      return { score: 0, label: "Spaces not allowed", color: "bg-rose-500", textTone: "text-rose-500" };
-    }
-
-    if (pass.length < 8) {
-      return { score: 1, label: "Too Short (Min. 8 chars)", color: "bg-rose-500", textTone: "text-rose-500" };
-    }
-
-    const hasUpper = /[A-Z]/.test(pass);
-    const hasLower = /[a-z]/.test(pass);
-    const hasNumber = /[0-9]/.test(pass);
-    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(pass);
-
-    const typesCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
-
-    if (typesCount <= 2) {
-      return { score: 1, label: "Weak (Need upper, lower, number, symbol)", color: "bg-rose-500", textTone: "text-rose-500" };
-    }
-    if (typesCount === 3) {
-      return { score: 2, label: "Fair (Missing 1 requirement)", color: "bg-amber-500", textTone: "text-amber-500" };
-    }
-    if (typesCount === 4 && pass.length < 12) {
-      return { score: 3, label: "Good (Meets all requirements)", color: "bg-sky-500", textTone: "text-sky-500" };
-    }
-    if (typesCount === 4 && pass.length >= 12) {
-      return { score: 4, label: "Strong (12+ characters)", color: "bg-emerald-500", textTone: "text-emerald-500" };
-    }
-
-    return { score: 1, label: "Weak", color: "bg-rose-500", textTone: "text-rose-500" };
-  };
-
-  const { score, label, color, textTone } = getStrength(password);
-
+function PasswordStrengthMeter({ password, confirmPassword }: { password: string; confirmPassword?: string }) {
   if (!password) return null;
 
+  const lenOk = password.length >= 12;
+  const upperOk = /[A-Z]/.test(password);
+  const lowerOk = /[a-z]/.test(password);
+  const numOk = /[0-9]/.test(password);
+  const specialOk = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password);
+  const noSpaces = !/\s/.test(password);
+  const notCommon = !COMMON_COMPROMISED_PASSWORDS.has(password.toLowerCase().trim());
+  const matchOk = confirmPassword !== undefined && confirmPassword.length > 0 ? password === confirmPassword : true;
+
+  const score = [lenOk, upperOk && lowerOk, numOk, specialOk && notCommon && noSpaces].filter(Boolean).length;
+
+  const labels = [
+    "Too Weak",
+    "Weak (Min. 12 chars needed)",
+    "Fair (Missing requirements)",
+    "Good (Almost there)",
+    "Strong (Security Policy Met)",
+  ];
+  const colors = ["bg-rose-500", "bg-rose-500", "bg-amber-500", "bg-sky-500", "bg-emerald-500"];
+  const textTones = ["text-rose-500", "text-rose-500", "text-amber-500", "text-sky-500", "text-emerald-600 dark:text-emerald-400"];
+
   return (
-    <div className="mt-2 space-y-1.5 animate-in fade-in duration-150">
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="text-muted-foreground font-medium">Password Strength:</span>
-        <span className={`font-bold ${textTone}`}>{label}</span>
+    <div className="mt-2.5 rounded-xl border border-border/70 bg-muted/20 p-2.5 space-y-2 text-[11px] animate-in fade-in duration-150">
+      <div className="flex items-center justify-between">
+        <span className="text-muted-foreground font-medium">Password Policy:</span>
+        <span className={`font-bold ${textTones[score]}`}>{labels[score]}</span>
       </div>
+
       <div className="grid grid-cols-4 gap-1.5 h-1.5">
         {[1, 2, 3, 4].map((step) => (
           <div
             key={step}
             className={`h-full rounded-full transition-all duration-300 ${
-              score >= step ? color : "bg-muted"
+              score >= step ? colors[score] : "bg-muted"
             }`}
           />
         ))}
       </div>
-      <p className="text-[10px] text-muted-foreground leading-tight">
-        Must be at least 8 characters with uppercase, lowercase, numbers & symbols (no spaces).
-      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px] pt-1 border-t border-border/40">
+        <div className={`flex items-center gap-1 ${lenOk ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}`}>
+          {lenOk ? "✓" : "○"} At least 12 characters
+        </div>
+        <div className={`flex items-center gap-1 ${upperOk && lowerOk ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}`}>
+          {upperOk && lowerOk ? "✓" : "○"} Uppercase (A–Z) & Lowercase (a–z)
+        </div>
+        <div className={`flex items-center gap-1 ${numOk ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}`}>
+          {numOk ? "✓" : "○"} At least one number (0–9)
+        </div>
+        <div className={`flex items-center gap-1 ${specialOk && notCommon ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}`}>
+          {specialOk && notCommon ? "✓" : "○"} Special symbol (no common passwords)
+        </div>
+      </div>
     </div>
   );
 }
@@ -4580,7 +4585,7 @@ function ActivateAccountWithOtp({
     }
     if (!isStrongPassword(newPassword)) {
       setError(
-        "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+        "Password must be at least 12 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (no common passwords or spaces)."
       );
       return;
     }
@@ -5532,7 +5537,7 @@ function StudentProfileView({
 
     if (!isStrongPassword(newPassword)) {
       setPwError(
-        "New password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+        "New password must be at least 12 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character (no common passwords or spaces)."
       );
       return;
     }
@@ -9016,13 +9021,30 @@ function StudentView({
                           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                           body: JSON.stringify({ status: "Claimed" }),
                         });
+                      } catch (err) {
+                        console.warn("Claim status API warning:", err);
+                      }
+
+                      try {
+                        await fetch(`${API_URL}/api/audit-logs`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({
+                            action: `Document Claimed & Done: #${req.id}`,
+                            details: `Student ${req.student} (${req.studentId || "No ID"}) confirmed claim of ${req.document} (${req.copies || 1} copy). Record updated on Admin & Staff.`,
+                            targetCategory: "archive",
+                            requestNumber: req.id,
+                            status: "Success",
+                          }),
+                        });
                       } catch {}
                     }
 
-                    archiveClaimedRecord(updatedItem, req.assignedStaffName || "Registrar Staff");
+                    archiveClaimedRecord(updatedItem, req.assignedStaffName || "Registrar Counter Officer");
+                    window.dispatchEvent(new Event("storage"));
                     setFlash({
                       tone: "success",
-                      text: `Document request #${req.id} (${req.document}) confirmed as Done & Claimed! Safely recorded in your history.`,
+                      text: `Document request #${req.id} (${req.document}) confirmed as Done & Claimed! Recorded on Admin & Staff ledgers.`,
                     });
                     setConfirmClaimReq(null);
                     setSelectedReceipt(updatedItem);
@@ -19782,11 +19804,11 @@ function AdminOfficialRecordsPanel({
             <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
               <Lock className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
               <span>
-                <strong>System Governance Notice:</strong> Administrators can inspect system records and queue operations. Student official details and submitted requests cannot be altered.
+                <strong>System Governance Notice:</strong> Institutional records and submitted requests are permanently protected. Administrators observe how the system operates and cannot edit student dossiers.
               </span>
             </div>
 
-            {/* Modal Body */}
+            {/* Modal Body (Data Blocks, Not Input Fields) */}
             <div className="flex-1 min-h-0 overflow-y-auto p-5 pb-8 space-y-6 text-xs scrollbar-thin">
               {/* Section 1: Legal Names & Identification */}
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
@@ -19795,43 +19817,72 @@ function AdminOfficialRecordsPanel({
                     <Lock className="size-3.5 text-primary" />
                     <span>Official Identity & Institutional Identification</span>
                   </div>
-                  <span className="font-mono text-[11px] text-muted-foreground">ID: {studentId || "N/A"}</span>
+                  <span className="font-mono text-[11px] font-bold text-foreground bg-muted/60 px-2 py-0.5 rounded border border-border">ID: {studentId || "N/A"}</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <Field label="Last Name">
-                    <input type="text" value={lastName} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="First Name">
-                    <input type="text" value={firstName} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Middle Name">
-                    <input type="text" value={middleName || "None"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Extension Name">
-                    <input type="text" value={extensionName || "None"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Last Name</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-2xs">
+                      {lastName || "None"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">First Name</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-2xs">
+                      {firstName || "None"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Middle Name</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-2xs">
+                      {middleName || "None"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Extension Name</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-2xs">
+                      {extensionName || "None"}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
-                  <Field label={editingUser.role === "staff" ? "Staff Employee ID" : editingUser.role === "admin" ? "Admin Employee ID" : editingUser.role === "guest" ? "User Identifier" : "UPang Student ID"}>
-                    <input type="text" value={studentId || "N/A"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Degree / Program">
-                    <input type="text" value={course || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Year Level">
-                    <input type="text" value={yearLevel || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                      {editingUser.role === "staff" ? "Staff Employee ID" : editingUser.role === "admin" ? "Admin Employee ID" : editingUser.role === "guest" ? "User Identifier" : "UPang Student ID"}
+                    </span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-mono font-bold text-foreground shadow-2xs">
+                      {studentId || "N/A"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Degree / Program</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-2xs">
+                      {course || "N/A"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Year Level</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground shadow-2xs">
+                      {yearLevel || "N/A"}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-border/50">
-                  <Field label="Institutional Email">
-                    <input type="email" value={email} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Contact Phone Number">
-                    <input type="text" value={phone || "Not provided (optional)"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
-                  </Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Institutional Email</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {email || "N/A"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Contact Phone Number</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-mono font-semibold text-foreground shadow-2xs">
+                      {phone || "Not provided (optional)"}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -19839,38 +19890,49 @@ function AdminOfficialRecordsPanel({
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
                 <p className="text-xs font-bold text-foreground">Personal & Demographic Details</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Field label="Date of Birth">
-                    <input type="text" value={birthDate ? new Date(birthDate).toLocaleDateString() : (birthDate || "Not provided")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Gender">
-                    <input type="text" value={gender || "Not specified"} readOnly disabled className="field bg-muted/50 cursor-not-allowed capitalize" />
-                  </Field>
-                  <Field label="Civil Status">
-                    <input type="text" value={civilStatus || "Single"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Nationality">
-                    <input type="text" value={nationality || "Filipino"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Date of Birth</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {birthDate ? new Date(birthDate).toLocaleDateString() : (birthDate || "Not provided")}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Gender</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground capitalize shadow-2xs">
+                      {gender || "Not specified"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Civil Status</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {civilStatus || "Single"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Nationality</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {nationality || "Filipino"}
+                    </div>
+                  </div>
                 </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-border/50">
-                  <Field label="Religion / Faith">
-                    <input type="text" value={religion || "None specified"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Emergency Contact Person & Number">
-                    <input
-                      type="text"
-                      value={
-                        editingUser.emergencyContact ||
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Religion / Faith</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {religion || "None specified"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Emergency Contact Person & Number</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {editingUser.emergencyContact ||
                         (editingUser.motherName ? `${editingUser.motherName} (${editingUser.motherMobile || "No mobile"})` : "") ||
                         (editingUser.fatherName ? `${editingUser.fatherName} (${editingUser.fatherMobile || "No mobile"})` : "") ||
                         (editingUser.guardianName ? `${editingUser.guardianName} (${editingUser.guardianMobile || "No mobile"})` : "") ||
-                        "None on file"
-                      }
-                      readOnly
-                      disabled
-                      className="field bg-muted/50 cursor-not-allowed"
-                    />
-                  </Field>
+                        "None on file"}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -19878,65 +19940,123 @@ function AdminOfficialRecordsPanel({
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
                 <p className="text-xs font-bold text-foreground">Family & Guardian Details</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <Field label="Father's Full Name">
-                    <input type="text" value={editingUser.fatherName || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Father's Occupation">
-                    <input type="text" value={editingUser.fatherOccupation || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Father's Mobile">
-                    <input type="text" value={editingUser.fatherMobile || "Not provided"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
-                  </Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Father's Full Name</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {editingUser.fatherName || "Not provided"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Father's Occupation</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {editingUser.fatherOccupation || "Not provided"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Father's Mobile</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-mono font-medium text-foreground shadow-2xs">
+                      {editingUser.fatherMobile || "Not provided"}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
-                  <Field label="Mother's Maiden Name">
-                    <input type="text" value={editingUser.motherName || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Mother's Occupation">
-                    <input type="text" value={editingUser.motherOccupation || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Mother's Mobile">
-                    <input type="text" value={editingUser.motherMobile || "Not provided"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
-                  </Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Mother's Maiden Name</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {editingUser.motherName || "Not provided"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Mother's Occupation</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {editingUser.motherOccupation || "Not provided"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Mother's Mobile</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-mono font-medium text-foreground shadow-2xs">
+                      {editingUser.motherMobile || "Not provided"}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
-                  <Field label="Guardian's Name">
-                    <input type="text" value={editingUser.guardianName || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Guardian Relationship">
-                    <input type="text" value={editingUser.guardianRelationship || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
-                  <Field label="Guardian Mobile">
-                    <input type="text" value={editingUser.guardianMobile || "Not provided"} readOnly disabled className="field font-mono bg-muted/50 cursor-not-allowed" />
-                  </Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Guardian's Name</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {editingUser.guardianName || "Not provided"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Guardian Relationship</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {editingUser.guardianRelationship || "Not provided"}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Guardian Mobile</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-mono font-medium text-foreground shadow-2xs">
+                      {editingUser.guardianMobile || "Not provided"}
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Section 4: Current & Permanent Residential Addresses */}
               <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
                 <p className="text-xs font-bold text-foreground">Current Residential Address</p>
-                <Field label="Street Address / Barangay">
-                  <input type="text" value={currentAddress || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                </Field>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Street Address / Barangay</span>
+                  <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                    {currentAddress || "Not provided"}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <Field label="Country"><input type="text" value={currentCountry || "Philippines"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
-                  <Field label="Province"><input type="text" value={currentProvince || "Pangasinan"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
-                  <Field label="City / Municipality"><input type="text" value={currentCity || "Dagupan City"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
-                  <Field label="Postal Code"><input type="text" value={currentPostalCode || "2400"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Country</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{currentCountry || "Philippines"}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Province</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{currentProvince || "Pangasinan"}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">City / Municipality</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{currentCity || "Dagupan City"}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Postal Code</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{currentPostalCode || "2400"}</div>
+                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-border/50">
                   <p className="text-xs font-bold text-foreground mb-2">Permanent Address</p>
-                  <Field label="Permanent Street Address">
-                    <input type="text" value={sameAsCurrentAddress ? (currentAddress || "Same as current address") : (permanentAddress || "Not provided")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                  </Field>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Permanent Street Address</span>
+                    <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">
+                      {sameAsCurrentAddress ? (currentAddress || "Same as current address") : (permanentAddress || "Not provided")}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
-                    <Field label="Country"><input type="text" value={sameAsCurrentAddress ? currentCountry : (permanentCountry || "Philippines")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
-                    <Field label="Province"><input type="text" value={sameAsCurrentAddress ? currentProvince : (permanentProvince || "Pangasinan")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
-                    <Field label="City / Municipality"><input type="text" value={sameAsCurrentAddress ? currentCity : (permanentCity || "Dagupan City")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
-                    <Field label="Postal Code"><input type="text" value={sameAsCurrentAddress ? currentPostalCode : (permanentPostalCode || "2400")} readOnly disabled className="field bg-muted/50 cursor-not-allowed" /></Field>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Country</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{sameAsCurrentAddress ? currentCountry : (permanentCountry || "Philippines")}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Province</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{sameAsCurrentAddress ? currentProvince : (permanentProvince || "Pangasinan")}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">City / Municipality</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{sameAsCurrentAddress ? currentCity : (permanentCity || "Dagupan City")}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Postal Code</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{sameAsCurrentAddress ? currentPostalCode : (permanentPostalCode || "2400")}</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -19946,39 +20066,48 @@ function AdminOfficialRecordsPanel({
                 <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
                   <p className="text-xs font-bold text-foreground">Educational Background</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <Field label="Elementary School">
-                      <input type="text" value={editingUser.elemSchool || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
-                    <Field label="Year Graduated">
-                      <input type="text" value={editingUser.elemYearGrad || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
-                    <Field label="School Type">
-                      <input type="text" value={editingUser.elemType || "Public"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Elementary School</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.elemSchool || "Not provided"}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Year Graduated</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.elemYearGrad || "N/A"}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">School Type</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.elemType || "Public"}</div>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
-                    <Field label="Junior High School">
-                      <input type="text" value={editingUser.juniorHighSchool || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
-                    <Field label="Year Graduated">
-                      <input type="text" value={editingUser.juniorHighYearGrad || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
-                    <Field label="School Type">
-                      <input type="text" value={editingUser.juniorHighType || "Public"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Junior High School</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.juniorHighSchool || "Not provided"}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Year Graduated</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.juniorHighYearGrad || "N/A"}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">School Type</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.juniorHighType || "Public"}</div>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-border/50">
-                    <Field label="Senior High School">
-                      <input type="text" value={editingUser.seniorHighSchool || "Not provided"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
-                    <Field label="Year Graduated">
-                      <input type="text" value={editingUser.seniorHighYearGrad || "N/A"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
-                    <Field label="School Type">
-                      <input type="text" value={editingUser.seniorHighType || "Public"} readOnly disabled className="field bg-muted/50 cursor-not-allowed" />
-                    </Field>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Senior High School</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.seniorHighSchool || "Not provided"}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Year Graduated</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.seniorHighYearGrad || "N/A"}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">School Type</span>
+                      <div className="rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-medium text-foreground shadow-2xs">{editingUser.seniorHighType || "Public"}</div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -20248,6 +20377,12 @@ function UsersPanel({
       return;
     }
 
+    const adminIdRegex = /^(UP-\d{2}-\d{3,4}-[A-Z]|ADMIN-\d{3,4})$/i;
+    if (trimmedId && !adminIdRegex.test(trimmedId)) {
+      setAdminValidationError("Admin ID must follow the official institutional format: UP-25-795-F (or leave blank for auto-generation).");
+      return;
+    }
+
     setPendingAdminPayload({
       name: trimmedName,
       email: trimmedEmail,
@@ -20352,6 +20487,12 @@ function UsersPanel({
     }
     if (!emailRegex.test(trimmedEmail)) {
       setValidationError("Please enter a valid email address (e.g. staff@up.phinma.edu.ph).");
+      return;
+    }
+
+    const staffIdRegex = /^(UP-\d{2}-\d{3,4}-[A-Z]|STAFF-\d{3,4})$/i;
+    if (trimmedId && !staffIdRegex.test(trimmedId)) {
+      setValidationError("Staff ID must follow the official institutional format: UP-25-795-F (or leave blank for auto-generation).");
       return;
     }
 
@@ -21116,7 +21257,7 @@ function UsersPanel({
             <Field label="Staff ID">
               <input
                 value={customStaffId}
-                onChange={(e) => setCustomStaffId(e.target.value)}
+                onChange={(e) => setCustomStaffId(e.target.value.toUpperCase())}
                 className="field"
                 placeholder="Enter your Staff ID"
               />
@@ -21195,9 +21336,9 @@ function UsersPanel({
             <Field label="Admin ID (Optional)">
               <input
                 value={customAdminId}
-                onChange={(e) => setCustomAdminId(e.target.value)}
+                onChange={(e) => setCustomAdminId(e.target.value.toUpperCase())}
                 className="field"
-                placeholder="Leave blank for auto-generation (e.g. ADMIN-003)"
+                placeholder="e.g. UP-25-795-F (Leave blank for auto-generation)"
               />
             </Field>
 

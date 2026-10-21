@@ -38,14 +38,24 @@ export const isGuestAccount = (u) => {
   return Boolean(u.studentId && String(u.studentId).startsWith("GUEST"));
 };
 
+export const COMMON_COMPROMISED_PASSWORDS = new Set([
+  "password1234", "password12345", "password123456", "123456789012", "1234567890123",
+  "qwerty123456", "admin1234567", "admin12345678", "queueless1234",
+  "queueless12345", "password@1234", "p@ssword1234", "welcome12345!",
+  "administrator1", "phinmaupang123", "iloveyou12345", "changeme12345",
+  "upangpassword1", "password2026!", "secret123456"
+]);
+
 export const isStrongPassword = (pwd = "") => {
-  if (typeof pwd !== "string" || pwd.length < 8) return false;
+  if (typeof pwd !== "string" || pwd.length < 12) return false;
   if (/\s/.test(pwd)) return false; // Reject passwords containing spaces
   const hasUpper = /[A-Z]/.test(pwd);
   const hasLower = /[a-z]/.test(pwd);
   const hasNumber = /[0-9]/.test(pwd);
   const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(pwd);
-  return hasUpper && hasLower && hasNumber && hasSpecial;
+  if (!hasUpper || !hasLower || !hasNumber || !hasSpecial) return false;
+  if (COMMON_COMPROMISED_PASSWORDS.has(pwd.toLowerCase().trim())) return false;
+  return true;
 };
 
 export const formatUserObject = (user) => {
@@ -171,7 +181,7 @@ export const register = async (req, res) => {
     if (!isStrongPassword(password)) {
       return res.status(400).json({
         message:
-          "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+          "Password must be at least 12 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
       });
     }
 
@@ -255,7 +265,7 @@ export const registerGuest = async (req, res) => {
     if (!isStrongPassword(password)) {
       return res.status(400).json({
         message:
-          "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+          "Password must be at least 12 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
       });
     }
 
@@ -577,6 +587,12 @@ export const createStaffAccount = async (req, res) => {
       ? req.body.staffId.trim()
       : `STAFF-${String(staffCount + 1).padStart(3, "0")}`;
 
+    const idFormatRegex = /^(UP-\d{2}-\d{3,4}-[A-Z]|STAFF-\d{3,4})$/i;
+    if (finalStaffId && !idFormatRegex.test(finalStaffId)) {
+      return res.status(400).json({
+        message: "Staff ID must follow the official format: UP-25-795-F (or STAFF-001).",
+      });
+    }
     const existingStaffId = await User.findOne({ studentId: finalStaffId });
     if (existingStaffId) {
       return res.status(409).json({
@@ -589,7 +605,7 @@ export const createStaffAccount = async (req, res) => {
     if (req.body.password) {
       if (!isStrongPassword(req.body.password)) {
         return res.status(400).json({
-          message: "Provided password must be at least 8 characters long and contain uppercase, lowercase, number, and special character with no spaces.",
+          message: "Provided password must be at least 12 characters long and contain uppercase, lowercase, number, and special character with no spaces.",
         });
       }
       tempPassword = req.body.password;
@@ -768,6 +784,12 @@ export const createAdminByAdmin = async (req, res) => {
       ? adminId.trim()
       : `ADMIN-${String(adminCount + 1).padStart(3, "0")}`;
 
+    const adminIdRegex = /^(UP-\d{2}-\d{3,4}-[A-Z]|ADMIN-\d{3,4})$/i;
+    if (finalAdminId && !adminIdRegex.test(finalAdminId)) {
+      return res.status(400).json({
+        message: "Admin ID must follow the official format: UP-25-795-F (or ADMIN-001).",
+      });
+    }
     const existingAdminId = await User.findOne({ studentId: finalAdminId });
     if (existingAdminId) {
       return res.status(409).json({
@@ -779,7 +801,7 @@ export const createAdminByAdmin = async (req, res) => {
     if (req.body.password) {
       if (!isStrongPassword(req.body.password)) {
         return res.status(400).json({
-          message: "Provided password must be at least 8 characters long and contain uppercase, lowercase, number, and special character with no spaces.",
+          message: "Provided password must be at least 12 characters long and contain uppercase, lowercase, number, and special character with no spaces.",
         });
       }
       tempPassword = req.body.password;
@@ -1411,7 +1433,7 @@ export const resetPassword = async (req, res) => {
     if (!isStrongPassword(newPassword)) {
       return res.status(400).json({
         message:
-          "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+          "Password must be at least 12 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
       });
     }
 
@@ -1674,7 +1696,7 @@ export const changePassword = async (req, res) => {
     if (!isStrongPassword(newPassword)) {
       return res.status(400).json({
         message:
-          "New password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+          "New password must be at least 12 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
       });
     }
 
