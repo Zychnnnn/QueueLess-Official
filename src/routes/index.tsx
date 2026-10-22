@@ -2032,11 +2032,11 @@ function QueueLessApp() {
                     onClick={() => setNotificationsOpen(false)}
                   />
 
-                  <div className="absolute right-0 top-12 z-40 w-[min(26rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
-                    <div className="border-b border-border/80 pb-3">
+                  <div className="fixed inset-x-2 top-14 sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 z-40 sm:w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-border bg-card p-3 sm:p-3.5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                    <div className="border-b border-border/80 pb-2.5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <p className="font-display text-base font-bold text-foreground">
+                          <p className="font-display text-sm font-bold text-foreground">
                             Notifications
                           </p>
                           {unreadCount > 0 && (
@@ -6683,6 +6683,8 @@ function StudentPersonalDetailsView({
 
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showFinalConfirmModal, setShowFinalConfirmModal] = useState(false);
+  const [doubleConfirmAgreed, setDoubleConfirmAgreed] = useState(true);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showMissingFieldsModal, setShowMissingFieldsModal] = useState(false);
   const [activeSectionTab, setActiveSectionTab] = useState<"all" | "personal" | "family" | "address" | "course">("all");
@@ -8460,6 +8462,95 @@ function StudentPersonalDetailsView({
         </div>,
         document.body
       )}
+
+      {/* Step 2 of 2: Final Double Confirmation Modal */}
+      {showFinalConfirmModal && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3.5 animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl border border-primary/30 bg-card p-5 shadow-2xl animate-in zoom-in-95 duration-150 text-left">
+            <div className="flex items-center gap-2.5 border-b border-border pb-3 mb-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600">
+                <ShieldAlert className="size-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+                  Step 2 of 2 • Final Authorization
+                </span>
+                <h3 className="font-display text-base font-bold text-foreground">
+                  Confirm Official Request Submission
+                </h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+              Are you sure you want to officially submit this request? Once authorized, your official queue ticket will be created and registrar staff will prepare your school records.
+            </p>
+
+            <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs space-y-1.5 mb-3">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Document:</span>
+                <strong className="text-foreground">{selectedDoc} ({copies}x)</strong>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Purpose:</span>
+                <span className="font-medium text-foreground">{purpose}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">Claimant:</span>
+                <span className="font-semibold text-foreground">{currentUser.name} ({currentUser.studentId})</span>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2.5 p-2 rounded-lg border border-border/80 bg-background text-xs cursor-pointer mb-4">
+              <input
+                type="checkbox"
+                checked={doubleConfirmAgreed}
+                onChange={(e) => setDoubleConfirmAgreed(e.target.checked)}
+                className="mt-0.5 size-4 rounded border-border text-primary focus:ring-primary/20"
+              />
+              <span className="text-[11px] text-muted-foreground leading-snug">
+                I verify that all information provided is accurate and authentic for official school documentation.
+              </span>
+            </label>
+
+            <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowFinalConfirmModal(false);
+                  setShowConfirmModal(true);
+                }}
+                disabled={loading}
+                className="h-8 text-xs cursor-pointer"
+              >
+                ← Back to Review
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={async () => {
+                  await executeSubmit();
+                  setShowFinalConfirmModal(false);
+                }}
+                disabled={loading || !doubleConfirmAgreed}
+                className="h-8 text-xs gap-1.5 cursor-pointer font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" /> Generating Ticket...
+                  </>
+                ) : (
+                  <>
+                    Yes, Submit Request <CheckCircle2 className="size-3.5" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -9536,29 +9627,20 @@ function NewRequest({
                 }
                 className="field"
               >
-                <option value="">
-                  Select a purpose
-                </option>
-
-                <option>
-                  Scholarship application
-                </option>
-
-                <option>
-                  Employment
-                </option>
-
-                <option>
-                  Transfer
-                </option>
-
-                <option>
-                  Board examination
-                </option>
-
-                <option>
-                  Personal record
-                </option>
+                <option value="">Select a purpose</option>
+                <option value="Scholarship application">Scholarship application</option>
+                <option value="Employment (Local)">Employment (Local)</option>
+                <option value="Employment (Overseas / Abroad / POEA / DMW)">Employment (Overseas / Abroad / POEA / DMW)</option>
+                <option value="Board examination / PRC License">Board examination / PRC License</option>
+                <option value="Transfer to another school / Honorable Dismissal">Transfer to another school / Honorable Dismissal</option>
+                <option value="Graduate School / Master's / Doctorate">Graduate School / Master's / Doctorate</option>
+                <option value="Visa / Immigration / Travel requirement">Visa / Immigration / Travel requirement</option>
+                <option value="Civil Service Commission (CSC) Eligibility">Civil Service Commission (CSC) Eligibility</option>
+                <option value="Ranking / Promotion / Salary increment">Ranking / Promotion / Salary increment</option>
+                <option value="Military / PNP / BFP / Coast Guard application">Military / PNP / BFP / Coast Guard application</option>
+                <option value="Legal / Court / Government agency requirement">Legal / Court / Government agency requirement</option>
+                <option value="Personal record / File copy">Personal record / File copy</option>
+                <option value="Other / Institutional evaluation">Other / Institutional evaluation</option>
               </select>
             </Field>
 
@@ -9741,19 +9823,14 @@ function NewRequest({
               <Button
                 type="button"
                 size="sm"
-                onClick={executeSubmit}
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setShowFinalConfirmModal(true);
+                }}
                 disabled={loading}
                 className="h-8 text-xs gap-1.5 cursor-pointer font-bold"
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="size-3.5 animate-spin" /> Submitting...
-                  </>
-                ) : (
-                  <>
-                    Confirm & Submit <CheckCircle2 className="size-3.5" />
-                  </>
-                )}
+                Proceed to Final Confirmation →
               </Button>
             </div>
           </div>
@@ -14946,6 +15023,7 @@ function CampusRegistrarHelperModal({
   };
 
   const [showConfirmDeleteHistory, setShowConfirmDeleteHistory] = useState(false);
+  const [showConfirmNewConvo, setShowConfirmNewConvo] = useState(false);
 
   const handleNewConversation = () => {
     const fresh: HelperChatMessage[] = [
@@ -14990,6 +15068,45 @@ function CampusRegistrarHelperModal({
         className="relative flex flex-col w-full max-w-lg h-[85vh] max-h-[680px] rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* New Conversation Confirmation Dialog */}
+        {showConfirmNewConvo && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+            <div className="w-full max-w-xs rounded-xl border border-primary/30 bg-card p-4 shadow-2xl animate-in zoom-in-95 duration-150 text-left">
+              <div className="flex items-center gap-2 text-primary mb-2">
+                <div className="flex size-7 items-center justify-center rounded-lg bg-primary/15">
+                  <RotateCcw className="size-3.5" />
+                </div>
+                <h4 className="font-display text-sm font-bold text-foreground">
+                  Start New Conversation?
+                </h4>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+                This will reset your current conversation thread and give you a fresh session with the Registrar Assistant.
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowConfirmNewConvo(false)}
+                  className="h-7 text-xs cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setShowConfirmNewConvo(false);
+                    handleNewConversation();
+                  }}
+                  className="h-7 text-xs font-bold gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="size-3" /> Yes, Start New
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Delete History Confirmation Dialog */}
         {showConfirmDeleteHistory && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
@@ -15055,7 +15172,7 @@ function CampusRegistrarHelperModal({
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={handleNewConversation}
+              onClick={() => setShowConfirmNewConvo(true)}
               title="Start new conversation"
               className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted/60 transition cursor-pointer whitespace-nowrap"
             >
@@ -16695,57 +16812,57 @@ function ManageRequests({
         />
       )}
 
-      {/* Staff Accept Request Confirmation Modal */}
+      {/* Staff Accept Request Confirmation Modal (Minimized) */}
       {confirmingAcceptReq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-left">
-            <div className="flex items-center gap-3 border-b border-border pb-4 mb-4">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-600">
-                <CheckCircle2 className="size-6" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-4 shadow-xl animate-in zoom-in-95 duration-150 text-left">
+            <div className="flex items-center gap-2.5 border-b border-border pb-2.5 mb-2.5">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600">
+                <CheckCircle2 className="size-4" />
               </div>
-              <div>
-                <h3 className="font-display text-base font-bold text-foreground">
+              <div className="min-w-0">
+                <h3 className="font-display text-sm font-bold text-foreground truncate">
                   Confirm Accept Request
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   Ticket #{confirmingAcceptReq.id} • Line #{confirmingAcceptReq.lineNumber ?? 1}
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-foreground/90 leading-relaxed mb-4">
-              Are you sure you want to accept this request? By confirming, you will be officially assigned as the handling registrar staff (<strong className="text-foreground">{currentUser?.name || "Registrar Staff"}</strong>).
+            <p className="text-xs text-foreground/90 leading-relaxed mb-2.5">
+              Assign this request to you (<strong className="text-foreground">{currentUser?.name || "Registrar Staff"}</strong>)?
             </p>
 
-            <div className="rounded-xl border border-border bg-muted/40 p-3.5 text-xs space-y-2 mb-4">
-              <div className="flex justify-between">
+            <div className="rounded-lg border border-border bg-muted/40 p-2.5 text-xs space-y-1.5 mb-2.5">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-muted-foreground">Student:</span>
-                <span className="font-semibold text-foreground">{confirmingAcceptReq.student} ({confirmingAcceptReq.studentId})</span>
+                <span className="font-semibold text-foreground truncate max-w-[200px]">{confirmingAcceptReq.student} ({confirmingAcceptReq.studentId})</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-muted-foreground">Document:</span>
-                <span className="font-semibold text-foreground">{confirmingAcceptReq.document} ({confirmingAcceptReq.copies || 1} {confirmingAcceptReq.copies === 1 ? "copy" : "copies"})</span>
+                <span className="font-semibold text-foreground truncate max-w-[200px]">{confirmingAcceptReq.document} ({confirmingAcceptReq.copies || 1}x)</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-muted-foreground">Purpose:</span>
-                <span className="font-medium text-foreground">{confirmingAcceptReq.purpose}</span>
+                <span className="font-medium text-foreground truncate max-w-[200px]">{confirmingAcceptReq.purpose}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center gap-2">
                 <span className="text-muted-foreground">Priority:</span>
                 <span className="font-bold text-foreground">{confirmingAcceptReq.priority || "Regular"}</span>
               </div>
             </div>
 
-            <p className="text-[11px] text-muted-foreground mb-5 italic">
-              * Note: Other registrar staff members will see that you have accepted this ticket and it is your responsibility to finish it.
+            <p className="text-[10px] text-muted-foreground mb-3 italic">
+              * Other staff will see that this ticket is your active assignment.
             </p>
 
-            <div className="flex items-center justify-end gap-2.5">
+            <div className="flex items-center justify-end gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setConfirmingAcceptReq(null)}
-                className="cursor-pointer text-xs"
+                className="h-8 text-xs px-3 cursor-pointer"
               >
                 Cancel
               </Button>
@@ -16759,10 +16876,10 @@ function ManageRequests({
                     await handleAcceptRequest(target);
                   }
                 }}
-                className="cursor-pointer text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="h-8 text-xs font-bold gap-1.5 px-3 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {acceptingId === confirmingAcceptReq.id ? (
-                  <Loader2 className="size-3.5 animate-spin" />
+                  <Loader2 className="size-3 animate-spin" />
                 ) : (
                   <CheckCircle2 className="size-3.5" />
                 )}
@@ -23810,31 +23927,31 @@ function Notice({
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
-      className={`group relative flex gap-3 rounded-xl border p-3 text-left transition ${
+      className={`group relative flex gap-2.5 rounded-lg border p-2.5 text-left transition ${
         isUnread
-          ? "border-primary/40 bg-primary/5 shadow-xs hover:bg-primary/10"
+          ? "border-primary/40 bg-primary/5 shadow-2xs hover:bg-primary/10"
           : "border-border/70 bg-card hover:bg-muted/40"
       } ${onClick ? "cursor-pointer" : ""}`}
     >
       <div
-        className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border ${getIconBg()}`}
+        className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border ${getIconBg()}`}
       >
-        {getIcon()}
+        <span className="scale-85">{getIcon()}</span>
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start justify-between gap-1.5">
           <div className="flex items-start gap-1.5 min-w-0">
             {isUnread && (
-              <span className="mt-1 size-2 shrink-0 rounded-full bg-primary ring-2 ring-card animate-pulse" />
+              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary ring-2 ring-card animate-pulse" />
             )}
-            <p className="text-xs font-bold text-foreground leading-snug line-clamp-2">
+            <p className="text-xs font-bold text-foreground leading-snug line-clamp-1">
               {title}
             </p>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+          <div className="flex items-center gap-1 shrink-0 pt-0.5">
             {time && (
-              <span className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">
+              <span className="text-[9px] text-muted-foreground font-medium whitespace-nowrap">
                 {time}
               </span>
             )}
@@ -23846,9 +23963,9 @@ function Notice({
                   e.stopPropagation();
                   onView(e);
                 }}
-                className="rounded p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition cursor-pointer"
+                className="rounded p-0.5 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition cursor-pointer"
               >
-                <Eye className="size-3.5" />
+                <Eye className="size-3" />
               </button>
             )}
             {onArchive && (
@@ -23859,12 +23976,12 @@ function Notice({
                   e.stopPropagation();
                   onArchive(e);
                 }}
-                className="rounded p-1 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition cursor-pointer"
+                className="rounded p-0.5 text-muted-foreground/60 hover:text-foreground hover:bg-muted transition cursor-pointer"
               >
                 {isArchived ? (
-                  <ArchiveRestore className="size-3.5 text-primary" />
+                  <ArchiveRestore className="size-3 text-primary" />
                 ) : (
-                  <Archive className="size-3.5" />
+                  <Archive className="size-3" />
                 )}
               </button>
             )}
@@ -23876,25 +23993,25 @@ function Notice({
                   e.stopPropagation();
                   onDelete(e);
                 }}
-                className="rounded p-1 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition cursor-pointer"
+                className="rounded p-0.5 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition cursor-pointer"
               >
-                <Trash2 className="size-3.5" />
+                <Trash2 className="size-3" />
               </button>
             )}
           </div>
         </div>
 
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">
+        <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground line-clamp-2">
           {text}
         </p>
 
         {onClick && (
-          <div className="mt-2 flex items-center justify-between">
-            <span className="text-[10px] font-bold text-primary group-hover:underline flex items-center gap-0.5">
-              Open details <ChevronRight className="size-3" />
+          <div className="mt-1.5 flex items-center justify-between">
+            <span className="text-[9px] font-bold text-primary group-hover:underline flex items-center gap-0.5">
+              Open details <ChevronRight className="size-2.5" />
             </span>
             {isUnread && (
-              <span className="text-[9px] font-extrabold uppercase tracking-wider text-primary">
+              <span className="text-[8px] font-extrabold uppercase tracking-wider text-primary">
                 New
               </span>
             )}
