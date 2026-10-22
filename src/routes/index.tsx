@@ -3386,10 +3386,10 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
       return;
     }
 
-    const studentIdPattern = /^\d{2}-\d{4}-\d{5,6}$/;
+    const studentIdPattern = /^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$/;
     if (!studentIdPattern.test(studentId)) {
       setError(
-        "Invalid Student ID format. Please use 00-0000-000000 (e.g. 02-2324-001234)."
+        "Invalid Student ID format. Please use 00-0000-000000 or 00-00-0000-000000 (e.g. 02-2223-012345)."
       );
       return;
     }
@@ -4098,7 +4098,7 @@ function Registration({
               name="studentId"
               required
               className="field"
-              placeholder="02-2324-001234"
+              placeholder="02-2223-012345"
               pattern="^\d{2}-\d{4}-\d{5,6}$"
               title="Please enter in 00-0000-000000 format (e.g. 02-2324-001234)"
             />
@@ -5289,7 +5289,7 @@ function StudentProfileView({
   const [editEmail, setEditEmail] = useState(currentUser.email || "");
 
   // Student ID validation: 03-2223-038512 or max 03-01-2425-045805
-  const studentIdRegex = /^03(-\d{2})?-\d{4}-\d{6}$/;
+  const studentIdRegex = /^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$/;
   const isValidStudentId = (id: string) => studentIdRegex.test(id.trim());
   const handleStudentIdChange = (raw: string) => {
     const cleaned = raw.replace(/[^0-9-]/g, "").slice(0, 17);
@@ -6622,7 +6622,7 @@ function StudentPersonalDetailsView({
 
   // Student ID
   const [editStudentId, setEditStudentId] = useState(currentUser.studentId || "");
-  const studentIdRegex = /^\d{2}(-\d{2})?-\d{4}-\d{5,6}$/;
+  const studentIdRegex = /^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$/;
   const isValidStudentId = (id: string) => studentIdRegex.test(id.trim());
   const handleStudentIdChange = (raw: string) => {
     const cleaned = raw.replace(/[^0-9-]/g, "").slice(0, 17);
@@ -9789,35 +9789,42 @@ const getClearedClaimedIds = (): Set<string> => {
   }
 };
 
+const isClaimedOrDone = (status?: string): boolean => {
+  if (!status) return false;
+  const s = status.toLowerCase().trim();
+  return s === "claimed" || s === "done" || s === "completed" || s === "released";
+};
+
 const getClaimedBackupRecords = (allRequests: RequestItem[]): ClaimedRecordBackup[] => {
   try {
-    const clearedIds = getClearedClaimedIds();
     const raw = localStorage.getItem("queueless_claimed_backup");
     let stored: ClaimedRecordBackup[] = raw ? JSON.parse(raw) : [];
 
-    // Clean ghost records and filter out cleared IDs so deleted archive records never resurrect
-    stored = stored.filter((item) => !clearedIds.has(item.id));
-    const claimedInRequests = allRequests.filter((r) => r.status === "Claimed" && !clearedIds.has(r.id));
-    const claimedIds = new Set(claimedInRequests.map((r) => r.id));
-    stored = stored.filter((item) => claimedIds.has(item.id));
+    // Identify all requests matching Claimed or Done
+    const claimedOrDoneInRequests = (allRequests || []).filter((r) => isClaimedOrDone(r.status));
 
-    claimedInRequests.forEach((req) => {
-      if (!stored.some((item) => item.id === req.id)) {
-        stored.unshift({
-          id: req.id,
-          student: req.student,
-          studentId: req.studentId,
-          document: req.document,
-          purpose: req.purpose,
-          remarks: req.remarks || "",
-          date: req.date,
-          claimedAt: req.pickupDate || req.date || "Completed",
-          releasedBy: "Registrar Counter Officer",
-          lineNumber: req.lineNumber,
-          priority: req.priority,
-          copies: req.copies || 1,
-          pickupDate: req.pickupDate,
-        });
+    claimedOrDoneInRequests.forEach((req) => {
+      const idx = stored.findIndex((item) => item.id === req.id);
+      const record: ClaimedRecordBackup = {
+        id: req.id,
+        student: req.student,
+        studentId: req.studentId,
+        document: req.document,
+        purpose: req.purpose,
+        remarks: req.remarks || "",
+        date: req.date,
+        claimedAt: req.pickupDate || req.date || "Completed",
+        releasedBy: req.assignedStaffName || "Registrar Counter Officer",
+        lineNumber: req.lineNumber,
+        priority: req.priority,
+        copies: req.copies || 1,
+        pickupDate: req.pickupDate,
+      };
+
+      if (idx >= 0) {
+        stored[idx] = { ...stored[idx], ...record };
+      } else {
+        stored.unshift(record);
       }
     });
 
@@ -10187,24 +10194,7 @@ function StaffView({
               >
                 <Printer className="size-3.5" /> Export (.CSV)
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  if (window.confirm("Are you sure you want to clear and reset all archived release slips?")) {
-                    localStorage.removeItem("queueless_claimed_backup");
-                    setBackupRecords([]);
-                    setFlash({
-                      tone: "success",
-                      text: "Archived release slips cleared. Ledger starts fresh at (0).",
-                    });
-                  }
-                }}
-                disabled={backupRecords.length === 0}
-                className="gap-1.5 text-xs h-9 cursor-pointer font-medium text-destructive hover:bg-destructive/10 hover:text-destructive border-border hover:border-destructive/30"
-              >
-                <Trash2 className="size-3.5" /> Clear Archive
-              </Button>
+
               <Button
                 size="sm"
                 variant="default"
@@ -14627,6 +14617,48 @@ function CampusRegistrarHelperModal({
       };
     }
 
+    // 2.5 Counter & Window Claiming Guide
+    if (q.includes("counter") || q.includes("window") || q.includes("releasing desk") || q.includes("saan kukunin") || q.includes("window 1") || q.includes("window 2") || q.includes("window 3") || q.includes("window 5")) {
+      return {
+        text: "**UPang Registrar Counter Windows Directory:**\n\n" +
+          "• **Window 1 (Requesting & Receiving):** Document submission, new requests verification, and basic inquiries.\n" +
+          "• **Window 2 (Releasing Desk & Evaluation):** Transcript evaluation, claiming of certified copies, and student verification.\n" +
+          "• **Window 3 (Transcripts & Certifications):** Official Transcript of Records (TOR) processing and certifications.\n" +
+          "• **Window 4 (Clearance & Records):** Graduation clearance, honorable dismissal, and institutional records archiving.\n" +
+          "• **Window 5 / 6 / 7 (Releasing Desks):** Physical document claim stubs inspection and sealed credentials releasing.\n\n" +
+          "💡 **Important:** When claiming your prepared document, check your **Student Queue Slip** for the exact assigned counter window specified by the registrar officer!",
+        chips: ["What are the requirements to claim?", "How does Queue Line work?", "What are your office hours?", "How to track document status?"],
+      };
+    }
+
+    // 2.6 Personal Details Requirement Explanation
+    if (q.includes("personal details") || q.includes("bakit kailangan") || q.includes("required ba") || q.includes("fill up")) {
+      return {
+        text: "**Why Are Personal Details Required?**\n\n" +
+          "Pursuant to PHINMA Education and University Registrar regulations, your **official personal, family, address, and educational details** are required because:\n" +
+          "1. **Accuracy of School Records:** Certified credentials (TOR, Diplomas, Good Moral) strictly embed your full legal name, date of birth, home address, and parent/guardian records.\n" +
+          "2. **CHED & DepEd Compliance:** University clearances mandate verified academic records from primary to tertiary education.\n" +
+          "3. **Secure Identity Verification:** Ensures documents are strictly claimed by legitimate students or duly authorized representatives.\n\n" +
+          "📌 Note: Phone/mobile numbers are optional, but all institutional record fields must be completed before submitting requests.",
+        chips: ["How to request document?", "Requirements to claim", "Where is the Dagupan campus?"],
+      };
+    }
+
+    // 2.7 Tracking Request & Queue Line Number
+    if (q.includes("track") || q.includes("status") || q.includes("queue line") || q.includes("queue number") || q.includes("pila")) {
+      return {
+        text: "**How Queue Line & Status Tracking Work:**\n\n" +
+          "• **Queue Line #:** Automatically generated upon request submission. Displays your current live queue position and priority lane.\n" +
+          "• **Workflow Statuses:**\n" +
+          "  1. **Pending:** Request submitted and queued for registrar document verification.\n" +
+          "  2. **Processing:** Registrar officer is printing, signing, and dry-sealing your credentials.\n" +
+          "  3. **Ready for Claiming:** Your document is prepared and waiting at the counter! You can now visit the Registrar's Office.\n" +
+          "  4. **Claimed:** Successfully claimed and permanently recorded in the institutional archive.\n\n" +
+          "You can view your digital receipt anytime under the **Track Request** tab in your dashboard.",
+        chips: ["What are the requirements to claim?", "Counter Windows Guide", "Office hours & location"],
+      };
+    }
+
     // 3. Contacts / email / phone
     if (q.includes("contact") || q.includes("email") || q.includes("phone") || q.includes("call") || q.includes("number")) {
       return {
@@ -16999,11 +17031,13 @@ function AdminOperationsAndArchivePanel({
     const cat = (l.targetCategory || "").toLowerCase();
     return (
       cat === "users" ||
-      ((act.includes("delete") || act.includes("remove") || act.includes("reject")) &&
-        (act.includes("user") || act.includes("account") || det.includes("user") || det.includes("student"))) ||
+      act.includes("delete") ||
+      act.includes("remove") ||
+      act.includes("reject") ||
       det.includes("deleted user") ||
       det.includes("removed account") ||
-      det.includes("application rejected")
+      det.includes("rejected") ||
+      Boolean((l as any).metadata?.deletedUser || (l as any).metadata?.rejectedUser)
     );
   }).filter((l) => {
     if (!deletedSearch.trim()) return true;
@@ -17166,15 +17200,7 @@ function AdminOperationsAndArchivePanel({
               >
                 <Printer className="size-3.5" /> Export (.CSV)
               </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleOpenClearModal}
-                disabled={backupRecords.length === 0}
-                className="gap-1.5 text-xs h-9 cursor-pointer font-medium text-destructive hover:bg-destructive/10 hover:text-destructive border-border hover:border-destructive/30"
-              >
-                <Trash2 className="size-3.5" /> Clear Archive Slips
-              </Button>
+
               <Button
                 size="sm"
                 variant="default"
@@ -20549,9 +20575,9 @@ function UsersPanel({
       return;
     }
 
-    const adminIdRegex = /^(UP-\d{2}-\d{3,4}-[A-Z]|ADMIN-\d{3,4})$/i;
+    const adminIdRegex = /^(ADMIN-\d{3}|UP-\d{2}-\d{3}-[A-Z])$/i;
     if (trimmedId && !adminIdRegex.test(trimmedId)) {
-      setAdminValidationError("Admin ID must follow the official institutional format: UP-25-795-F (or leave blank for auto-generation).");
+      setAdminValidationError("Admin ID must follow official format: ADMIN-000 (e.g. ADMIN-001) or UP-00-000-F.");
       return;
     }
 
@@ -20662,9 +20688,9 @@ function UsersPanel({
       return;
     }
 
-    const staffIdRegex = /^(UP-\d{2}-\d{3,4}-[A-Z]|STAFF-\d{3,4})$/i;
+    const staffIdRegex = /^(UP-\d{2}-\d{3}-[A-Z]|STAFF-\d{3})$/i;
     if (trimmedId && !staffIdRegex.test(trimmedId)) {
-      setValidationError("Staff ID must follow the official institutional format: UP-25-795-F (or leave blank for auto-generation).");
+      setValidationError("Staff ID must follow official format: UP-00-000-F (e.g. UP-25-795-F) or STAFF-001.");
       return;
     }
 
@@ -20796,8 +20822,9 @@ function UsersPanel({
       setStudentValidationError("Student ID is required (e.g. 02-2223-012345).");
       return;
     }
-    if (trimmedId.length < 5) {
-      setStudentValidationError("Student ID must be at least 5 characters long.");
+    const studentIdRegex = /^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$/;
+    if (!studentIdRegex.test(trimmedId)) {
+      setStudentValidationError("Student ID must follow format: 00-0000-000000 or 00-00-0000-000000 (e.g. 02-2223-012345).");
       return;
     }
 
@@ -20945,6 +20972,9 @@ function UsersPanel({
         const existing = JSON.parse(localStorage.getItem("queueless_deleted_users_backup") || "[]");
         existing.unshift(backupEntry);
         localStorage.setItem("queueless_deleted_users_backup", JSON.stringify(existing.slice(0, 200)));
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("storage"));
+        }
       } catch {}
 
       // Call API delete and audit-log
@@ -21060,6 +21090,9 @@ function UsersPanel({
           reason: "Registrar Admission Review - Rejected",
         });
         localStorage.setItem("queueless_deleted_users_backup", JSON.stringify(existing.slice(0, 200)));
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("storage"));
+        }
       } catch {}
 
       setFlash({

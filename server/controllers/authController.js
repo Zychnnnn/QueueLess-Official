@@ -159,11 +159,11 @@ export const register = async (req, res) => {
       });
     }
 
-    const studentIdPattern = /^\d{2}-\d{4}-\d{5,6}$/;
+    const studentIdPattern = /^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$/;
     if (!studentIdPattern.test(cleanStudentId)) {
       return res.status(400).json({
         message:
-          "Invalid Student ID format. Please use the format 00-0000-000000 (e.g. 02-2324-001234).",
+          "Invalid Student ID format. Please use the format 00-0000-000000 or 00-00-0000-000000 (e.g. 02-2223-012345).",
       });
     }
 
@@ -587,10 +587,10 @@ export const createStaffAccount = async (req, res) => {
       ? req.body.staffId.trim()
       : `STAFF-${String(staffCount + 1).padStart(3, "0")}`;
 
-    const idFormatRegex = /^(UP-\d{2}-\d{3,4}-[A-Z]|STAFF-\d{3,4})$/i;
+    const idFormatRegex = /^(UP-\d{2}-\d{3}-[A-Z]|STAFF-\d{3,4})$/i;
     if (finalStaffId && !idFormatRegex.test(finalStaffId)) {
       return res.status(400).json({
-        message: "Staff ID must follow the official format: UP-25-795-F (or STAFF-001).",
+        message: "Staff ID must follow the official format: UP-00-000-F (e.g. UP-25-795-F) or STAFF-001.",
       });
     }
     const existingStaffId = await User.findOne({ studentId: finalStaffId });
@@ -784,10 +784,10 @@ export const createAdminByAdmin = async (req, res) => {
       ? adminId.trim()
       : `ADMIN-${String(adminCount + 1).padStart(3, "0")}`;
 
-    const adminIdRegex = /^(UP-\d{2}-\d{3,4}-[A-Z]|ADMIN-\d{3,4})$/i;
+    const adminIdRegex = /^(ADMIN-\d{3}|UP-\d{2}-\d{3}-[A-Z])$/i;
     if (finalAdminId && !adminIdRegex.test(finalAdminId)) {
       return res.status(400).json({
-        message: "Admin ID must follow the official format: UP-25-795-F (or ADMIN-001).",
+        message: "Admin ID must follow the official format: ADMIN-000 (e.g. ADMIN-001) or UP-00-000-F.",
       });
     }
     const existingAdminId = await User.findOne({ studentId: finalAdminId });
@@ -935,6 +935,27 @@ export const rejectUser = async (req, res) => {
     user.approvalStatus = "rejected";
     await user.save();
 
+    await recordAuditLog({
+      actorName: req.user?.name || "Administrator",
+      actorEmail: req.user?.email || "",
+      actorRole: req.user?.role || "admin",
+      actorId: req.user?.studentId || req.user?.id || "ADMIN",
+      targetCategory: "users",
+      action: `Rejected Registration: ${user.name} (${user.role})`,
+      details: `Account registration for ${user.name} (${user.role}, ${user.email}, ID: ${user.studentId || "N/A"}) was rejected by ${req.user?.name || "Administrator"}.`,
+      status: "Warning",
+      metadata: {
+        rejectedUser: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          studentId: user.studentId,
+          rejectedAt: new Date().toISOString(),
+        },
+      },
+    });
+
     sendAccountStatusNotification({
       toEmail: user.email,
       name: user.name,
@@ -980,7 +1001,7 @@ export const deleteUser = async (req, res) => {
     await User.findByIdAndDelete(id);
 
     const deleteReason = req.body?.reason || "Administrative removal";
-    recordAuditLog({
+    await recordAuditLog({
       actorName: req.user?.name || "Administrator",
       actorEmail: req.user?.email || "",
       actorRole: req.user?.role || "admin",
@@ -989,6 +1010,17 @@ export const deleteUser = async (req, res) => {
       action: `Deleted User Account: ${user.name} (${user.role})`,
       details: `User account for ${user.name} (${user.role}, ${user.email}, ID: ${user.studentId || "N/A"}) was deleted. Reason: ${deleteReason}`,
       status: "Warning",
+      metadata: {
+        deletedUser: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          studentId: user.studentId,
+          deletedAt: new Date().toISOString(),
+          reason: deleteReason,
+        },
+      },
     });
 
     return res.status(200).json({

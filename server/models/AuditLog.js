@@ -29,7 +29,6 @@ const auditLogSchema = new mongoose.Schema(
     },
     targetCategory: {
       type: String,
-      enum: ["staff", "priority", "student", "guest", "system"],
       required: true,
       default: "student",
     },
