@@ -514,14 +514,16 @@ export const verifyLoginOtp = async (req, res) => {
     try {
       const securityToken = generateSecurityActionToken(user._id);
       const frontendBase = process.env.FRONTEND_URL || process.env.VITE_APP_URL || "https://queue-less-official.vercel.app";
-      const securityActionUrl = `${frontendBase}?security-action=${encodeURIComponent(securityToken)}&email=${encodeURIComponent(user.email)}`;
+      const logoutUrl = `${frontendBase}?security-action=logout&token=${encodeURIComponent(securityToken)}&email=${encodeURIComponent(user.email)}`;
+      const resetPasswordUrl = `${frontendBase}?security-action=reset-password&token=${encodeURIComponent(securityToken)}&email=${encodeURIComponent(user.email)}`;
 
       sendSecurityConfirmationEmail({
         toEmail: user.email,
         userName: user.name,
         actionType: "Account Sign-In (Verified)",
         details: `Your QueueLess account was accessed via verified OTP authentication on ${new Date().toLocaleString()}. You can continue using QueueLess safely.`,
-        securityActionUrl,
+        logoutUrl,
+        resetPasswordUrl,
       }).catch((err) => console.error("OTP login security email error:", err));
     } catch (err) {
       console.error("Error sending OTP login security notice:", err);
@@ -1234,14 +1236,16 @@ export const googleLogin = async (req, res) => {
     // Generate a time-limited security action token for "That wasn't me"
     const securityToken = generateSecurityActionToken(user._id);
     const frontendBase = process.env.FRONTEND_URL || process.env.VITE_APP_URL || "https://queue-less-official.vercel.app";
-    const securityActionUrl = `${frontendBase}?security-action=${encodeURIComponent(securityToken)}`;
+    const logoutUrl = `${frontendBase}?security-action=logout&token=${encodeURIComponent(securityToken)}&email=${encodeURIComponent(user.email)}`;
+    const resetPasswordUrl = `${frontendBase}?security-action=reset-password&token=${encodeURIComponent(securityToken)}&email=${encodeURIComponent(user.email)}`;
 
     sendSecurityConfirmationEmail({
       toEmail: user.email,
       userName: user.name,
       actionType: "Google Sign-In",
       details: `Your account was accessed via Google authentication on ${new Date().toLocaleString()}. You can continue using QueueLess system safely.`,
-      securityActionUrl,
+      logoutUrl,
+      resetPasswordUrl,
     }).catch((err) => console.error("Google sign-in security email error:", err));
 
     const isGuest = isGuestAccount(user);

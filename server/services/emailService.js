@@ -49,6 +49,10 @@ export const sendOtpEmail = async (toEmail, otp, customSubject) => {
     return { sent: false, reason: "credentials_not_configured" };
   }
 
+  const frontendBase = process.env.FRONTEND_URL || process.env.VITE_APP_URL || "https://queue-less-official.vercel.app";
+  const effectiveLogoutUrl = logoutUrl || securityActionUrl || `${frontendBase}?security-action=logout&email=${encodeURIComponent(toEmail)}`;
+  const effectiveResetUrl = resetPasswordUrl || securityActionUrl || `${frontendBase}?security-action=reset-password&email=${encodeURIComponent(toEmail)}`;
+
   const transport = getTransporter();
 
   const mailOptions = {
@@ -365,6 +369,8 @@ export const sendSecurityConfirmationEmail = async ({
   userName,
   actionType,
   details,
+  logoutUrl,
+  resetPasswordUrl,
   securityActionUrl,
 }) => {
   const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
@@ -410,24 +416,43 @@ export const sendSecurityConfirmationEmail = async ({
           If this was you, you can continue using the <strong>QueueLess System</strong> safely. No further action is required.
         </p>
 
-        <div style="background-color: #fef2f2; border-radius: 8px; padding: 16px; border: 1px solid #fee2e2; margin-bottom: 4px; text-align: left;">
-          <p style="color: #991b1b; font-size: 13px; font-weight: 700; margin: 0 0 6px;">
-            ⚠️ Didn't make this request? (That wasn't me)
-          </p>
-          <p style="color: #7f1d1d; font-size: 12px; line-height: 1.5; margin: 0 0 12px;">
-            If you did not authorize this sign-in or recent activity, please secure your account immediately. You can log out of all active sessions and change your password:
-          </p>
-          ${
-            securityActionUrl
-              ? `<div style="text-align: center; margin-top: 8px;">
-                   <a href="${securityActionUrl}" style="display: inline-block; background-color: #dc2626; color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; padding: 10px 22px; border-radius: 6px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(220,38,38,0.25);">
-                     ⚠ That wasn't me — Log Out & Secure Account
-                   </a>
-                 </div>`
-              : `<p style="color: #b91c1c; font-size: 11px; margin: 0; font-style: italic;">
-                   Please secure your account immediately or contact the Registrar's Office.
-                 </p>`
-          }
+        <div style="background-color: #fef2f2; border-radius: 12px; padding: 20px; border: 1px solid #fee2e2; margin-top: 20px; text-align: left;">
+          <div style="margin-bottom: 14px;">
+            <p style="color: #991b1b; font-size: 15px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.3px;">
+              ⚠️ Security Alert: Was this not you?
+            </p>
+            <p style="color: #7f1d1d; font-size: 12px; line-height: 1.5; margin: 0;">
+              Confirm unauthorized sign-in or activity. If you did not perform this action, choose an option below to secure your account immediately:
+            </p>
+          </div>
+
+          <!-- Option 1: Log Out of All Devices -->
+          <div style="background-color: #ffffff; border: 1px solid #fecaca; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+            <div style="margin-bottom: 6px;">
+              <span style="color: #b91c1c; font-size: 13px; font-weight: 700;">Log Out of All Devices</span>
+              <span style="background-color: #fee2e2; color: #991b1b; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; margin-left: 6px; text-transform: uppercase;">Immediate</span>
+            </div>
+            <p style="color: #4b5563; font-size: 12px; line-height: 1.45; margin: 0 0 12px;">
+              Instantly terminates all active sessions everywhere. The unauthorized user is kicked out immediately.
+            </p>
+            <a href="${effectiveLogoutUrl}" style="display: inline-block; background-color: #dc2626; color: #ffffff; font-size: 12px; font-weight: 700; text-decoration: none; padding: 9px 20px; border-radius: 6px; letter-spacing: 0.2px;">
+              🔒 Log Out of All Devices
+            </a>
+          </div>
+
+          <!-- Option 2: Log Out Everywhere & Change Password -->
+          <div style="background-color: #ffffff; border: 1px solid #bbf7d0; border-radius: 10px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+            <div style="margin-bottom: 6px;">
+              <span style="color: #166534; font-size: 13px; font-weight: 700;">Log Out Everywhere & Change Password</span>
+              <span style="background-color: #dcfce7; color: #166534; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; margin-left: 6px; text-transform: uppercase;">Recommended</span>
+            </div>
+            <p style="color: #4b5563; font-size: 12px; line-height: 1.45; margin: 0 0 12px;">
+              Kicks out all sessions AND lets you set a new secure password right now so no one can access your account again.
+            </p>
+            <a href="${effectiveResetUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; font-size: 12px; font-weight: 700; text-decoration: none; padding: 9px 20px; border-radius: 6px; letter-spacing: 0.2px;">
+              🔑 Log Out & Change Password
+            </a>
+          </div>
         </div>
 
         <p style="color: #9ca3af; font-size: 11px; margin: 24px 0 0; text-align: center; border-top: 1px solid #f3f4f6; padding-top: 16px;">

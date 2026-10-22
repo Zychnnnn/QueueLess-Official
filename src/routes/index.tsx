@@ -839,17 +839,47 @@ function QueueLessApp() {
     }
   };
 
-  // Listen for ?security-action= query parameter ("That wasn't me" link from email)
+  // Listen for ?security-action= query parameter ("That wasn't me" direct actions from email)
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search) {
       const params = new URLSearchParams(window.location.search);
-      const secToken = params.get("security-action");
-      if (secToken) {
-        if (secToken === "self-report") {
-          setSecurityActionToken(null);
-          setSecurityActionStatus("choose");
-          return;
-        }
+      const secAction = params.get("security-action");
+      const secToken = params.get("token") || (secAction && secAction !== "logout" && secAction !== "reset-password" ? secAction : null);
+
+      if (secAction === "logout" && secToken) {
+        // Option 1 from email: User clicked "Log Out of All Devices" directly in the email
+        setSecurityActionToken(secToken);
+        setSecurityActionStatus("verifying");
+        setSecurityActionLoading(true);
+        fetch(`${API_URL}/api/auth/report-unauthorized`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: secToken, action: "logout" }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            setSecurityActionLoading(false);
+            localStorage.removeItem("queueless_token");
+            localStorage.removeItem("queueless_user");
+            setSignedIn(false);
+            setCurrentUser(null);
+            if (data.success || data.action) {
+              setSecurityActionDoneMessage(
+                data.message || "All active sessions have been terminated. Your account is now secured."
+              );
+              setSecurityActionStatus("done");
+            } else {
+              setSecurityActionStatus("error");
+              setSecurityActionError(data.message || "This security link has expired or has already been used.");
+            }
+          })
+          .catch(() => {
+            setSecurityActionLoading(false);
+            setSecurityActionStatus("error");
+            setSecurityActionError("Network error while securing account. Please try again.");
+          });
+      } else if (secAction === "reset-password" && secToken) {
+        // Option 2 from email: User clicked "Log Out Everywhere & Change Password" directly in the email
         setSecurityActionToken(secToken);
         setSecurityActionStatus("verifying");
         setSecurityActionLoading(true);
@@ -863,10 +893,11 @@ function QueueLessApp() {
             setSecurityActionLoading(false);
             if (data.valid) {
               setSecurityActionData(data);
-              setSecurityActionStatus("choose");
+              // Open change password directly (skips the selection modal)
+              setSecurityActionStatus("changing-password");
             } else {
               setSecurityActionStatus("error");
-              setSecurityActionError(data.message || "Invalid or expired security verification link.");
+              setSecurityActionError(data.message || "This security link has expired or is invalid.");
             }
           })
           .catch(() => {
@@ -6234,31 +6265,6 @@ function StudentProfileView({
 
         {/* Right: Account Security */}
         <div className="space-y-6">
-
-          {/* Unfamiliar Activity / That wasn't me Card */}
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 shadow-sm text-left">
-            <h3 className="font-display text-sm font-bold text-destructive flex items-center gap-2">
-              <ShieldAlert className="size-4.5" /> Unfamiliar Login? That wasn't me
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-              Did you receive a security notice regarding an unauthorized Google sign-in or device? You can immediately terminate all active sessions across all devices or choose to change your password.
-            </p>
-            <div className="mt-3.5 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  const newUrl = window.location.pathname + "?security-action=self-report" + window.location.hash;
-                  window.history.pushState({}, "", newUrl);
-                  window.location.reload();
-                }}
-                className="text-xs font-bold gap-1.5 cursor-pointer shadow-xs"
-              >
-                <LogOut className="size-3.5" /> That wasn't me — Log Out Everywhere
-              </Button>
-            </div>
-          </div>
 
           {/* Change Password Card */}
           <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -15573,88 +15579,6 @@ function SecurityActionModal({
           </div>
         )}
 
-        {status === "choose" && (
-          <div>
-            <div className="flex items-center gap-3 border-b border-border pb-3 mb-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
-                <ShieldAlert className="size-5" />
-              </div>
-              <div>
-                <h3 className="font-display text-base font-bold text-foreground">
-                  Security Alert: Was this not you?
-                </h3>
-                <p className="text-xs text-muted-foreground">
-                  Confirm unauthorized sign-in or activity
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-foreground/90 leading-relaxed mb-4">
-              Hello <strong className="text-foreground">{userData?.name || "QueueLess User"}</strong>, you received a security notice regarding recent activity on <strong className="text-foreground">{userData?.email || "your account"}</strong>. If you did not perform this action, choose an option below to secure your account immediately:
-            </p>
-
-            <div className="space-y-2.5 mb-4">
-              {/* Option 1: Log out everywhere */}
-              <button
-                type="button"
-                onClick={onRevokeAllSessions}
-                disabled={loading}
-                className="w-full text-left p-3.5 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 hover:border-destructive/40 transition-all cursor-pointer group"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive group-hover:bg-destructive group-hover:text-white transition-colors mt-0.5">
-                    <LogOut className="size-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground flex items-center justify-between">
-                      <span>Log Out of All Devices</span>
-                      <span className="text-[10px] text-destructive font-semibold">Immediate</span>
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                      Instantly terminates all active sessions everywhere. The unauthorized user is kicked out immediately.
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              {/* Option 2: Log out everywhere & change password */}
-              <button
-                type="button"
-                onClick={() => onResetStatus("changing-password")}
-                disabled={loading}
-                className="w-full text-left p-3.5 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 transition-all cursor-pointer group"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors mt-0.5">
-                    <Lock className="size-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-foreground flex items-center justify-between">
-                      <span>Log Out Everywhere & Change Password</span>
-                      <span className="text-[10px] text-primary font-bold">Recommended</span>
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                      Kicks out all sessions AND lets you set a new secure password right now so no one can access your account again.
-                    </p>
-                  </div>
-                </div>
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between border-t border-border pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                disabled={loading}
-                className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-              >
-                Never mind, this was me
-              </Button>
-            </div>
-          </div>
-        )}
-
         {status === "changing-password" && (
           <form
             onSubmit={(e) => {
@@ -15763,11 +15687,11 @@ function SecurityActionModal({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => onResetStatus("choose")}
+                onClick={onClose}
                 disabled={loading}
                 className="text-xs cursor-pointer"
               >
-                Back
+                Cancel
               </Button>
               <Button
                 type="submit"
