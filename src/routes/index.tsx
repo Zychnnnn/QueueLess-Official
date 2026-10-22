@@ -21250,6 +21250,7 @@ function UsersPanel({
       return null;
     }
   }, []);
+  const currentUser = currentAdmin;
 
   const fetchUsers = async () => {
     const token = localStorage.getItem("queueless_token");
@@ -22861,42 +22862,42 @@ function UsersPanel({
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+            className="w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card p-4 sm:p-5 shadow-2xl scrollbar-thin"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-                <AlertTriangle className="size-5" />
+            <div className="flex items-center gap-2.5">
+              <div className="flex size-8 items-center justify-center rounded-full bg-destructive/10 text-destructive shrink-0">
+                <AlertTriangle className="size-4" />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-foreground">
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-foreground">
                   Delete User Account
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground truncate">
                   This action is permanent and removes the account completely.
                 </p>
               </div>
             </div>
 
-            <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-xs">
-              <p className="font-semibold text-destructive">
+            <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs">
+              <p className="font-semibold text-destructive text-[11.5px]">
                 Are you sure you want to permanently delete this user?
               </p>
-              <div className="mt-3 space-y-1.5 border-t border-destructive/10 pt-2.5 text-muted-foreground">
-                <p>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 border-t border-destructive/10 pt-2 text-[11px] text-muted-foreground">
+                <p className="truncate">
                   <strong className="text-foreground">Name:</strong>{" "}
                   {userToDelete.name}
                 </p>
-                <p>
+                <p className="truncate">
                   <strong className="text-foreground">Role:</strong>{" "}
                   <span className="capitalize">{userToDelete.role}</span>
                 </p>
-                <p>
+                <p className="truncate sm:col-span-2">
                   <strong className="text-foreground">Email:</strong>{" "}
                   {userToDelete.email}
                 </p>
                 {userToDelete.studentId && (
-                  <p>
+                  <p className="truncate sm:col-span-2">
                     <strong className="text-foreground">ID:</strong>{" "}
                     {userToDelete.studentId}
                   </p>
@@ -22904,12 +22905,12 @@ function UsersPanel({
               </div>
             </div>
 
-            <div className="mt-4">
-              <label className="text-xs font-bold text-foreground block mb-1.5">Reason for Deletion *</label>
+            <div className="mt-3">
+              <label className="text-[11px] font-bold text-foreground block mb-1">Reason for Deletion *</label>
               <select
                 value={deleteReason}
                 onChange={(e) => setDeleteReason(e.target.value)}
-                className="field text-xs cursor-pointer"
+                className="field h-8 text-xs cursor-pointer"
                 required
               >
                 <option value="">Select a reason</option>
@@ -22925,10 +22926,12 @@ function UsersPanel({
               </select>
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="h-8 text-xs cursor-pointer"
                 onClick={() => setShowDeleteConfirmModal(false)}
                 disabled={deleteLoading}
               >
@@ -22937,12 +22940,14 @@ function UsersPanel({
               <Button
                 type="button"
                 variant="destructive"
+                size="sm"
+                className="h-8 text-xs font-bold cursor-pointer"
                 onClick={handleConfirmDelete}
                 disabled={deleteLoading || !deleteReason}
               >
                 {deleteLoading ? (
                   <>
-                    <Loader2 className="size-4 animate-spin" />
+                    <Loader2 className="size-3.5 animate-spin" />
                     Deleting...
                   </>
                 ) : (
