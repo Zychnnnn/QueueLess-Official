@@ -728,7 +728,7 @@ function QueueLessApp() {
     title: string;
   } | null>(null);
 
-  const [notificationTab, setNotificationTab] = useState<"inbox" | "archived">("inbox");
+  const [notificationTab, setNotificationTab] = useState<"inbox" | "archived" | "deleted">("inbox");
 
   const archiveNotification = (id: string, title?: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -775,6 +775,17 @@ function QueueLessApp() {
     if (title) {
       setNotificationUndoAction({ type: "delete", id, title });
     }
+  };
+
+  const restoreDeletedNotification = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setDeletedNotificationIds((prev) => {
+      const next = prev.filter((item) => item !== id);
+      try {
+        localStorage.setItem("queueless_deleted_notifications", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   };
 
   const handleUndoNotificationAction = () => {
@@ -1710,6 +1721,10 @@ function QueueLessApp() {
     return visibleNotifications.filter((n) => archivedNotificationIds.includes(n.id));
   }, [visibleNotifications, archivedNotificationIds]);
 
+  const deletedNotifications = useMemo(() => {
+    return notifications.filter((n) => deletedNotificationIds.includes(n.id));
+  }, [notifications, deletedNotificationIds]);
+
   const unreadCount = useMemo(() => {
     return activeNotifications.filter((n) => !readNotificationIds.includes(n.id))
       .length;
@@ -2274,7 +2289,7 @@ function QueueLessApp() {
                         <button
                           type="button"
                           onClick={() => setNotificationTab("archived")}
-                          className={`flex-1 flex items-center justify-center gap-1.5 rounded-md py-1 font-semibold transition cursor-pointer ${
+                          className={`flex-1 flex items-center justify-center gap-1 rounded-md py-1 font-semibold transition cursor-pointer ${
                             notificationTab === "archived"
                               ? "bg-card text-foreground shadow-xs"
                               : "text-muted-foreground hover:text-foreground"
@@ -2283,8 +2298,26 @@ function QueueLessApp() {
                           <Archive className="size-3.5" />
                           <span>Archived</span>
                           {archivedNotifications.length > 0 && (
-                            <span className="rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[10px] font-bold text-muted-foreground">
+                            <span className="rounded-full bg-muted-foreground/20 px-1.5 py-0.2 text-[9px] font-bold text-muted-foreground">
                               {archivedNotifications.length}
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setNotificationTab("deleted")}
+                          className={`flex-1 flex items-center justify-center gap-1 rounded-md py-1 font-semibold transition cursor-pointer ${
+                            notificationTab === "deleted"
+                              ? "bg-card text-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <Trash2 className="size-3.5" />
+                          <span>Deleted</span>
+                          {deletedNotifications.length > 0 && (
+                            <span className="rounded-full bg-destructive/15 px-1.5 py-0.2 text-[9px] font-bold text-destructive">
+                              {deletedNotifications.length}
                             </span>
                           )}
                         </button>
@@ -2368,7 +2401,7 @@ function QueueLessApp() {
                             }}
                           />
                         ))
-                      ) : (
+                      ) : notificationTab === "archived" ? (
                         <div className="py-8 text-center">
                           <Archive className="mx-auto size-8 text-muted-foreground/40 mb-2" />
                           <p className="text-sm font-medium text-foreground">
@@ -2378,6 +2411,48 @@ function QueueLessApp() {
                             Notifications you archive will be kept here.
                           </p>
                         </div>
+                      ) : (
+                        deletedNotifications.length > 0 ? (
+                          deletedNotifications.map((notification) => (
+                            <div
+                              key={notification.id}
+                              className="rounded-xl border border-border/80 bg-muted/20 p-2.5 text-xs transition hover:bg-muted/40 space-y-1.5 text-left"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-bold text-foreground text-xs truncate">
+                                    {notification.title}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
+                                    {notification.text}
+                                  </p>
+                                  <span className="text-[10px] text-muted-foreground/70 mt-1 block font-mono">
+                                    {notification.time}
+                                  </span>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={(e) => restoreDeletedNotification(notification.id, e)}
+                                  className="h-7 px-2.5 text-[11px] font-bold text-primary border-primary/30 hover:bg-primary/10 gap-1 cursor-pointer shrink-0"
+                                  title="Restore notification to Inbox"
+                                >
+                                  <RotateCcw className="size-3" /> Undo
+                                </Button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="py-8 text-center">
+                            <Trash2 className="mx-auto size-8 text-muted-foreground/40 mb-2" />
+                            <p className="text-sm font-medium text-foreground">
+                              No deleted notifications
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Notifications you delete can be undone and restored here.
+                            </p>
+                          </div>
+                        )
                       )}
                     </div>
                   </div>
@@ -3894,9 +3969,9 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                       {showLoginPassword ? (
-                        <EyeOff className="size-4" />
+                        <Eye className="size-4 text-primary" />
                       ) : (
-                        <Eye className="size-4" />
+                        <EyeOff className="size-4 text-muted-foreground" />
                       )}
                     </button>
                   </div>
@@ -4323,9 +4398,9 @@ function Registration({
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPassword ? (
-                  <Eye className="size-4" />
+                  <Eye className="size-4 text-primary" />
                 ) : (
-                  <EyeOff className="size-4" />
+                  <EyeOff className="size-4 text-muted-foreground" />
                 )}
               </button>
             </div>
@@ -4356,9 +4431,9 @@ function Registration({
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showConfirmPassword ? (
-                  <Eye className="size-4" />
+                  <Eye className="size-4 text-primary" />
                 ) : (
-                  <EyeOff className="size-4" />
+                  <EyeOff className="size-4 text-muted-foreground" />
                 )}
               </button>
             </div>
@@ -5523,6 +5598,7 @@ function StudentProfileView({
 
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   const isStudentOrGuest = currentUser.role === "student" || currentUser.role === "guest";
   const nameCooldownDays = currentUser.role === "admin" ? 3 : 90;
@@ -5970,9 +6046,9 @@ function StudentProfileView({
       </div>
 
       {/* Profile Card */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_1fr] items-stretch">
         {/* Left: Profile Info */}
-        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col justify-between h-full">
           <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
             <UserRound className="size-4 text-primary" /> Profile Information
           </h3>
@@ -6264,10 +6340,10 @@ function StudentProfileView({
         </div>
 
         {/* Right: Account Security */}
-        <div className="space-y-6">
+        <div className="flex flex-col justify-between h-full">
 
           {/* Change Password Card */}
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="rounded-xl border border-border bg-card p-6 shadow-sm flex flex-col justify-between h-full">
             <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
               <Shield className="size-4 text-primary" /> Change Password
             </h3>
@@ -6306,7 +6382,7 @@ function StudentProfileView({
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                       disabled={!pwChangeAllowed && !isAdminOrStaff}
                     >
-                      {showCurrentPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      {showCurrentPw ? <Eye className="size-4 text-primary" /> : <EyeOff className="size-4 text-muted-foreground" />}
                     </button>
                   </div>
                 </Field>
@@ -6331,23 +6407,34 @@ function StudentProfileView({
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                     disabled={!pwChangeAllowed}
                   >
-                    {showNewPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    {showNewPw ? <Eye className="size-4 text-primary" /> : <EyeOff className="size-4 text-muted-foreground" />}
                   </button>
                 </div>
                 <PasswordStrengthMeter password={newPassword} />
               </Field>
 
               <Field label="Confirm New Password">
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter new password"
-                  className="field"
-                  required
-                  minLength={8}
-                  disabled={!pwChangeAllowed || changingPassword}
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPw ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="field pr-10"
+                    required
+                    minLength={8}
+                    disabled={!pwChangeAllowed || changingPassword}
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowConfirmPw(!showConfirmPw)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                    disabled={!pwChangeAllowed}
+                  >
+                    {showConfirmPw ? <Eye className="size-4 text-primary" /> : <EyeOff className="size-4 text-muted-foreground" />}
+                  </button>
+                </div>
               </Field>
 
               {pwError && (
@@ -6371,10 +6458,10 @@ function StudentProfileView({
               </Button>
             </form>
 
-            {/* Account Info */}
-            <div className="mt-6 border-t border-border pt-4">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Account Details</h4>
-              <div className="space-y-2 text-xs">
+            {/* Account Info - Aligned to bottom of column */}
+            <div className="mt-auto pt-6 border-t border-border/80">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Account Details</h4>
+              <div className="space-y-2.5 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Account Type</span>
                   <span className="font-semibold">
@@ -9496,6 +9583,10 @@ function NewRequest({
 
   const [showConfirmModal, setShowConfirmModal] =
     useState(false);
+  const [showFinalConfirmModal, setShowFinalConfirmModal] =
+    useState(false);
+  const [finalRecheckAgreed, setFinalRecheckAgreed] =
+    useState(false);
 
   useEffect(() => {
     if (showConfirmModal) {
@@ -9652,6 +9743,7 @@ function NewRequest({
       };
 
       setShowConfirmModal(false);
+      setShowFinalConfirmModal(false);
       onSubmit(savedRequest);
     } catch (error) {
       console.warn("Backend unavailable, generating ticket and saving request locally:", error);
@@ -9816,18 +9908,17 @@ function NewRequest({
               >
                 <option value="">Select a purpose</option>
                 <option value="Scholarship application">Scholarship application</option>
-                <option value="Employment (Local)">Employment (Local)</option>
-                <option value="Employment (Overseas / Abroad / POEA / DMW)">Employment (Overseas / Abroad / POEA / DMW)</option>
-                <option value="Board examination / PRC License">Board examination / PRC License</option>
                 <option value="Transfer to another school / Honorable Dismissal">Transfer to another school / Honorable Dismissal</option>
-                <option value="Graduate School / Master's / Doctorate">Graduate School / Master's / Doctorate</option>
-                <option value="Visa / Immigration / Travel requirement">Visa / Immigration / Travel requirement</option>
-                <option value="Civil Service Commission (CSC) Eligibility">Civil Service Commission (CSC) Eligibility</option>
-                <option value="Ranking / Promotion / Salary increment">Ranking / Promotion / Salary increment</option>
-                <option value="Military / PNP / BFP / Coast Guard application">Military / PNP / BFP / Coast Guard application</option>
-                <option value="Legal / Court / Government agency requirement">Legal / Court / Government agency requirement</option>
-                <option value="Personal record / File copy">Personal record / File copy</option>
-                <option value="Other / Institutional evaluation">Other / Institutional evaluation</option>
+                <option value="Enrollment / College Admission requirement">Enrollment / College Admission requirement</option>
+                <option value="Graduation / Academic Clearance requirement">Graduation / Academic Clearance requirement</option>
+                <option value="Board examination (PRC License) requirement">Board examination (PRC License) requirement</option>
+                <option value="Graduate School / Master's / Doctorate application">Graduate School / Master's / Doctorate application</option>
+                <option value="Internship / OJT / Practicum requirement">Internship / OJT / Practicum requirement</option>
+                <option value="Cross-Enrollment evaluation">Cross-Enrollment evaluation</option>
+                <option value="Student Visa / Exchange Program / Study Abroad">Student Visa / Exchange Program / Study Abroad</option>
+                <option value="Academic Evaluation / Ranking / Honors verification">Academic Evaluation / Ranking / Honors verification</option>
+                <option value="Personal Academic Record / Student file copy">Personal Academic Record / Student file copy</option>
+                <option value="Other School-Related Purpose">Other School-Related Purpose</option>
               </select>
             </Field>
 
@@ -10018,6 +10109,112 @@ function NewRequest({
                 className="h-8 text-xs gap-1.5 cursor-pointer font-bold"
               >
                 Proceed to Final Confirmation →
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Step 2 of 2: Double Confirmation & Recheck Dialog */}
+      {showFinalConfirmModal && typeof document !== "undefined" && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Final Request Confirmation"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+        >
+          <div
+            className="flex flex-col w-full max-w-md max-h-[92vh] rounded-2xl border border-border bg-card p-5 shadow-2xl animate-in zoom-in-95 duration-150 text-left overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-2.5 border-b border-border pb-3 shrink-0">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600">
+                <AlertCircle className="size-5" />
+              </div>
+              <div>
+                <h3 className="font-display text-base font-bold text-foreground">
+                  Are you sure? Final Confirmation
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Please recheck your details again before proceeding to submit.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2.5 text-xs overflow-y-auto">
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300">
+                <p className="font-bold flex items-center gap-1.5 text-xs mb-1">
+                  <span>⚠️</span> Are you sure? Please recheck carefully:
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  Once you confirm and submit, this document request is immediately queued in the official Registrar database. Queue tickets cannot be modified after creation.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-1.5 text-xs">
+                <div className="flex justify-between py-0.5 border-b border-border/40">
+                  <span className="text-muted-foreground">Document:</span>
+                  <span className="font-bold text-foreground text-right">{doc} ({copies} {copies === 1 ? "copy" : "copies"})</span>
+                </div>
+                <div className="flex justify-between py-0.5 border-b border-border/40">
+                  <span className="text-muted-foreground">Purpose:</span>
+                  <span className="font-bold text-foreground text-right truncate max-w-[220px]">{purpose}</span>
+                </div>
+                <div className="flex justify-between py-0.5 border-b border-border/40">
+                  <span className="text-muted-foreground">Student:</span>
+                  <span className="font-semibold text-foreground">{currentUser.name} ({currentUser.studentId})</span>
+                </div>
+                <div className="flex justify-between py-0.5">
+                  <span className="text-muted-foreground">Queue Ranking:</span>
+                  <span className="font-bold text-foreground">
+                    {currentUser.isPriority || currentUser.userType === "priority" ? "⭐ Priority Lane" : "Regular Queue"}
+                  </span>
+                </div>
+              </div>
+
+              <label className="flex items-start gap-2.5 p-3 rounded-xl border border-border bg-card hover:bg-muted/30 cursor-pointer transition">
+                <input
+                  type="checkbox"
+                  checked={finalRecheckAgreed}
+                  onChange={(e) => setFinalRecheckAgreed(e.target.checked)}
+                  className="mt-0.5 size-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                />
+                <span className="text-[11px] text-foreground font-medium leading-relaxed">
+                  I have rechecked all document information above and confirm this official request submission.
+                </span>
+              </label>
+
+              {error && (
+                <div className="mt-1">
+                  <InlineError text={error} />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-3 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowFinalConfirmModal(false);
+                  setShowConfirmModal(true);
+                }}
+                disabled={loading}
+                className="h-8 text-xs cursor-pointer"
+              >
+                ← Back to Edit / Recheck
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={executeSubmit}
+                disabled={loading || !finalRecheckAgreed}
+                className="h-8 text-xs font-bold gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {loading ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                Yes, Submit Document Request
               </Button>
             </div>
           </div>
