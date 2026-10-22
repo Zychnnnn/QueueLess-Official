@@ -20521,32 +20521,32 @@ function AdminOfficialRecordsPanel({
   const guestCount = users.filter(isGuestUserRecord).length;
 
   return (
-    <div className="animate-rise space-y-6">
+    <div className="animate-rise space-y-3.5">
       {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-3">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-primary">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
             Institutional Records Workspace
           </p>
-          <h2 className="font-display text-2xl sm:text-3xl font-bold text-foreground mt-1">
+          <h2 className="font-display text-xl sm:text-2xl font-bold text-foreground mt-0.5">
             Official student & staff records
           </h2>
-          <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+          <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl">
             Only Registrar Administrators can modify legal names, identification numbers, and residential addresses. Legal names are locked from staff and students.
           </p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by student name, ID number, or email..."
-            className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+            className="h-8.5 w-full rounded-lg border border-border bg-card pl-8.5 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
           />
         </div>
 
@@ -20554,7 +20554,7 @@ function AdminOfficialRecordsPanel({
           <button
             type="button"
             onClick={() => setRoleFilter("all")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
               roleFilter === "all"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -20565,7 +20565,7 @@ function AdminOfficialRecordsPanel({
           <button
             type="button"
             onClick={() => setRoleFilter("student")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
               roleFilter === "student"
                 ? "bg-emerald-600 text-white shadow-xs"
                 : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20"
@@ -20576,7 +20576,7 @@ function AdminOfficialRecordsPanel({
           <button
             type="button"
             onClick={() => setRoleFilter("staff")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
               roleFilter === "staff"
                 ? "bg-blue-600 text-white shadow-xs"
                 : "bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-500/20"
@@ -20587,7 +20587,7 @@ function AdminOfficialRecordsPanel({
           <button
             type="button"
             onClick={() => setRoleFilter("guest")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
               roleFilter === "guest"
                 ? "bg-amber-600 text-white shadow-xs"
                 : "bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20"
@@ -20598,111 +20598,113 @@ function AdminOfficialRecordsPanel({
         </div>
       </div>
 
-      {/* Users Grid */}
+      {/* Users Grid (Scrollable & Minimized) */}
       {filteredUsers.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-12 text-center bg-card">
-          <Lock className="mx-auto size-8 text-muted-foreground/60 mb-2" />
+        <div className="rounded-2xl border border-dashed border-border p-10 text-center bg-card">
+          <Lock className="mx-auto size-7 text-muted-foreground/60 mb-1.5" />
           <p className="text-sm font-semibold text-foreground">No records match your search</p>
-          <p className="text-xs text-muted-foreground mt-1">Try another search term or clear the role filter.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Try another search term or clear the role filter.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredUsers.map((u) => {
-            const isGuest = isGuestUserRecord(u);
-            const displayRoleName = isGuest ? "Users" : u.role;
-            const roleBadge =
-              u.role === "admin"
-                ? "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30"
-                : u.role === "staff"
-                ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30"
-                : isGuest
-                ? "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30"
-                : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
+        <div className="max-h-[calc(100vh-250px)] min-h-[380px] overflow-y-auto pr-1.5 scrollbar-thin">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredUsers.map((u) => {
+              const isGuest = isGuestUserRecord(u);
+              const displayRoleName = isGuest ? "Users" : u.role;
+              const roleBadge =
+                u.role === "admin"
+                  ? "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30"
+                  : u.role === "staff"
+                  ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30"
+                  : isGuest
+                  ? "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30"
+                  : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30";
 
-            return (
-              <div
-                key={u.id}
-                className="rounded-2xl border border-border bg-card p-4 shadow-xs flex flex-col justify-between transition hover:border-primary/40 hover:shadow-md"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="relative shrink-0">
-                        {u.picture ? (
-                          <img
-                            src={u.picture}
-                            alt={u.name}
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = "none";
-                              const fallback = (e.target as HTMLElement).nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = "flex";
-                            }}
-                            className="size-11 rounded-xl object-cover border border-border shadow-xs"
-                          />
-                        ) : null}
-                        <div
-                          style={{ display: u.picture ? "none" : "flex" }}
-                          className="size-11 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-xs uppercase border border-primary/20 shadow-xs"
-                        >
-                          {u.name ? u.name.slice(0, 2) : "US"}
+              return (
+                <div
+                  key={u.id}
+                  className="rounded-xl border border-border bg-card p-3 shadow-xs flex flex-col justify-between transition hover:border-primary/40 hover:shadow-md"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2.5 mb-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="relative shrink-0">
+                          {u.picture ? (
+                            <img
+                              src={u.picture}
+                              alt={u.name}
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = "none";
+                                const fallback = (e.target as HTMLElement).nextElementSibling as HTMLElement;
+                                if (fallback) fallback.style.display = "flex";
+                              }}
+                              className="size-9 rounded-lg object-cover border border-border shadow-xs"
+                            />
+                          ) : null}
+                          <div
+                            style={{ display: u.picture ? "none" : "flex" }}
+                            className="size-9 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-[11px] uppercase border border-primary/20 shadow-xs"
+                          >
+                            {u.name ? u.name.slice(0, 2) : "US"}
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="font-bold text-sm text-foreground truncate">{u.name}</p>
-                          <span title="Legal Name Locked for User">
-                            <Lock className="size-3 text-amber-500 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1">
+                            <p className="font-bold text-xs text-foreground truncate">{u.name}</p>
+                            <span title="Legal Name Locked for User">
+                              <Lock className="size-2.5 text-amber-500 shrink-0" />
+                            </span>
+                          </div>
+                          <span className={`inline-block mt-0.5 rounded border px-1.5 py-0.2 text-[8.5px] font-bold uppercase ${roleBadge}`}>
+                            {displayRoleName}
                           </span>
                         </div>
-                        <span className={`inline-block mt-0.5 rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase ${roleBadge}`}>
-                          {displayRoleName}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 text-[11px] text-muted-foreground bg-muted/20 p-2 rounded-lg border border-border/50">
+                      {!isGuest && (
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="shrink-0 text-[10.5px]">ID Number:</span>
+                          <span className="font-mono font-bold text-foreground text-[11px] truncate">{u.studentId || "N/A"}</span>
+                        </div>
+                      )}
+                      {u.role === "student" && u.course && (
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="shrink-0 text-[10.5px]">Program:</span>
+                          <span className="font-medium text-foreground truncate max-w-[150px]" title={u.course}>
+                            {u.course}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="shrink-0 text-[10.5px]">Email:</span>
+                        <span className="text-foreground truncate max-w-[150px]" title={u.email}>{u.email}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="shrink-0 text-[10.5px]">Address:</span>
+                        <span className="text-foreground truncate max-w-[150px]">
+                          {[u.currentCity, u.currentProvince, u.currentCountry].filter(Boolean).join(", ") || "Not set"}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 text-xs text-muted-foreground bg-muted/20 p-2.5 rounded-xl border border-border/60">
-                    {!isGuest && (
-                      <div className="flex items-center justify-between">
-                        <span>ID Number:</span>
-                        <span className="font-mono font-bold text-foreground">{u.studentId || "N/A"}</span>
-                      </div>
-                    )}
-                    {u.role === "student" && u.course && (
-                      <div className="flex items-center justify-between">
-                        <span>Program:</span>
-                        <span className="font-medium text-foreground truncate max-w-[170px]" title={u.course}>
-                          {u.course}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <span>Email:</span>
-                      <span className="text-foreground truncate max-w-[170px]" title={u.email}>{u.email}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Address:</span>
-                      <span className="text-foreground truncate max-w-[170px]">
-                        {[u.currentCity, u.currentProvince, u.currentCountry].filter(Boolean).join(", ") || "Not set"}
-                      </span>
-                    </div>
+                  <div className="mt-2.5 pt-2 border-t border-border/60 flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openEditModal(u)}
+                      className="w-full h-7 text-[11px] font-bold gap-1.5 cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                    >
+                      <Eye className="size-3" /> View Official Record
+                    </Button>
                   </div>
                 </div>
-
-                <div className="mt-4 pt-3 border-t border-border flex justify-end">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openEditModal(u)}
-                    className="w-full h-8 text-xs font-bold gap-1.5 cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                  >
-                    <Eye className="size-3" /> View Official Record
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
