@@ -3886,7 +3886,9 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
           </div>
         </section>
 
-        <section className="animate-rise rounded-lg border border-border bg-card p-6 shadow-2xl sm:p-9">
+        <section className={`animate-rise rounded-lg border border-border bg-card shadow-2xl transition-all duration-200 ${
+          mode === "activate-account" || mode === "forgot" ? "p-5 sm:p-7" : "p-6 sm:p-9"
+        }`}>
           <div className="mb-8 lg:hidden">
             <Brand />
           </div>
@@ -4643,13 +4645,13 @@ function PasswordStrengthMeter({ password, confirmPassword }: { password: string
   const textTones = ["text-rose-500", "text-rose-500", "text-amber-500", "text-sky-500", "text-emerald-600 dark:text-emerald-400"];
 
   return (
-    <div className="mt-2.5 rounded-xl border border-border/70 bg-muted/20 p-2.5 space-y-2 text-[11px] animate-in fade-in duration-150">
+    <div className="mt-1.5 rounded-lg border border-border/70 bg-muted/20 p-2 space-y-1.5 text-[10px] animate-in fade-in duration-150">
       <div className="flex items-center justify-between">
         <span className="text-muted-foreground font-medium">Password Policy:</span>
         <span className={`font-bold ${textTones[score]}`}>{labels[score]}</span>
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5 h-1.5">
+      <div className="grid grid-cols-4 gap-1 h-1">
         {[1, 2, 3, 4].map((step) => (
           <div
             key={step}
@@ -4660,7 +4662,7 @@ function PasswordStrengthMeter({ password, confirmPassword }: { password: string
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px] pt-1 border-t border-border/40">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-0.5 text-[9.5px] pt-1 border-t border-border/40">
         <div className={`flex items-center gap-1 ${lenOk ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}`}>
           {lenOk ? "✓" : "○"} At least 12 characters
         </div>
@@ -4878,6 +4880,7 @@ function ActivateAccountWithOtp({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -4984,11 +4987,11 @@ function ActivateAccountWithOtp({
   };
 
   return (
-    <div className="flex flex-col justify-center max-w-md mx-auto w-full py-1">
+    <div className="flex flex-col justify-center max-w-md mx-auto w-full">
       <Button
         variant="ghost"
         size="sm"
-        className="-ml-2 h-8 text-xs gap-1 w-fit cursor-pointer text-muted-foreground hover:text-foreground"
+        className="-ml-2 h-7 text-xs gap-1 w-fit cursor-pointer text-muted-foreground hover:text-foreground mb-0.5"
         type="button"
         onClick={onBack}
       >
@@ -4996,22 +4999,22 @@ function ActivateAccountWithOtp({
       </Button>
 
       {success ? (
-        <div className="mt-3 text-center py-4">
-          <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-            <CheckCircle2 className="size-6" />
+        <div className="mt-2 text-center py-3">
+          <div className="mx-auto mb-2 flex size-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
+            <CheckCircle2 className="size-5" />
           </div>
 
-          <h3 className="text-xl font-bold text-foreground">
+          <h3 className="text-lg font-bold text-foreground">
             Account Activated!
           </h3>
 
-          <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed">
+          <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
             Your verification code has been confirmed and your new password has been set. You can now sign in using your credentials.
           </p>
 
           <Button
             size="default"
-            className="mt-5 w-full cursor-pointer font-bold h-9 text-xs"
+            className="mt-4 w-full cursor-pointer font-bold h-8.5 text-xs"
             onClick={onSuccess}
           >
             Sign in now <ArrowRight className="size-3.5" />
@@ -5019,21 +5022,21 @@ function ActivateAccountWithOtp({
         </div>
       ) : (
         <>
-          <div className="mt-2">
+          <div className="mt-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
               First-Time Setup / Account Activation
             </p>
 
-            <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-foreground">
+            <h2 className="mt-0.5 font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">
               Activate with OTP
             </h2>
 
-            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+            <p className="mt-0.5 text-xs text-muted-foreground leading-snug">
               Enter the 6-digit OTP code emailed to you by the Registrar Admin, along with your new password to activate your account.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          <form onSubmit={handleSubmit} className="mt-2.5 space-y-2">
             <Field label="Registered Email or Student/Staff ID *">
               <input
                 type="text"
@@ -5041,7 +5044,7 @@ function ActivateAccountWithOtp({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="e.g. your.email@phinmaed.com or STAFF-001"
                 required
-                className="field h-9 text-xs"
+                className="field h-8 text-xs"
                 autoFocus
               />
             </Field>
@@ -5054,11 +5057,11 @@ function ActivateAccountWithOtp({
                 maxLength={6}
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                placeholder="123456"
+                placeholder="1 2 3 4 5 6"
                 required
-                className="field h-10 text-center font-mono text-xl font-bold tracking-[0.35em]"
+                className="field h-8.5 text-center font-mono text-base font-bold tracking-[0.3em]"
               />
-              <div className="mt-1 flex items-center justify-between text-[11px]">
+              <div className="mt-0.5 flex items-center justify-between text-[10px]">
                 <span className="text-muted-foreground text-[10px]">
                   Check inbox for the 6-digit code.
                 </span>
@@ -5066,50 +5069,69 @@ function ActivateAccountWithOtp({
                   type="button"
                   onClick={handleResendOtp}
                   disabled={resendLoading || resendCooldown > 0}
-                  className="font-semibold text-primary text-[11px] hover:underline disabled:text-muted-foreground disabled:no-underline cursor-pointer disabled:cursor-not-allowed shrink-0 ml-2"
+                  className="font-semibold text-primary text-[10.5px] hover:underline disabled:text-muted-foreground disabled:no-underline cursor-pointer disabled:cursor-not-allowed shrink-0 ml-2"
                 >
                   {resendLoading ? "Resending..." : resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Resend OTP"}
                 </button>
               </div>
               {resendMessage && (
-                <p className="mt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <p className="mt-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                   ✓ {resendMessage}
                 </p>
               )}
             </Field>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Field label="Create New Password *">
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Min. 8 characters (uppercase, lowercase, number & symbol)"
+                    placeholder="Min. 8 characters"
                     minLength={8}
                     required
-                    className="field h-9 text-xs pr-8"
+                    className="field h-8 text-xs pr-8"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                   >
-                    <Eye className="size-3.5" />
+                    {showPassword ? (
+                      <Eye className="size-3.5 text-primary" />
+                    ) : (
+                      <EyeOff className="size-3.5 text-muted-foreground" />
+                    )}
                   </button>
                 </div>
               </Field>
 
               <Field label="Confirm New Password *">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter password"
-                  required
-                  minLength={8}
-                  className="field h-9 text-xs"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter password"
+                    required
+                    minLength={8}
+                    className="field h-8 text-xs pr-8"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    {showConfirmPassword ? (
+                      <Eye className="size-3.5 text-primary" />
+                    ) : (
+                      <EyeOff className="size-3.5 text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
               </Field>
             </div>
 
@@ -5119,7 +5141,7 @@ function ActivateAccountWithOtp({
 
             <Button
               size="default"
-              className="w-full cursor-pointer h-10 font-bold text-xs shadow-sm mt-1"
+              className="w-full cursor-pointer h-8.5 font-bold text-xs shadow-sm mt-0.5"
               type="submit"
               disabled={loading || otp.length !== 6}
             >
@@ -5153,6 +5175,7 @@ function ForgotPasswordWithOtp({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -5471,24 +5494,43 @@ function ForgotPasswordWithOtp({
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
                 >
-                  <Eye className="size-4" />
+                  {showPassword ? (
+                    <Eye className="size-4 text-primary" />
+                  ) : (
+                    <EyeOff className="size-4 text-muted-foreground" />
+                  )}
                 </button>
               </div>
               <PasswordStrengthMeter password={newPassword} />
             </Field>
 
             <Field label="Confirm New Password">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter your new password"
-                required
-                minLength={8}
-                className="field"
-              />
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter your new password"
+                  required
+                  minLength={8}
+                  className="field pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  {showConfirmPassword ? (
+                    <Eye className="size-4 text-primary" />
+                  ) : (
+                    <EyeOff className="size-4 text-muted-foreground" />
+                  )}
+                </button>
+              </div>
             </Field>
 
             {error && <InlineError text={error} />}
