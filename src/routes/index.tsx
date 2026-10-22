@@ -649,6 +649,20 @@ function QueueLessApp() {
   const [activeReceiptModal, setActiveReceiptModal] =
     useState<RequestItem | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // Security action ("That wasn't me" / Force logout & reset pass)
+  const [securityActionToken, setSecurityActionToken] = useState<string | null>(null);
+  const [securityActionData, setSecurityActionData] = useState<{
+    valid: boolean;
+    name?: string;
+    email?: string;
+    role?: string;
+    studentId?: string;
+  } | null>(null);
+  const [securityActionLoading, setSecurityActionLoading] = useState(false);
+  const [securityActionStatus, setSecurityActionStatus] = useState<"idle" | "verifying" | "choose" | "changing-password" | "done" | "error">("idle");
+  const [securityActionDoneMessage, setSecurityActionDoneMessage] = useState("");
+  const [securityActionError, setSecurityActionError] = useState("");
   const [showInactivityModal, setShowInactivityModal] = useState(false);
   const [inactivityCountdown, setInactivityCountdown] = useState(59);
   const [showLoginLoading, setShowLoginLoading] = useState(false);
@@ -822,6 +836,132 @@ function QueueLessApp() {
       }
     } catch (err) {
       console.error("Fetch admin users error:", err);
+    }
+  };
+
+  // Listen for ?security-action= query parameter ("That wasn't me" link from email)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search) {
+      const params = new URLSearchParams(window.location.search);
+      const secToken = params.get("security-action");
+      if (secToken) {
+        if (secToken === "self-report") {
+          setSecurityActionToken(null);
+          setSecurityActionStatus("choose");
+          return;
+        }
+        setSecurityActionToken(secToken);
+        setSecurityActionStatus("verifying");
+        setSecurityActionLoading(true);
+        fetch(`${API_URL}/api/auth/verify-security-token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: secToken }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            setSecurityActionLoading(false);
+            if (data.valid) {
+              setSecurityActionData(data);
+              setSecurityActionStatus("choose");
+            } else {
+              setSecurityActionStatus("error");
+              setSecurityActionError(data.message || "Invalid or expired security verification link.");
+            }
+          })
+          .catch(() => {
+            setSecurityActionLoading(false);
+            setSecurityActionStatus("error");
+            setSecurityActionError("Network error while validating security link. Please check your connection.");
+          });
+      }
+    }
+  }, []);
+
+  const handleRevokeAllSessions = async () => {
+    try {
+      setSecurityActionLoading(true);
+      setSecurityActionError("");
+      const localToken = localStorage.getItem("queueless_token");
+      const res = await fetch(`${API_URL}/api/auth/report-unauthorized`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(localToken ? { Authorization: `Bearer ${localToken}` } : {}),
+        },
+        body: JSON.stringify({
+          token: securityActionToken || undefined,
+          action: "logout",
+        }),
+      });
+      const data = await res.json();
+      setSecurityActionLoading(false);
+      if (res.ok) {
+        localStorage.removeItem("queueless_token");
+        localStorage.removeItem("queueless_user");
+        setSignedIn(false);
+        setCurrentUser(null);
+        setSecurityActionDoneMessage(
+          data.message || "All active sessions have been forcefully terminated. Your account is now secured."
+        );
+        setSecurityActionStatus("done");
+      } else {
+        setSecurityActionError(data.message || "Failed to terminate sessions.");
+      }
+    } catch (err) {
+      setSecurityActionLoading(false);
+      setSecurityActionError("Connection error while securing account.");
+    }
+  };
+
+  const handleChangePasswordAndRevoke = async (newPassword: string) => {
+    try {
+      setSecurityActionLoading(true);
+      setSecurityActionError("");
+      const localToken = localStorage.getItem("queueless_token");
+      const res = await fetch(`${API_URL}/api/auth/report-unauthorized`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(localToken ? { Authorization: `Bearer ${localToken}` } : {}),
+        },
+        body: JSON.stringify({
+          token: securityActionToken || undefined,
+          action: "change-password",
+          newPassword,
+        }),
+      });
+      const data = await res.json();
+      setSecurityActionLoading(false);
+      if (res.ok) {
+        localStorage.removeItem("queueless_token");
+        localStorage.removeItem("queueless_user");
+        setSignedIn(false);
+        setCurrentUser(null);
+        setSecurityActionDoneMessage(
+          data.message || "All active sessions have been terminated and your new password has been set. Please sign in with your new credentials."
+        );
+        setSecurityActionStatus("done");
+      } else {
+        setSecurityActionError(data.message || "Failed to update password.");
+      }
+    } catch (err) {
+      setSecurityActionLoading(false);
+      setSecurityActionError("Connection error while updating password.");
+    }
+  };
+
+  const handleCloseSecurityActionModal = () => {
+    setSecurityActionStatus("idle");
+    setSecurityActionToken(null);
+    setSecurityActionData(null);
+    if (typeof window !== "undefined" && window.location.search) {
+      const p = new URLSearchParams(window.location.search);
+      p.delete("security-action");
+      p.delete("email");
+      const remaining = p.toString();
+      const newUrl = window.location.pathname + (remaining ? `?${remaining}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
     }
   };
 
@@ -2780,6 +2920,22 @@ function QueueLessApp() {
             setActiveReceiptModal(null);
             setCalendarOpen(true);
           }}
+        />
+      )}
+
+      {/* "That Wasn't Me" Security Action Dialog */}
+      {securityActionStatus !== "idle" && (
+        <SecurityActionModal
+          token={securityActionToken}
+          userData={securityActionData || (currentUser ? { name: currentUser.name, email: currentUser.email, role: currentUser.role } : null)}
+          status={securityActionStatus}
+          error={securityActionError}
+          loading={securityActionLoading}
+          doneMessage={securityActionDoneMessage}
+          onClose={handleCloseSecurityActionModal}
+          onRevokeAllSessions={handleRevokeAllSessions}
+          onChangePasswordAndRevoke={handleChangePasswordAndRevoke}
+          onResetStatus={(s) => setSecurityActionStatus(s)}
         />
       )}
 
@@ -6078,6 +6234,31 @@ function StudentProfileView({
 
         {/* Right: Account Security */}
         <div className="space-y-6">
+
+          {/* Unfamiliar Activity / That wasn't me Card */}
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 shadow-sm text-left">
+            <h3 className="font-display text-sm font-bold text-destructive flex items-center gap-2">
+              <ShieldAlert className="size-4.5" /> Unfamiliar Login? That wasn't me
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+              Did you receive a security notice regarding an unauthorized Google sign-in or device? You can immediately terminate all active sessions across all devices or choose to change your password.
+            </p>
+            <div className="mt-3.5 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  const newUrl = window.location.pathname + "?security-action=self-report" + window.location.hash;
+                  window.history.pushState({}, "", newUrl);
+                  window.location.reload();
+                }}
+                className="text-xs font-bold gap-1.5 cursor-pointer shadow-xs"
+              >
+                <LogOut className="size-3.5" /> That wasn't me — Log Out Everywhere
+              </Button>
+            </div>
+          </div>
 
           {/* Change Password Card */}
           <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
@@ -15301,6 +15482,310 @@ function CampusRegistrarHelperModal({
   );
 }
 
+function SecurityActionModal({
+  token,
+  userData,
+  status,
+  error,
+  loading,
+  doneMessage,
+  onClose,
+  onRevokeAllSessions,
+  onChangePasswordAndRevoke,
+  onResetStatus,
+}: {
+  token: string | null;
+  userData: { name?: string; email?: string; role?: string } | null;
+  status: "idle" | "verifying" | "choose" | "changing-password" | "done" | "error";
+  error: string;
+  loading: boolean;
+  doneMessage: string;
+  onClose: () => void;
+  onRevokeAllSessions: () => Promise<void>;
+  onChangePasswordAndRevoke: (newPass: string) => Promise<void>;
+  onResetStatus: (newStatus: "choose" | "changing-password") => void;
+}) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  if (status === "idle") return null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Security Alert: That Wasn't Me"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+    >
+      <div className="w-full max-w-md rounded-2xl border border-destructive/40 bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-150 text-left relative overflow-hidden">
+        {/* Top accent banner */}
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-destructive via-amber-500 to-destructive" />
+
+        {status === "verifying" && (
+          <div className="py-8 text-center space-y-3">
+            <Loader2 className="size-10 animate-spin text-primary mx-auto" />
+            <h3 className="font-display font-bold text-base text-foreground">
+              Verifying Security Link...
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Please wait while we validate your security request with the Registrar authentication server.
+            </p>
+          </div>
+        )}
+
+        {status === "error" && (
+          <div className="py-4 text-center space-y-3">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+              <ShieldAlert className="size-6" />
+            </div>
+            <h3 className="font-display font-bold text-base text-foreground">
+              Security Link Expired or Invalid
+            </h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {error || "This security link has expired or has already been used to secure the account."}
+            </p>
+            <div className="pt-2">
+              <Button onClick={onClose} className="w-full cursor-pointer">
+                Close
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {status === "done" && (
+          <div className="py-4 text-center space-y-3">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
+              <ShieldCheck className="size-6" />
+            </div>
+            <h3 className="font-display font-bold text-base text-foreground">
+              Account Secured Successfully
+            </h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {doneMessage || "All active sessions have been terminated. Your account is now completely protected."}
+            </p>
+            <div className="pt-2">
+              <Button onClick={onClose} className="w-full cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+                Return to Sign In
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {status === "choose" && (
+          <div>
+            <div className="flex items-center gap-3 border-b border-border pb-3 mb-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/15 text-destructive">
+                <ShieldAlert className="size-5" />
+              </div>
+              <div>
+                <h3 className="font-display text-base font-bold text-foreground">
+                  Security Alert: Was this not you?
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Confirm unauthorized sign-in or activity
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-foreground/90 leading-relaxed mb-4">
+              Hello <strong className="text-foreground">{userData?.name || "QueueLess User"}</strong>, you received a security notice regarding recent activity on <strong className="text-foreground">{userData?.email || "your account"}</strong>. If you did not perform this action, choose an option below to secure your account immediately:
+            </p>
+
+            <div className="space-y-2.5 mb-4">
+              {/* Option 1: Log out everywhere */}
+              <button
+                type="button"
+                onClick={onRevokeAllSessions}
+                disabled={loading}
+                className="w-full text-left p-3.5 rounded-xl border border-border bg-muted/40 hover:bg-muted/70 hover:border-destructive/40 transition-all cursor-pointer group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive group-hover:bg-destructive group-hover:text-white transition-colors mt-0.5">
+                    <LogOut className="size-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-foreground flex items-center justify-between">
+                      <span>Log Out of All Devices</span>
+                      <span className="text-[10px] text-destructive font-semibold">Immediate</span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                      Instantly terminates all active sessions everywhere. The unauthorized user is kicked out immediately.
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Option 2: Log out everywhere & change password */}
+              <button
+                type="button"
+                onClick={() => onResetStatus("changing-password")}
+                disabled={loading}
+                className="w-full text-left p-3.5 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50 transition-all cursor-pointer group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors mt-0.5">
+                    <Lock className="size-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-foreground flex items-center justify-between">
+                      <span>Log Out Everywhere & Change Password</span>
+                      <span className="text-[10px] text-primary font-bold">Recommended</span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                      Kicks out all sessions AND lets you set a new secure password right now so no one can access your account again.
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-border pt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                disabled={loading}
+                className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                Never mind, this was me
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {status === "changing-password" && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setFormError("");
+              if (newPassword.length < 12) {
+                setFormError("Password must be at least 12 characters long.");
+                return;
+              }
+              if (newPassword !== confirmPassword) {
+                setFormError("Passwords do not match.");
+                return;
+              }
+              const hasUpper = /[A-Z]/.test(newPassword);
+              const hasLower = /[a-z]/.test(newPassword);
+              const hasDigit = /[0-9]/.test(newPassword);
+              const hasSymbol = /[^A-Za-z0-9]/.test(newPassword);
+              if (!hasUpper || !hasLower || !hasDigit || !hasSymbol) {
+                setFormError("Password must contain at least one uppercase, lowercase, number, and special character.");
+                return;
+              }
+              onChangePasswordAndRevoke(newPassword);
+            }}
+          >
+            <div className="flex items-center gap-3 border-b border-border pb-3 mb-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Lock className="size-4.5" />
+              </div>
+              <div>
+                <h3 className="font-display text-sm font-bold text-foreground">
+                  Create New Password & Log Out All Sessions
+                </h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Securing: {userData?.email}
+                </p>
+              </div>
+            </div>
+
+            {formError && (
+              <div className="mb-3 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive flex items-center gap-2">
+                <ShieldAlert className="size-4 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
+
+            <div className="space-y-3 mb-3.5">
+              <div>
+                <label className="text-xs font-bold text-foreground block mb-1">
+                  New Password * (Min. 12 characters)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPass ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    placeholder="Enter new strong password"
+                    className="field text-xs pr-12 w-full"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-[11px] font-semibold"
+                  >
+                    {showPass ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-foreground block mb-1">
+                  Confirm New Password *
+                </label>
+                <input
+                  type={showPass ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  placeholder="Re-enter new password"
+                  className="field text-xs w-full"
+                />
+              </div>
+
+              {/* Requirement badges */}
+              <div className="rounded-lg bg-muted/40 border border-border p-2.5 text-[11px] space-y-1 text-muted-foreground">
+                <p className="font-semibold text-foreground text-[11px] mb-1">Password Requirements:</p>
+                <div className="grid grid-cols-2 gap-1">
+                  <span className={newPassword.length >= 12 ? "text-emerald-600 font-bold" : ""}>
+                    {newPassword.length >= 12 ? "✓" : "○"} 12+ characters
+                  </span>
+                  <span className={/[A-Z]/.test(newPassword) ? "text-emerald-600 font-bold" : ""}>
+                    {/[A-Z]/.test(newPassword) ? "✓" : "○"} Uppercase letter
+                  </span>
+                  <span className={/[a-z]/.test(newPassword) ? "text-emerald-600 font-bold" : ""}>
+                    {/[a-z]/.test(newPassword) ? "✓" : "○"} Lowercase letter
+                  </span>
+                  <span className={/[0-9]/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword) ? "text-emerald-600 font-bold" : ""}>
+                    {/[0-9]/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword) ? "✓" : "○"} Number & symbol
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-border pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onResetStatus("choose")}
+                disabled={loading}
+                className="text-xs cursor-pointer"
+              >
+                Back
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={loading || !newPassword || !confirmPassword}
+                className="text-xs font-bold gap-1.5 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {loading ? <Loader2 className="size-3.5 animate-spin" /> : <ShieldCheck className="size-3.5" />}
+                Secure & Update Password
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LogoutConfirmModal({
   user,
   onConfirm,
@@ -16499,15 +16984,16 @@ function ManageRequests({
       </div>
 
       {/* Requests List (Scrollable Card Rows) */}
-      <div className="mt-3 overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+      <div className="mt-3 overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
+        <div className="min-w-[960px]">
         {/* Header row */}
         <div className="sticky top-0 z-10 grid items-center gap-3 border-b border-border bg-muted/60 px-4 py-2.5 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-          style={{ gridTemplateColumns: "96px 200px 220px 140px minmax(200px, 1fr)" }}>
+          style={{ gridTemplateColumns: "88px 180px 220px 120px minmax(300px, 1fr)" }}>
           <span>Queue</span>
           <span>Student</span>
           <span>Document</span>
           <span>Status</span>
-          <span className="text-right">Actions</span>
+          <span className="text-right pr-2">Actions</span>
         </div>
 
         <div className="max-h-[360px] overflow-y-auto scrollbar-thin divide-y divide-border/60">
@@ -16548,7 +17034,7 @@ function ManageRequests({
               <div
                 key={r.id}
                 className={`grid items-center gap-3 border-l-4 px-4 py-3.5 transition-colors hover:bg-muted/25 ${accentColor}`}
-                style={{ gridTemplateColumns: "96px 200px 220px 140px minmax(200px, 1fr)" }}
+                style={{ gridTemplateColumns: "88px 180px 220px 120px minmax(300px, 1fr)" }}
               >
                 {/* Queue line + priority */}
                 <div className="flex flex-col gap-1">
@@ -16591,7 +17077,7 @@ function ManageRequests({
                         {isAssignedToMe ? "Assigned to You" : `Assigned: ${r.assignedStaffName}`}
                       </span>
                     )}
-                    {r.rating && (
+                    {Boolean(r.rating) && (
                       <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.2 text-[9px] font-black text-amber-700 dark:text-amber-400 border border-amber-500/30">
                         ★ {r.rating}/5 from student
                       </span>
@@ -16605,12 +17091,12 @@ function ManageRequests({
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1.5 justify-end">
+                <div className="flex items-center gap-1.5 justify-end pr-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setViewingStudentDetails(r)}
-                    className="h-8 w-8 p-0 cursor-pointer text-primary border-primary/30 hover:bg-primary/10"
+                    className="h-8 w-8 p-0 cursor-pointer text-primary border-primary/30 hover:bg-primary/10 shrink-0"
                     title="View Student Personal & Educational Details"
                   >
                     <UserRound className="size-3.5" />
@@ -16620,7 +17106,7 @@ function ManageRequests({
                     variant="outline"
                     size="sm"
                     onClick={() => setViewingReceipt(r)}
-                    className="h-8 w-8 p-0 cursor-pointer"
+                    className="h-8 w-8 p-0 cursor-pointer shrink-0"
                     title="View Receipt"
                   >
                     <Eye className="size-3.5" />
@@ -16631,51 +17117,50 @@ function ManageRequests({
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
+                      setEditingReceipt(r);
+                    }}
+                    className="h-8 w-8 p-0 cursor-pointer text-foreground hover:text-primary hover:border-primary/40 shrink-0"
+                    title="Edit Receipt & Line"
+                  >
+                    <Edit3 className="size-3.5" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setDeletingReq(r);
                       setDeleteReason("");
                     }}
-                    className="h-8 w-8 p-0 cursor-pointer text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                    className="h-8 w-8 p-0 cursor-pointer text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50 shrink-0"
                     title="Delete Request from Queue"
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
-
-
 
                   {isPendingUnassigned ? (
                     <Button
                       size="sm"
                       onClick={() => setConfirmingAcceptReq(r)}
                       disabled={acceptingId === r.id}
-                      className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs whitespace-nowrap"
+                      className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs shrink-0 whitespace-nowrap"
                       title="Accept this request to take responsibility for processing it"
                     >
                       {acceptingId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
                       Accept Request
                     </Button>
                   ) : isAcceptedByOther ? (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => setConfirmingAcceptReq(r)}
                         disabled={acceptingId === r.id}
-                        className="h-8 px-2.5 text-xs font-bold cursor-pointer gap-1 text-primary border-primary/30 hover:bg-primary/10 whitespace-nowrap"
+                        className="h-8 px-2.5 text-xs font-bold cursor-pointer gap-1 text-primary border-primary/30 hover:bg-primary/10 shrink-0 whitespace-nowrap"
                         title={`Handled by ${r.assignedStaffName}. Click to reassign to yourself.`}
                       >
-                        <UserCheck className="size-3.5" /> Reassign to Me
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingReceipt(r);
-                        }}
-                        className="h-8 w-8 p-0 cursor-pointer text-foreground hover:text-primary hover:border-primary/40"
-                        title="Edit Receipt & Line"
-                      >
-                        <Edit3 className="size-3.5" />
+                        <UserCheck className="size-3.5" /> Reassign
                       </Button>
                       <Button
                         size="sm"
@@ -16690,46 +17175,31 @@ function ManageRequests({
                               : "Processing";
                           setPendingStatusChange({ request: r, nextStatus });
                         }}
-                        className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs whitespace-nowrap"
+                        className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs shrink-0 whitespace-nowrap"
                         title="Process Request"
                       >
                         <ClipboardCheck className="size-3.5" /> Process
                       </Button>
                     </div>
                   ) : (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingReceipt(r);
-                        }}
-                        className="h-8 w-8 p-0 cursor-pointer text-foreground hover:text-primary hover:border-primary/40"
-                        title="Edit Receipt & Line"
-                      >
-                        <Edit3 className="size-3.5" />
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          const nextStatus: Status =
-                            r.status === "Pending"
-                              ? "Processing"
-                              : r.status === "Processing"
-                              ? "Ready for Claiming"
-                              : r.status === "Ready for Claiming"
-                              ? "Claimed"
-                              : "Processing";
-                          setPendingStatusChange({ request: r, nextStatus });
-                        }}
-                        className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs whitespace-nowrap"
-                        title="Process Request"
-                      >
-                        <ClipboardCheck className="size-3.5" /> Process
-                      </Button>
-                    </>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const nextStatus: Status =
+                          r.status === "Pending"
+                            ? "Processing"
+                            : r.status === "Processing"
+                            ? "Ready for Claiming"
+                            : r.status === "Ready for Claiming"
+                            ? "Claimed"
+                            : "Processing";
+                        setPendingStatusChange({ request: r, nextStatus });
+                      }}
+                      className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs shrink-0 whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white"
+                      title="Process Request"
+                    >
+                      <ClipboardCheck className="size-3.5" /> Process
+                    </Button>
                   )}
                 </div>
               </div>
@@ -16765,6 +17235,7 @@ function ManageRequests({
               <EmptyState text="No requests match your search or filter." />
             )
           )}
+        </div>
         </div>
       </div>
 

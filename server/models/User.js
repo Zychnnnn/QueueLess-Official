@@ -127,6 +127,8 @@ const userSchema = new mongoose.Schema(
     emergencyContact: { type: String, default: "" },
     termsAccepted: { type: Boolean, default: false },
     termsAcceptedAt: { type: Date },
+    // Security: token version for force-logout (bumped on "That wasn't me" action)
+    tokenVersion: { type: Number, default: 0 },
     // Educational Background
     elemSchool: { type: String, default: "" },
     elemYearGrad: { type: String, default: "" },

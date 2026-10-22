@@ -22,6 +22,8 @@ import {
   verifyContactOtp,
   verifyLoginOtp,
   resendLoginOtp,
+  reportUnauthorizedAccess,
+  verifySecurityActionToken,
 } from "../controllers/authController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 import roleMiddleware from "../middleware/roleMiddleware.js";
@@ -85,6 +87,10 @@ router.patch(
   roleMiddleware("admin"),
   updateUserByAdmin
 );
+
+// Security: "That wasn't me" — report unauthorized access (public, token-verified)
+router.post("/verify-security-token", verifySecurityActionToken);
+router.post("/report-unauthorized", reportUnauthorizedAccess);
 
 // Profile & verification routes (any authenticated user)
 router.patch("/profile", authMiddleware, updateProfile);

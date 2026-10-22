@@ -12,6 +12,15 @@ import { recordAuditLog } from "./auditController.js";
 
 export const JWT_SECRET = process.env.JWT_SECRET || "queueless-production-secret-key-2026-auth";
 
+// Generate a time-limited security action token for the "That wasn't me" email link
+export const generateSecurityActionToken = (userId) => {
+  return jwt.sign(
+    { userId, purpose: "security-action" },
+    JWT_SECRET,
+    { expiresIn: "24h" }
+  );
+};
+
 export const isSchoolCredential = (email = "", studentId = "") => {
   const cleanEmail = email.toLowerCase().trim();
   const cleanId = studentId ? studentId.trim() : "";
@@ -287,11 +296,7 @@ export const registerGuest = async (req, res) => {
       lastLogin: new Date(),
     });
 
-    const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
-      },
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0, },
       JWT_SECRET,
       {
         expiresIn: "1d",
@@ -486,11 +491,7 @@ export const verifyLoginOtp = async (req, res) => {
     }
     await user.save();
 
-    const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
-      },
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0, },
       JWT_SECRET,
       {
         expiresIn: "1d",
@@ -509,6 +510,22 @@ export const verifyLoginOtp = async (req, res) => {
       details: `${isGuest ? "Guest " : ""}${user.name} successfully verified OTP authentication and entered QueueLess.`,
       status: "Success",
     });
+
+    try {
+      const securityToken = generateSecurityActionToken(user._id);
+      const frontendBase = process.env.FRONTEND_URL || process.env.VITE_APP_URL || "https://queue-less-official.vercel.app";
+      const securityActionUrl = `${frontendBase}?security-action=${encodeURIComponent(securityToken)}&email=${encodeURIComponent(user.email)}`;
+
+      sendSecurityConfirmationEmail({
+        toEmail: user.email,
+        userName: user.name,
+        actionType: "Account Sign-In (Verified)",
+        details: `Your QueueLess account was accessed via verified OTP authentication on ${new Date().toLocaleString()}. You can continue using QueueLess safely.`,
+        securityActionUrl,
+      }).catch((err) => console.error("OTP login security email error:", err));
+    } catch (err) {
+      console.error("Error sending OTP login security notice:", err);
+    }
 
     return res.status(200).json({
       message: "Authentication successful! Welcome to QueueLess.",
@@ -1214,11 +1231,17 @@ export const googleLogin = async (req, res) => {
       }
     }
 
+    // Generate a time-limited security action token for "That wasn't me"
+    const securityToken = generateSecurityActionToken(user._id);
+    const frontendBase = process.env.FRONTEND_URL || process.env.VITE_APP_URL || "https://queue-less-official.vercel.app";
+    const securityActionUrl = `${frontendBase}?security-action=${encodeURIComponent(securityToken)}`;
+
     sendSecurityConfirmationEmail({
       toEmail: user.email,
       userName: user.name,
       actionType: "Google Sign-In",
       details: `Your account was accessed via Google authentication on ${new Date().toLocaleString()}. You can continue using QueueLess system safely.`,
+      securityActionUrl,
     }).catch((err) => console.error("Google sign-in security email error:", err));
 
     const isGuest = isGuestAccount(user);
@@ -1234,11 +1257,7 @@ export const googleLogin = async (req, res) => {
       status: "Success",
     });
 
-    const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
-      },
+    const token = jwt.sign({ id: user._id, role: user.role, tokenVersion: user.tokenVersion || 0, },
       JWT_SECRET,
       {
         expiresIn: "1d",
@@ -1945,5 +1964,152 @@ export const adminEditUser = async (req, res) => {
   } catch (error) {
     console.error("adminEditUser error:", error);
     return res.status(500).json({ message: "Server error while editing user." });
+  }
+};
+
+// ─── "That Wasn't Me" — Verify Security Action Token ───
+export const verifySecurityActionToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ valid: false, message: "Security token is required." });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({
+        valid: false,
+        message: err.name === "TokenExpiredError"
+          ? "This security link has expired. Please contact the Registrar's Office or log in to secure your account."
+          : "Invalid or corrupted security link.",
+      });
+    }
+
+    if (decoded.purpose !== "security-action") {
+      return res.status(400).json({ valid: false, message: "Invalid security token purpose." });
+    }
+
+    const user = await User.findById(decoded.userId).select("name email role studentId picture");
+    if (!user) {
+      return res.status(404).json({ valid: false, message: "User account not found." });
+    }
+
+    return res.status(200).json({
+      valid: true,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      studentId: user.studentId,
+    });
+  } catch (error) {
+    console.error("verifySecurityActionToken error:", error);
+    return res.status(500).json({ valid: false, message: "Server error while validating security token." });
+  }
+};
+
+// ─── "That Wasn't Me" — Report Unauthorized Access & Terminate Sessions / Change Password ───
+export const reportUnauthorizedAccess = async (req, res) => {
+  try {
+    const { token, action, newPassword } = req.body;
+    let userId = null;
+
+    if (token) {
+      let decoded;
+      try {
+        decoded = jwt.verify(token, JWT_SECRET);
+      } catch (err) {
+        return res.status(400).json({
+          message: err.name === "TokenExpiredError"
+            ? "This security link has expired. Please use the Forgot Password link or contact the Registrar."
+            : "Invalid security token.",
+        });
+      }
+      if (decoded.purpose !== "security-action") {
+        return res.status(400).json({ message: "Invalid security token purpose." });
+      }
+      userId = decoded.userId;
+    } else if (req.user?.id) {
+      userId = req.user.id;
+    }
+
+    if (!userId) {
+      return res.status(400).json({ message: "Security verification token or active session is required." });
+    }
+
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return res.status(404).json({ message: "Account not found." });
+    }
+
+    // Force-terminate ALL active sessions immediately by incrementing tokenVersion
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
+    user.failedLoginAttempts = 0;
+    user.lockUntil = undefined;
+
+    let passwordChanged = false;
+    if (action === "change-password" || newPassword) {
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 12) {
+        return res.status(400).json({
+          message: "Password must be at least 12 characters long in accordance with institutional security policy.",
+        });
+      }
+
+      // Check policy: uppercase, lowercase, number, symbol
+      const hasUpper = /[A-Z]/.test(newPassword);
+      const hasLower = /[a-z]/.test(newPassword);
+      const hasDigit = /[0-9]/.test(newPassword);
+      const hasSymbol = /[^A-Za-z0-9]/.test(newPassword);
+
+      if (!hasUpper || !hasLower || !hasDigit || !hasSymbol) {
+        return res.status(400).json({
+          message: "Password must include at least one uppercase letter, one lowercase letter, one number, and one special character.",
+        });
+      }
+
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(newPassword, salt);
+      user.passwordLastChanged = new Date().toISOString();
+      passwordChanged = true;
+    }
+
+    await user.save();
+
+    // Audit log
+    recordAuditLog({
+      actorName: user.name,
+      actorEmail: user.email,
+      actorRole: user.role,
+      actorId: user.studentId || String(user._id),
+      actorPicture: user.picture || "",
+      targetCategory: "security",
+      action: passwordChanged
+        ? "Unauthorized Activity: Terminated Sessions & Password Reset"
+        : "Unauthorized Activity: Terminated All Active Sessions",
+      details: `${user.name} reported unauthorized access ("That wasn't me"). All active tokens revoked${passwordChanged ? " and account password changed" : ""}.`,
+      status: "Critical",
+    });
+
+    // Confirmation email
+    sendSecurityConfirmationEmail({
+      toEmail: user.email,
+      userName: user.name,
+      actionType: passwordChanged ? "Account Secured — Sessions Revoked & Password Changed" : "Account Secured — All Sessions Revoked",
+      details: `Your QueueLess account was secured on ${new Date().toLocaleString()}. All existing sign-in sessions were forcefully terminated${passwordChanged ? " and your password was successfully updated" : ""}. No unauthorized user can access your account.`,
+    }).catch((err) => console.error("Security follow-up email error:", err));
+
+    return res.status(200).json({
+      success: true,
+      message: passwordChanged
+        ? "Account secured! All active sessions have been terminated and your password has been successfully updated."
+        : "Account secured! All active sessions across all devices have been logged out immediately.",
+      email: user.email,
+      passwordChanged,
+      action: passwordChanged ? "password-changed" : "sessions-revoked",
+    });
+  } catch (error) {
+    console.error("Report unauthorized access error:", error);
+    return res.status(500).json({ message: "Server error while securing account." });
   }
 };

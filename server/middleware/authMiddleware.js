@@ -38,11 +38,23 @@ const authMiddleware = async (req, res, next) => {
 
     // Verify user exists and synchronize live role from database
     const dbUser = await User.findById(decoded.id).select(
-      "role approvalStatus email studentId name isPriority userType"
+      "role approvalStatus email studentId name isPriority userType tokenVersion"
     );
 
     if (!dbUser) {
       return res.status(401).json({ message: "User account no longer exists." });
+    }
+
+    // Check tokenVersion — if the JWT was issued before a force-logout, reject it
+    if (
+      typeof dbUser.tokenVersion === "number" &&
+      typeof decoded.tokenVersion === "number" &&
+      decoded.tokenVersion !== dbUser.tokenVersion
+    ) {
+      return res.status(401).json({
+        message: "Session revoked for security reasons. Please log in again.",
+        forceLogout: true,
+      });
     }
 
     if (dbUser.approvalStatus === "rejected") {

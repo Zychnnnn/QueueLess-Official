@@ -365,6 +365,7 @@ export const sendSecurityConfirmationEmail = async ({
   userName,
   actionType,
   details,
+  securityActionUrl,
 }) => {
   const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
   const emailPass =
@@ -409,9 +410,25 @@ export const sendSecurityConfirmationEmail = async ({
           If this was you, you can continue using the <strong>QueueLess System</strong> safely. No further action is required.
         </p>
 
-        <p style="color: #dc2626; font-size: 12px; line-height: 1.5; margin: 0; padding: 12px; background-color: #fef2f2; border-radius: 6px; border: 1px solid #fee2e2;">
-          <strong>Didn't make this request?</strong> If you did not authorize this action, please secure your account immediately or contact the Registrar's Office.
-        </p>
+        <div style="background-color: #fef2f2; border-radius: 8px; padding: 16px; border: 1px solid #fee2e2; margin-bottom: 4px; text-align: left;">
+          <p style="color: #991b1b; font-size: 13px; font-weight: 700; margin: 0 0 6px;">
+            ⚠️ Didn't make this request? (That wasn't me)
+          </p>
+          <p style="color: #7f1d1d; font-size: 12px; line-height: 1.5; margin: 0 0 12px;">
+            If you did not authorize this sign-in or recent activity, please secure your account immediately. You can log out of all active sessions and change your password:
+          </p>
+          ${
+            securityActionUrl
+              ? `<div style="text-align: center; margin-top: 8px;">
+                   <a href="${securityActionUrl}" style="display: inline-block; background-color: #dc2626; color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; padding: 10px 22px; border-radius: 6px; letter-spacing: 0.3px; box-shadow: 0 2px 4px rgba(220,38,38,0.25);">
+                     ⚠ That wasn't me — Log Out & Secure Account
+                   </a>
+                 </div>`
+              : `<p style="color: #b91c1c; font-size: 11px; margin: 0; font-style: italic;">
+                   Please secure your account immediately or contact the Registrar's Office.
+                 </p>`
+          }
+        </div>
 
         <p style="color: #9ca3af; font-size: 11px; margin: 24px 0 0; text-align: center; border-top: 1px solid #f3f4f6; padding-top: 16px;">
           PHINMA University of Pangasinan • QueueLess Automated Notification
