@@ -49,9 +49,7 @@ export const sendOtpEmail = async (toEmail, otp, customSubject) => {
     return { sent: false, reason: "credentials_not_configured" };
   }
 
-  const frontendBase = process.env.FRONTEND_URL || process.env.VITE_APP_URL || "https://queue-less-official.vercel.app";
-  const effectiveLogoutUrl = logoutUrl || securityActionUrl || `${frontendBase}?security-action=logout&email=${encodeURIComponent(toEmail)}`;
-  const effectiveResetUrl = resetPasswordUrl || securityActionUrl || `${frontendBase}?security-action=reset-password&email=${encodeURIComponent(toEmail)}`;
+
 
   const transport = getTransporter();
 
@@ -471,6 +469,5 @@ export const sendSecurityConfirmationEmail = async ({
     return { sent: false, error: err.message };
   }
 };
-
 
 
