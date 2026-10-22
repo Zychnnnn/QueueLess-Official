@@ -4357,14 +4357,15 @@ function Registration({
         </div>
 
         <div className="sm:col-span-2">
-          <Field label="Student ID (Format: 00-0000-000000)">
+          <Field label="Student ID (Format: 00-0000-000000 or 00-00-0000-000000)">
             <input
               name="studentId"
               required
-              className="field"
+              className="field font-mono"
               placeholder="02-2223-012345"
-              pattern="^\d{2}-\d{4}-\d{5,6}$"
-              title="Please enter in 00-0000-000000 format (e.g. 02-2324-001234)"
+              pattern="^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$"
+              title="Please enter in 00-0000-000000 or 00-00-0000-000000 format (e.g. 02-2223-012345)"
+              maxLength={17}
             />
           </Field>
         </div>
@@ -21329,9 +21330,9 @@ function UsersPanel({
       return;
     }
 
-    const adminIdRegex = /^(ADMIN-\d{3}|UP-\d{2}-\d{3}-[A-Z])$/i;
+    const adminIdRegex = /^ADMIN(\s*-\s*|-)\d{3}$/i;
     if (trimmedId && !adminIdRegex.test(trimmedId)) {
-      setAdminValidationError("Admin ID must follow official format: ADMIN-000 (e.g. ADMIN-001) or UP-00-000-F.");
+      setAdminValidationError("Admin ID must follow official format: ADMIN - 000 or ADMIN-000 (e.g. ADMIN - 001). Maximum length: 11 characters.");
       return;
     }
 
@@ -21444,7 +21445,7 @@ function UsersPanel({
 
     const staffIdRegex = /^(UP-\d{2}-\d{3}-[A-Z]|STAFF-\d{3})$/i;
     if (trimmedId && !staffIdRegex.test(trimmedId)) {
-      setValidationError("Staff ID must follow official format: UP-00-000-F (e.g. UP-25-795-F) or STAFF-001.");
+      setValidationError("Staff ID must follow official format: UP-00-000-T (e.g. UP-23-197-T) or STAFF-001. Maximum length: 11 characters.");
       return;
     }
 
@@ -21578,7 +21579,7 @@ function UsersPanel({
     }
     const studentIdRegex = /^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$/;
     if (!studentIdRegex.test(trimmedId)) {
-      setStudentValidationError("Student ID must follow format: 00-0000-000000 or 00-00-0000-000000 (e.g. 02-2223-012345).");
+      setStudentValidationError("Student ID must follow format: 00-0000-000000 or 00-00-0000-000000 (e.g. 02-2223-012345). Maximum length: 17 characters.");
       return;
     }
 
@@ -22104,10 +22105,11 @@ function UsersPanel({
             <Field label="Student ID (Required)">
               <input
                 value={customStudentId}
-                onChange={(e) => setCustomStudentId(e.target.value)}
+                onChange={(e) => setCustomStudentId(e.target.value.replace(/[^0-9-]/g, "").slice(0, 17))}
                 required
                 className="field font-mono"
-                placeholder="Enter Student ID (e.g. 02-2223-012345)"
+                placeholder="Enter Student ID (e.g. 02-2223-012345 or 00-00-0000-000000)"
+                maxLength={17}
               />
             </Field>
 
@@ -22216,9 +22218,10 @@ function UsersPanel({
             <Field label="Staff ID">
               <input
                 value={customStaffId}
-                onChange={(e) => setCustomStaffId(e.target.value.toUpperCase())}
-                className="field"
-                placeholder="Enter your Staff ID"
+                onChange={(e) => setCustomStaffId(e.target.value.toUpperCase().slice(0, 11))}
+                className="field font-mono"
+                placeholder="e.g. UP-23-197-T (Leave blank for auto-generation)"
+                maxLength={11}
               />
             </Field>
 
@@ -22295,9 +22298,10 @@ function UsersPanel({
             <Field label="Admin ID (Optional)">
               <input
                 value={customAdminId}
-                onChange={(e) => setCustomAdminId(e.target.value.toUpperCase())}
-                className="field"
-                placeholder="e.g. UP-25-795-F (Leave blank for auto-generation)"
+                onChange={(e) => setCustomAdminId(e.target.value.toUpperCase().slice(0, 11))}
+                className="field font-mono"
+                placeholder="e.g. ADMIN - 001 (Leave blank for auto-generation)"
+                maxLength={11}
               />
             </Field>
 

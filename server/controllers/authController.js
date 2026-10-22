@@ -30,7 +30,7 @@ export const isSchoolCredential = (email = "", studentId = "") => {
     cleanEmail.endsWith("@phinmaed.com") ||
     cleanEmail.includes("phinma");
 
-  const isOfficialStudentId = cleanId ? /^\d{2}-\d{4}-\d{5,6}$/.test(cleanId) : false;
+  const isOfficialStudentId = cleanId ? /^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$/.test(cleanId) : false;
 
   return Boolean(isSchoolEmail || isOfficialStudentId);
 };
@@ -609,7 +609,7 @@ export const createStaffAccount = async (req, res) => {
     const idFormatRegex = /^(UP-\d{2}-\d{3}-[A-Z]|STAFF-\d{3,4})$/i;
     if (finalStaffId && !idFormatRegex.test(finalStaffId)) {
       return res.status(400).json({
-        message: "Staff ID must follow the official format: UP-00-000-F (e.g. UP-25-795-F) or STAFF-001.",
+        message: "Staff ID must follow the official format: UP-00-000-T (e.g. UP-23-197-T) or STAFF-001. Maximum length: 11 characters.",
       });
     }
     const existingStaffId = await User.findOne({ studentId: finalStaffId });
@@ -698,6 +698,13 @@ export const createStudentByAdmin = async (req, res) => {
 
     const cleanEmail = email.toLowerCase().trim();
     const cleanStudentId = studentId.trim();
+
+    const studentIdPattern = /^(\d{2}-\d{4}-\d{5,6}|\d{2}-\d{2}-\d{4}-\d{6})$/;
+    if (!studentIdPattern.test(cleanStudentId)) {
+      return res.status(400).json({
+        message: "Student ID must follow official format: 00-0000-000000 or 00-00-0000-000000 (e.g. 02-2223-012345). Maximum length: 17 characters.",
+      });
+    }
 
     const existingEmail = await User.findOne({ email: cleanEmail });
     if (existingEmail) {
@@ -803,10 +810,10 @@ export const createAdminByAdmin = async (req, res) => {
       ? adminId.trim()
       : `ADMIN-${String(adminCount + 1).padStart(3, "0")}`;
 
-    const adminIdRegex = /^(ADMIN-\d{3}|UP-\d{2}-\d{3}-[A-Z])$/i;
+    const adminIdRegex = /^ADMIN(\s*-\s*|-)\d{3}$/i;
     if (finalAdminId && !adminIdRegex.test(finalAdminId)) {
       return res.status(400).json({
-        message: "Admin ID must follow the official format: ADMIN-000 (e.g. ADMIN-001) or UP-00-000-F.",
+        message: "Admin ID must follow the official format: ADMIN - 000 or ADMIN-000 (e.g. ADMIN - 001). Maximum length: 11 characters.",
       });
     }
     const existingAdminId = await User.findOne({ studentId: finalAdminId });
