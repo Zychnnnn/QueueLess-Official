@@ -17148,19 +17148,19 @@ function ManageRequests({
       </div>
 
       {/* Requests List (Scrollable Card Rows) */}
-      <div className="mt-3 overflow-x-auto rounded-xl border border-border bg-card shadow-xs">
-        <div className="min-w-[960px]">
+      <div className="mt-3 rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+        <div className="w-full">
         {/* Header row */}
-        <div className="sticky top-0 z-10 grid items-center gap-3 border-b border-border bg-muted/60 px-4 py-2.5 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-          style={{ gridTemplateColumns: "88px 180px 220px 120px minmax(300px, 1fr)" }}>
+        <div className="sticky top-0 z-10 grid items-center gap-2.5 border-b border-border bg-muted/60 px-3.5 py-2.5 backdrop-blur text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+          style={{ gridTemplateColumns: "78px minmax(120px, 1fr) minmax(140px, 1.3fr) 110px auto" }}>
           <span>Queue</span>
           <span>Student</span>
           <span>Document</span>
-          <span>Status</span>
+          <span className="text-center">Status</span>
           <span className="text-right pr-2">Actions</span>
         </div>
 
-        <div className="max-h-[360px] overflow-y-auto scrollbar-thin divide-y divide-border/60">
+        <div className="max-h-[360px] overflow-y-auto overflow-x-hidden scrollbar-thin divide-y divide-border/60">
           {shown.map((r) => {
             const isUrgent = r.priority === "Urgent";
             const isPriority = r.priority === "Priority";
@@ -17197,8 +17197,8 @@ function ManageRequests({
             return (
               <div
                 key={r.id}
-                className={`grid items-center gap-3 border-l-4 px-4 py-3.5 transition-colors hover:bg-muted/25 ${accentColor}`}
-                style={{ gridTemplateColumns: "88px 180px 220px 120px minmax(300px, 1fr)" }}
+                className={`grid items-center gap-2.5 border-l-4 px-3.5 py-3 transition-colors hover:bg-muted/25 ${accentColor}`}
+                style={{ gridTemplateColumns: "78px minmax(120px, 1fr) minmax(140px, 1.3fr) 110px auto" }}
               >
                 {/* Queue line + priority */}
                 <div className="flex flex-col gap-1">
