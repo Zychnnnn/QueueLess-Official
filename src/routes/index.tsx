@@ -22676,7 +22676,7 @@ function UsersPanel({
       )}
 
       {/* Confirmation Modal 1: Add New Staff */}
-      {showAddConfirmModal && pendingStaffPayload && (
+      {showAddConfirmModal && pendingStaffPayload && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
           onClick={() => !staffLoading && setShowAddConfirmModal(false)}
@@ -22754,11 +22754,12 @@ function UsersPanel({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Modal 2: Add New Student */}
-      {showAddStudentConfirmModal && pendingStudentPayload && (
+      {showAddStudentConfirmModal && pendingStudentPayload && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
           onClick={() => !studentLoading && setShowAddStudentConfirmModal(false)}
@@ -22850,40 +22851,41 @@ function UsersPanel({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Modal 2: Delete Account */}
-      {showDeleteConfirmModal && userToDelete && (
+      {showDeleteConfirmModal && userToDelete && typeof document !== "undefined" && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 animate-in fade-in duration-150"
           onClick={() => !deleteLoading && setShowDeleteConfirmModal(false)}
         >
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto rounded-xl border border-border bg-card p-4 sm:p-5 shadow-2xl scrollbar-thin"
+            className="w-full max-w-[390px] rounded-xl border border-border bg-card p-3.5 shadow-2xl animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="flex size-8 items-center justify-center rounded-full bg-destructive/10 text-destructive shrink-0">
-                <AlertTriangle className="size-4" />
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex size-7 items-center justify-center rounded-full bg-destructive/10 text-destructive shrink-0">
+                <AlertTriangle className="size-3.5" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-base font-bold text-foreground">
+                <h3 className="text-sm font-bold text-foreground leading-tight">
                   Delete User Account
                 </h3>
-                <p className="text-[11px] text-muted-foreground truncate">
-                  This action is permanent and removes the account completely.
+                <p className="text-[10px] text-muted-foreground truncate leading-tight">
+                  Permanently removes this user from the system.
                 </p>
               </div>
             </div>
 
-            <div className="mt-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-xs">
-              <p className="font-semibold text-destructive text-[11.5px]">
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-2.5 text-[11px]">
+              <p className="font-semibold text-destructive text-[11px] mb-1.5 leading-snug">
                 Are you sure you want to permanently delete this user?
               </p>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1 border-t border-destructive/10 pt-2 text-[11px] text-muted-foreground">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 border-t border-destructive/10 pt-1.5 text-[10.5px] text-muted-foreground">
                 <p className="truncate">
                   <strong className="text-foreground">Name:</strong>{" "}
                   {userToDelete.name}
@@ -22892,12 +22894,12 @@ function UsersPanel({
                   <strong className="text-foreground">Role:</strong>{" "}
                   <span className="capitalize">{userToDelete.role}</span>
                 </p>
-                <p className="truncate sm:col-span-2">
+                <p className="truncate col-span-2">
                   <strong className="text-foreground">Email:</strong>{" "}
                   {userToDelete.email}
                 </p>
                 {userToDelete.studentId && (
-                  <p className="truncate sm:col-span-2">
+                  <p className="truncate col-span-2">
                     <strong className="text-foreground">ID:</strong>{" "}
                     {userToDelete.studentId}
                   </p>
@@ -22905,12 +22907,12 @@ function UsersPanel({
               </div>
             </div>
 
-            <div className="mt-3">
-              <label className="text-[11px] font-bold text-foreground block mb-1">Reason for Deletion *</label>
+            <div className="mt-2.5">
+              <label className="text-[10.5px] font-bold text-foreground block mb-1">Reason for Deletion *</label>
               <select
                 value={deleteReason}
                 onChange={(e) => setDeleteReason(e.target.value)}
-                className="field h-8 text-xs cursor-pointer"
+                className="field h-8 text-xs cursor-pointer py-1 px-2"
                 required
               >
                 <option value="">Select a reason</option>
@@ -22926,12 +22928,12 @@ function UsersPanel({
               </select>
             </div>
 
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-3 flex justify-end gap-1.5">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs cursor-pointer"
+                className="h-7.5 px-3 text-xs cursor-pointer"
                 onClick={() => setShowDeleteConfirmModal(false)}
                 disabled={deleteLoading}
               >
@@ -22941,13 +22943,13 @@ function UsersPanel({
                 type="button"
                 variant="destructive"
                 size="sm"
-                className="h-8 text-xs font-bold cursor-pointer"
+                className="h-7.5 px-3 text-xs font-bold cursor-pointer"
                 onClick={handleConfirmDelete}
                 disabled={deleteLoading || !deleteReason}
               >
                 {deleteLoading ? (
                   <>
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <Loader2 className="size-3 animate-spin" />
                     Deleting...
                   </>
                 ) : (
@@ -22956,7 +22958,8 @@ function UsersPanel({
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Admin View User Profile & Manage Account Modal */}
