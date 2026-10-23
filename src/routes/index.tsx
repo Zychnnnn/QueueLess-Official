@@ -41,6 +41,7 @@ import {
   FileText,
   GraduationCap,
   History,
+  KeyRound,
   LayoutDashboard,
   Loader2,
   Lock,
@@ -211,6 +212,7 @@ type RequestItem = {
   assignedStaffId?: string;
   assignedStaffName?: string;
   counterWindow?: string;
+  claimOtp?: string;
   rating?: number;
   feedback?: string;
   feedbackAt?: string;
@@ -13624,6 +13626,21 @@ function DigitalReceiptModal({
                 <span className="font-semibold text-foreground print:text-black">{currentReq.status}</span>
               </div>
 
+              {/* Claiming OTP Verification Code */}
+              {currentReq.claimOtp && (
+                <div className="mt-2.5 inline-flex flex-col items-center rounded-lg border-2 border-dashed border-emerald-600/50 bg-emerald-500/10 px-4 py-2 print:border-black print:bg-white">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 print:text-black">
+                    Claiming Verification OTP Code
+                  </span>
+                  <span className="font-mono text-2xl font-extrabold tracking-widest text-emerald-700 dark:text-emerald-200 print:text-black">
+                    {currentReq.claimOtp}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground print:text-black">
+                    Present this 6-digit code at {counterInfo.short} to claim
+                  </span>
+                </div>
+              )}
+
               {/* Barcode representation */}
               <div className="mt-3 flex flex-col items-center">
                 <div className="h-6 w-48 flex items-center justify-center gap-[2px] opacity-75 print:opacity-100">
@@ -14061,6 +14078,7 @@ function EditReceiptModal({
     purpose: string;
     paymentStatus: string;
     counterWindow?: string;
+    claimOtp?: string;
   }) => void;
   loading?: boolean;
 }) {
@@ -14072,6 +14090,9 @@ function EditReceiptModal({
   const [remarks, setRemarks] = useState<string>(request.remarks || "");
   const [counterWindow, setCounterWindow] = useState<string>(
     request.counterWindow || getReleasingCounter(request).full
+  );
+  const [claimOtp, setClaimOtp] = useState<string>(
+    request.claimOtp || Math.floor(100000 + Math.random() * 900000).toString()
   );
   const [pickupDate, setPickupDate] = useState<string>(request.pickupDate || "");
   const [copies, setCopies] = useState<number>(request.copies || 1);
@@ -16105,6 +16126,7 @@ function ConfirmStatusModal({
       pickupDate: pickupDate.trim() || "Standard Schedule",
       remarks: remarks.trim(),
       counterWindow: counterWindow.trim(),
+      claimOtp: claimOtp.trim(),
     });
   };
 
@@ -16283,6 +16305,36 @@ function ConfirmStatusModal({
                 placeholder="e.g., Please present your valid school ID at Window 2 upon payment."
                 className="field text-xs resize-none"
               />
+            </div>
+
+            {/* Claiming Verification OTP Code */}
+            <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                  <ShieldCheck className="size-3.5 text-emerald-600" />
+                  Claiming Verification OTP (Dispatched to Student Email)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setClaimOtp(Math.floor(100000 + Math.random() * 900000).toString())}
+                  className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+                  title="Generate a new 6-digit verification code"
+                >
+                  Regenerate
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={claimOtp}
+                  onChange={(e) => setClaimOtp(e.target.value.replace(/\D/g, ""))}
+                  className="font-mono text-sm font-extrabold tracking-widest text-emerald-800 dark:text-emerald-200 bg-background rounded-lg px-2.5 py-1 border border-emerald-500/40 w-32 text-center shadow-xs"
+                />
+                <span className="text-[11px] text-muted-foreground leading-tight">
+                  Student presents this 6-digit OTP code at {counterWindow || "the counter"} upon claim.
+                </span>
+              </div>
             </div>
 
             {/* Digital Receipt Live Preview Helper */}
@@ -16731,6 +16783,7 @@ function ManageRequests({
     pickupDate: string;
     remarks: string;
     counterWindow?: string;
+    claimOtp?: string;
   }) => {
     if (!pendingStatusChange) return;
     const reqId = pendingStatusChange.request.id;
@@ -16771,6 +16824,7 @@ function ManageRequests({
           paymentStatus: result.request.paymentStatus || payload.paymentStatus,
           pickupDate: result.request.pickupDate || payload.pickupDate,
           remarks: result.request.remarks ?? payload.remarks,
+          claimOtp: result.request.claimOtp || payload.claimOtp,
         } : {}),
       };
 
@@ -17282,6 +17336,14 @@ function ManageRequests({
                       <MapPin className="size-2.5 text-primary shrink-0" />
                       {getReleasingCounter(r).short}
                     </span>
+                    {r.claimOtp && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.2 text-[9px] font-mono font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-500/30"
+                        title={`Claiming OTP Code for student verification: ${r.claimOtp}`}
+                      >
+                        <KeyRound className="size-2.5 shrink-0" /> OTP: {r.claimOtp}
+                      </span>
+                    )}
                     {Boolean(r.rating) && (
                       <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.2 text-[9px] font-black text-amber-700 dark:text-amber-400 border border-amber-500/30">
                         ★ {r.rating}/5 from student

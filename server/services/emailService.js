@@ -211,6 +211,7 @@ export const sendRequestUpdateNotification = async ({
   remarks,
   lineNumber,
   copies,
+  claimOtp,
 }) => {
   const { emailUser, emailPass } = getCredentials();
   if (!emailUser || !emailPass) {
@@ -261,9 +262,9 @@ export const sendRequestUpdateNotification = async ({
   }
 
   const subject = status === "Ready for Claiming"
-    ? `[QueueLess] Ready for Claiming: ${document} (${requestNumber})`
+    ? `[QueueLess] Ready for Claiming: ${document} (OTP: ${claimOtp || requestNumber})`
     : status === "Processing"
-    ? `[QueueLess] In Processing: ${document} (${requestNumber})`
+    ? `[QueueLess] In Processing: ${document} (Claim OTP: ${claimOtp || requestNumber})`
     : status === "Claimed"
     ? `[QueueLess] Document Released: ${document} (${requestNumber})`
     : status === "Needs Correction"
@@ -296,6 +297,20 @@ export const sendRequestUpdateNotification = async ({
             ${statusDescription}
           </p>
         </div>
+
+        ${claimOtp ? `
+        <div style="background-color: #f0fdf4; border: 2px dashed #15803d; border-radius: 12px; padding: 22px 18px; margin-bottom: 20px; text-align: center;">
+          <p style="color: #166534; font-size: 12px; margin: 0 0 6px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;">
+            Official Claiming Verification OTP Code
+          </p>
+          <div style="font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #15803d; background: #ffffff; padding: 12px 24px; border-radius: 8px; display: inline-block; border: 1.5px solid #86efac; font-family: monospace; margin: 4px 0 10px;">
+            ${claimOtp}
+          </div>
+          <p style="color: #166534; font-size: 13px; margin: 0; font-weight: 600; line-height: 1.4;">
+            Present this 6-digit OTP code along with your Student ID at <strong>${counterWindow || pickupDate || "Counter Window 2 (Releasing Desk)"}</strong> upon claiming.
+          </p>
+        </div>
+        ` : ""}
 
         <div style="background-color: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6; padding: 16px; margin-bottom: 20px;">
           <h4 style="margin: 0 0 12px; color: #111827; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Document Details</h4>
@@ -345,13 +360,24 @@ export const sendRequestUpdateNotification = async ({
     `,
   };
 
+  // Attempt 1: Port 465 (SSL direct)
   try {
-    const info = await transport.sendMail(mailOptions);
-    console.log(`[Email Service] Update email sent for ${requestNumber} to ${toEmail}: ${info.messageId}`);
+    const transport465 = createGmailTransport(465, true);
+    const info = await transport465.sendMail(mailOptions);
+    console.log(`[Email Service] Update email sent for ${requestNumber} to ${toEmail} via 465: ${info.messageId}`);
     return { sent: true, messageId: info.messageId };
-  } catch (err) {
-    console.error(`[Email Service] Failed to send update email to ${toEmail}:`, err.message);
-    return { sent: false, error: err.message };
+  } catch (err465) {
+    console.warn(`[Email Service] Port 465 failed for ${requestNumber} (${err465.message}), falling back to port 587...`);
+    // Attempt 2: Port 587 (TLS)
+    try {
+      const transport587 = createGmailTransport(587, false);
+      const info = await transport587.sendMail(mailOptions);
+      console.log(`[Email Service] Update email sent for ${requestNumber} to ${toEmail} via 587: ${info.messageId}`);
+      return { sent: true, messageId: info.messageId };
+    } catch (err587) {
+      console.error(`[Email Service] All update email attempts failed for ${toEmail}: 465: ${err465.message} | 587: ${err587.message}`);
+      return { sent: false, error: err587.message };
+    }
   }
 };
 

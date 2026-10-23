@@ -305,6 +305,20 @@ export const updateRequestStatus = async (req, res) => {
       updatePayload.remarks = req.body.remarks;
     }
 
+    // Generate / assign Claiming OTP for processing & claiming verification
+    let claimOtp = req.body.claimOtp;
+    if (!claimOtp) {
+      const existing = await Request.findOne({ requestNumber });
+      if (existing && existing.claimOtp) {
+        claimOtp = existing.claimOtp;
+      } else if (status === "Processing" || status === "Ready for Claiming") {
+        claimOtp = Math.floor(100000 + Math.random() * 900000).toString();
+      }
+    }
+    if (claimOtp) {
+      updatePayload.claimOtp = claimOtp;
+    }
+
     const request = await Request.findOneAndUpdate(
       { requestNumber },
       updatePayload,
@@ -315,8 +329,12 @@ export const updateRequestStatus = async (req, res) => {
       return res.status(404).json({ message: "Request not found." });
     }
 
-    // Notify student via email asynchronously
-    notifyStudentOfUpdate(request);
+    // Notify student via email (awaited for Vercel serverless lifecycle)
+    try {
+      await notifyStudentOfUpdate(request);
+    } catch (notifErr) {
+      console.error(`[Request Controller] Notification delivery warning for ${requestNumber}:`, notifErr?.message);
+    }
 
     let staffUser = null;
     if (req.user?.id) {
@@ -371,6 +389,7 @@ const notifyStudentOfUpdate = async (request) => {
         counterWindow: request.counterWindow,
         lineNumber: request.lineNumber,
         copies: request.copies,
+        claimOtp: request.claimOtp,
       });
     } else {
       console.warn(`[Request Controller] No email found for request ${request.requestNumber}`);

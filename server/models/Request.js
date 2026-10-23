@@ -52,6 +52,10 @@ const requestSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    claimOtp: {
+      type: String,
+      default: "",
+    },
     counterWindow: {
       type: String,
       default: "",
