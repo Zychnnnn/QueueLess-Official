@@ -212,6 +212,7 @@ export const sendRequestUpdateNotification = async ({
   lineNumber,
   copies,
   claimOtp,
+  counterWindow,
 }) => {
   const { emailUser, emailPass } = getCredentials();
   if (!emailUser || !emailPass) {
@@ -332,7 +333,11 @@ export const sendRequestUpdateNotification = async ({
             ` : ""}
             <tr>
               <td style="padding: 6px 0; color: #6b7280;">When to Claim:</td>
-              <td style="padding: 6px 0; color: #111827; font-weight: 600;">${pickupDate || "Standard Schedule • Registrar Counter 2"}</td>
+              <td style="padding: 6px 0; color: #111827; font-weight: 600;">${pickupDate || "Standard Schedule"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #6b7280;">Claiming Window:</td>
+              <td style="padding: 6px 0; color: #183d22; font-weight: 700;">${counterWindow || "Counter Window 2 (Releasing Desk)"}</td>
             </tr>
             <tr>
               <td style="padding: 6px 0; color: #6b7280;">Payment Requirement:</td>
