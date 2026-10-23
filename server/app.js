@@ -22,10 +22,12 @@ process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "1085223545333-85
 process.env.EMAIL_USER = process.env.EMAIL_USER || "reirei.edu.ph@gmail.com";
 process.env.EMAIL_PASS = process.env.EMAIL_PASS || "ofbcccujpenkpqnz";
 
-try {
-  dns.setServers(["1.1.1.1", "8.8.8.8", "8.8.4.4"]);
-} catch {
-  // Use default system DNS if custom servers are disallowed
+if (process.env.NODE_ENV !== "production") {
+  try {
+    dns.setServers(["1.1.1.1", "8.8.8.8", "8.8.4.4"]);
+  } catch {
+    // Use default system DNS if custom servers are disallowed
+  }
 }
 
 const app = express();

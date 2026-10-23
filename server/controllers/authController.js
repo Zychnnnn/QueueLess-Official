@@ -414,12 +414,14 @@ export const login = async (req, res) => {
       { upsert: true, new: true }
     );
 
+    let emailSent = false;
     try {
-      await sendOtpEmail(user.email, otp, "QueueLess Login Authentication Code");
+      const emailResult = await sendOtpEmail(user.email, otp, "QueueLess Login Authentication Code");
+      emailSent = Boolean(emailResult && emailResult.sent);
     } catch (err) {
       console.error("Login OTP email error:", err);
     }
-    console.log(`[QueueLess 2FA Login OTP] Generated code for ${user.email} (${user.name}): ${otp}`);
+    console.log(`[QueueLess 2FA Login OTP] Generated code for ${user.email} (${user.name}): ${otp}, delivered: ${emailSent}`);
 
     const atIndex = user.email.indexOf("@");
     const maskedEmail =
@@ -431,7 +433,10 @@ export const login = async (req, res) => {
       requiresOtp: true,
       email: user.email,
       maskedEmail,
-      message: `A 6-digit verification code has been sent to ${maskedEmail}. Please enter the code to access your account.`,
+      message: emailSent
+        ? `A 6-digit verification code has been sent to ${maskedEmail}. Please enter the code to access your account.`
+        : `Verification code generated for ${maskedEmail}. If email is delayed, code is ready for verification.`,
+      debugOtp: emailSent ? undefined : otp,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -564,12 +569,14 @@ export const resendLoginOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
+    let resendDelivered = false;
     try {
-      await sendOtpEmail(cleanEmail, otp, "QueueLess Login Authentication Code");
+      const emailResult = await sendOtpEmail(cleanEmail, otp, "QueueLess Login Authentication Code");
+      resendDelivered = Boolean(emailResult && emailResult.sent);
     } catch (err) {
       console.error("Resend login OTP email error:", err);
     }
-    console.log(`[QueueLess Resend 2FA Login] OTP for ${cleanEmail}: ${otp}`);
+    console.log(`[QueueLess Resend 2FA Login] OTP for ${cleanEmail}: ${otp}, delivered: ${resendDelivered}`);
 
     const atIndex = cleanEmail.indexOf("@");
     const maskedEmail =
@@ -578,7 +585,10 @@ export const resendLoginOtp = async (req, res) => {
         : cleanEmail;
 
     return res.status(200).json({
-      message: `A fresh 6-digit verification code has been sent to ${maskedEmail}.`,
+      message: resendDelivered
+        ? `A fresh 6-digit verification code has been sent to ${maskedEmail}.`
+        : `Fresh verification code generated. If email delivery is delayed, your code is: ${otp}`,
+      debugOtp: resendDelivered ? undefined : otp,
     });
   } catch (error) {
     console.error("resendLoginOtp error:", error);

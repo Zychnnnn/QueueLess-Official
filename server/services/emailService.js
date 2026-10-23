@@ -13,34 +13,28 @@ const getCredentials = () => {
 };
 
 
+export const createGmailTransport = (port = 465, secure = true) => {
+  const { emailUser, emailPass } = getCredentials();
+  return nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port,
+    secure,
+    auth: {
+      user: emailUser,
+      pass: emailPass,
+    },
+    connectionTimeout: 6000,
+    greetingTimeout: 6000,
+    socketTimeout: 6000,
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+};
+
 export const getTransporter = () => {
   if (transporter) return transporter;
-
-  const { emailUser, emailPass } = getCredentials();
-
-  if (emailUser && emailPass) {
-    transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: emailUser,
-        pass: emailPass,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 10000,
-    });
-  } else {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: false,
-      auth: {
-        user: emailUser || "",
-        pass: emailPass || "",
-      },
-    });
-  }
-
+  transporter = createGmailTransport(465, true);
   return transporter;
 };
 
@@ -84,13 +78,24 @@ export const sendOtpEmail = async (toEmail, otp, customSubject) => {
     `,
   };
 
+  // Attempt 1: Port 465 (SSL direct)
   try {
-    const info = await transport.sendMail(mailOptions);
-    console.log(`[Email Service] OTP successfully sent to ${toEmail}: ${info.messageId}`);
+    const transport465 = createGmailTransport(465, true);
+    const info = await transport465.sendMail(mailOptions);
+    console.log(`[Email Service] OTP successfully sent to ${toEmail} via port 465: ${info.messageId}`);
     return { sent: true, messageId: info.messageId };
-  } catch (err) {
-    console.error(`[Email Service] Failed to send email to ${toEmail}:`, err.message);
-    return { sent: false, error: err.message };
+  } catch (err465) {
+    console.warn(`[Email Service] Port 465 failed (${err465.message}), falling back to port 587 (TLS)...`);
+    // Attempt 2: Port 587 (STARTTLS)
+    try {
+      const transport587 = createGmailTransport(587, false);
+      const info = await transport587.sendMail(mailOptions);
+      console.log(`[Email Service] OTP successfully sent to ${toEmail} via port 587: ${info.messageId}`);
+      return { sent: true, messageId: info.messageId };
+    } catch (err587) {
+      console.error(`[Email Service] All SMTP attempts failed for ${toEmail}. 465: ${err465.message} | 587: ${err587.message}`);
+      return { sent: false, error: `${err465.message} | ${err587.message}` };
+    }
   }
 };
 
