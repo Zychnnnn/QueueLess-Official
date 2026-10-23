@@ -16136,10 +16136,12 @@ function ConfirmStatusModal({
             </div>
             <div>
               <h3 className="font-display text-sm font-bold text-foreground">
-                Process Request & Update Receipt
+                {initialTargetStatus === "Claimed" ? "Release Document & Mark as Done" : "Process Request & Update Receipt"}
               </h3>
               <p className="text-[11px] text-muted-foreground">
-                Edit payment directive & schedule before applying to receipt
+                {initialTargetStatus === "Claimed"
+                  ? "Confirm official document release to student and finalize ticket"
+                  : "Edit claiming window, payment directive & schedule before applying to receipt"}
               </p>
             </div>
           </div>
@@ -16322,6 +16324,10 @@ function ConfirmStatusModal({
               <>
                 <Loader2 className="size-3.5 animate-spin" /> Saving...
               </>
+            ) : initialTargetStatus === "Claimed" ? (
+              <>
+                <CheckCircle2 className="size-3.5" /> Confirm & Mark as Done
+              </>
             ) : (
               <>
                 <Check className="size-3.5" /> Confirm & Apply to Receipt
@@ -16351,7 +16357,7 @@ function ManageRequests({
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Active");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "priority-only">("all");
-  const [staffQueueTab, setStaffQueueTab] = useState<"all" | "my_assigned" | "unassigned" | "done">("all");
+  const [staffQueueTab, setStaffQueueTab] = useState<"all" | "my_assigned" | "processing" | "unassigned" | "done">("all");
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [confirmingAcceptReq, setConfirmingAcceptReq] = useState<RequestItem | null>(null);
 
@@ -16555,7 +16561,7 @@ function ManageRequests({
       requests
         .filter((r) => {
           const statusMatch =
-            staffQueueTab === "done"
+            staffQueueTab === "done" || staffQueueTab === "processing"
               ? true
               : status === "Active"
               ? r.status !== "Claimed"
@@ -16582,6 +16588,8 @@ function ManageRequests({
           const staffTabMatch =
             staffQueueTab === "my_assigned"
               ? isAssignedToMe
+              : staffQueueTab === "processing"
+              ? r.status === "Processing"
               : staffQueueTab === "unassigned"
               ? isUnassigned && r.status === "Pending"
               : staffQueueTab === "done"
@@ -17081,6 +17089,22 @@ function ManageRequests({
 
         <button
           type="button"
+          onClick={() => {
+            setStaffQueueTab("processing");
+            setStatus("All");
+          }}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
+            staffQueueTab === "processing"
+              ? "bg-sky-600 text-white shadow-xs"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          <Clock className="size-3.5" />
+          <span>Processing ({stats.processing})</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setStaffQueueTab("unassigned")}
           className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition cursor-pointer ${
             staffQueueTab === "unassigned"
@@ -17166,7 +17190,7 @@ function ManageRequests({
           <span>Queue</span>
           <span>Student</span>
           <span>Document</span>
-          <span className="text-center">Status</span>
+          <span className="text-center">Status & Window</span>
           <span className="text-right pr-2">Actions</span>
         </div>
 
@@ -17251,6 +17275,13 @@ function ManageRequests({
                         {isAssignedToMe ? "Assigned to You" : `Assigned: ${r.assignedStaffName}`}
                       </span>
                     )}
+                    <span
+                      className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.2 text-[9px] font-semibold text-muted-foreground border border-border"
+                      title={`Claiming Counter: ${getReleasingCounter(r).full}`}
+                    >
+                      <MapPin className="size-2.5 text-primary shrink-0" />
+                      {getReleasingCounter(r).short}
+                    </span>
                     {Boolean(r.rating) && (
                       <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.2 text-[9px] font-black text-amber-700 dark:text-amber-400 border border-amber-500/30">
                         ★ {r.rating}/5 from student
@@ -17259,9 +17290,21 @@ function ManageRequests({
                   </div>
                 </div>
 
-                {/* Status badge */}
-                <div className="flex justify-center">
+                {/* Status badge & Claiming Window */}
+                <div className="flex flex-col items-center justify-center gap-1 text-center">
                   <StatusBadge status={r.status} />
+                  {(() => {
+                    const counter = getReleasingCounter(r);
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary border border-primary/20 max-w-full truncate"
+                        title={`Claiming Window: ${counter.full}`}
+                      >
+                        <MapPin className="size-2.5 shrink-0" />
+                        <span className="truncate">{counter.short}</span>
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 {/* Actions */}
@@ -17336,6 +17379,45 @@ function ManageRequests({
                       >
                         <UserCheck className="size-3.5" /> Reassign
                       </Button>
+                      {r.status === "Claimed" ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 text-xs font-bold border border-emerald-500/30">
+                          <CheckCircle2 className="size-3.5" /> Claimed
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const nextStatus: Status =
+                              r.status === "Pending"
+                                ? "Processing"
+                                : r.status === "Processing"
+                                ? "Ready for Claiming"
+                                : r.status === "Ready for Claiming"
+                                ? "Claimed"
+                                : "Processing";
+                            setPendingStatusChange({ request: r, nextStatus });
+                          }}
+                          className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs shrink-0 whitespace-nowrap text-white bg-emerald-600 hover:bg-emerald-700"
+                          title={r.status === "Ready for Claiming" ? "Mark Request as Done (Claimed)" : "Process Request"}
+                        >
+                          {r.status === "Ready for Claiming" ? (
+                            <>
+                              <CheckCircle2 className="size-3.5" /> Done
+                            </>
+                          ) : (
+                            <>
+                              <ClipboardCheck className="size-3.5" /> Process
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    r.status === "Claimed" ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 text-xs font-bold border border-emerald-500/30">
+                        <CheckCircle2 className="size-3.5" /> Claimed
+                      </span>
+                    ) : (
                       <Button
                         size="sm"
                         onClick={() => {
@@ -17349,31 +17431,24 @@ function ManageRequests({
                               : "Processing";
                           setPendingStatusChange({ request: r, nextStatus });
                         }}
-                        className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs shrink-0 whitespace-nowrap"
-                        title="Process Request"
+                        className={`h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs shrink-0 whitespace-nowrap text-white ${
+                          r.status === "Ready for Claiming"
+                            ? "bg-emerald-600 hover:bg-emerald-700 ring-1 ring-emerald-500/40"
+                            : "bg-emerald-600 hover:bg-emerald-700"
+                        }`}
+                        title={r.status === "Ready for Claiming" ? "Mark Request as Done (Claimed)" : "Process Request"}
                       >
-                        <ClipboardCheck className="size-3.5" /> Process
+                        {r.status === "Ready for Claiming" ? (
+                          <>
+                            <CheckCircle2 className="size-3.5" /> Done
+                          </>
+                        ) : (
+                          <>
+                            <ClipboardCheck className="size-3.5" /> Process
+                          </>
+                        )}
                       </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        const nextStatus: Status =
-                          r.status === "Pending"
-                            ? "Processing"
-                            : r.status === "Processing"
-                            ? "Ready for Claiming"
-                            : r.status === "Ready for Claiming"
-                            ? "Claimed"
-                            : "Processing";
-                        setPendingStatusChange({ request: r, nextStatus });
-                      }}
-                      className="h-8 px-3 text-xs font-bold cursor-pointer gap-1.5 shadow-xs shrink-0 whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white"
-                      title="Process Request"
-                    >
-                      <ClipboardCheck className="size-3.5" /> Process
-                    </Button>
+                    )
                   )}
                 </div>
               </div>
@@ -17403,6 +17478,18 @@ function ManageRequests({
                 </p>
                 <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
                   Switch to "Available to Accept" to claim pending student requests.
+                </p>
+              </div>
+            ) : staffQueueTab === "processing" ? (
+              <div className="py-12 px-4 text-center">
+                <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-sky-500/15 text-sky-600 mb-3">
+                  <Clock className="size-6" />
+                </div>
+                <p className="font-display font-bold text-sm text-foreground">
+                  No Requests Currently in Processing
+                </p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                  All requests are either pending pickup, ready for claiming, or already completed.
                 </p>
               </div>
             ) : (
