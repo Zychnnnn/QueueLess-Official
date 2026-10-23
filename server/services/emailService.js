@@ -371,6 +371,10 @@ export const sendSecurityConfirmationEmail = async ({
   resetPasswordUrl,
   securityActionUrl,
 }) => {
+  // Map destructured params to template variable names
+  const effectiveLogoutUrl = logoutUrl || securityActionUrl || "#";
+  const effectiveResetUrl = resetPasswordUrl || securityActionUrl || "#";
+
   const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
   const emailPass =
     process.env.EMAIL_PASS ||
