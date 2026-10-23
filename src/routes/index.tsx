@@ -16077,6 +16077,9 @@ function ConfirmStatusModal({
     request.pickupDate || (initialTargetStatus === "Ready for Claiming" ? "Ready for Claiming Now" : "Within the day (Today)")
   );
   const [remarks, setRemarks] = useState<string>(request.remarks || "");
+  const [counterWindow, setCounterWindow] = useState<string>(
+    request.counterWindow || getReleasingCounter(request).full
+  );
 
   const paymentPresets = [
     "Prepare payment within the day",
@@ -16122,7 +16125,7 @@ function ConfirmStatusModal({
         role="dialog"
         aria-modal="true"
         aria-label="Process Request & Update Receipt"
-        className="w-full max-w-md max-h-[85vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden"
+        className="w-full max-w-lg md:max-w-xl max-h-[88vh] flex flex-col rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Pinned Header */}
@@ -16754,6 +16757,13 @@ function ManageRequests({
       const updatedItem: RequestItem = {
         ...pendingStatusChange.request,
         ...payload,
+        ...(result.request ? {
+          status: result.request.status || payload.status,
+          counterWindow: result.request.counterWindow || payload.counterWindow,
+          paymentStatus: result.request.paymentStatus || payload.paymentStatus,
+          pickupDate: result.request.pickupDate || payload.pickupDate,
+          remarks: result.request.remarks ?? payload.remarks,
+        } : {}),
       };
 
       let nextRequests = requests.map((r) => (r.id === reqId ? updatedItem : r));
@@ -17525,52 +17535,119 @@ function ManageRequests({
         </div>
       )}
 
-      {/* Delete Request Confirmation Modal */}
+      {/* Delete Request Confirmation Modal (Maximized) */}
       {deletingReq && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-sm rounded-xl border border-destructive/30 bg-card p-4 shadow-xl animate-in zoom-in-95 duration-150 text-left">
-            <div className="flex items-center gap-2.5 border-b border-border pb-2.5 mb-2.5">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive">
-                <Trash2 className="size-4" />
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm p-4 sm:p-6 animate-in fade-in duration-150"
+          onClick={() => !deleteLoading && setDeletingReq(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-dialog-title"
+            className="w-full max-w-xl md:max-w-2xl rounded-2xl border border-destructive/40 bg-card p-6 sm:p-7 shadow-2xl animate-in zoom-in-95 duration-150 text-left overflow-hidden flex flex-col gap-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 border-b border-border/70 pb-4">
+              <div className="flex items-center gap-3.5">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-destructive/15 text-destructive ring-1 ring-destructive/25">
+                  <Trash2 className="size-5" />
+                </div>
+                <div>
+                  <h3 id="delete-dialog-title" className="font-display text-base sm:text-lg font-bold text-foreground">
+                    Confirm Delete Request
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-mono font-bold text-foreground">
+                      Ticket #{deletingReq.id}
+                    </span>
+                    <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+                      Queue Line #{deletingReq.lineNumber ?? 1}
+                    </span>
+                    <span className="inline-flex items-center rounded-md bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
+                      Permanent Removal
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h3 className="font-display text-sm font-bold text-foreground">
-                  Confirm Delete Request
-                </h3>
-                <p className="text-[11px] text-muted-foreground">
-                  Ticket #{deletingReq.id} • Line #{deletingReq.lineNumber ?? 1}
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingReq(null);
+                  setDeleteReason("");
+                }}
+                disabled={deleteLoading}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition cursor-pointer"
+                aria-label="Close dialog"
+              >
+                <X className="size-5" />
+              </button>
             </div>
 
-            <p className="text-xs text-muted-foreground leading-relaxed mb-2.5">
-              Are you sure you want to permanently delete this request? This action cannot be undone.
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Are you sure you want to permanently delete this request from the queue? This will update succeeding line numbers in the queue. <span className="font-semibold text-destructive">This action cannot be undone.</span>
             </p>
 
-            <div className="rounded-lg border border-border bg-muted/30 p-2.5 text-xs space-y-1.5 mb-3">
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-muted-foreground">Student:</span>
-                <span className="font-semibold text-foreground truncate max-w-[200px]">{deletingReq.student} ({deletingReq.studentId})</span>
+            {/* Request Summary Card (Spacious & Max-Visible) */}
+            <div className="rounded-xl border border-border/80 bg-muted/40 p-4 sm:p-5 text-sm space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b border-border/50">
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground block mb-0.5">Student Information</span>
+                  <p className="font-bold text-foreground text-sm leading-snug break-words">
+                    {deletingReq.student}
+                  </p>
+                  <p className="font-mono text-xs text-muted-foreground mt-0.5">
+                    Student ID: {deletingReq.studentId || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground block mb-0.5">Current Status</span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold border border-border bg-background text-foreground">
+                    <span className="size-2 rounded-full bg-amber-500" />
+                    {deletingReq.status}
+                  </span>
+                  {deletingReq.date && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Requested on: {deletingReq.date}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-muted-foreground">Document:</span>
-                <span className="font-semibold text-foreground truncate max-w-[200px]">{deletingReq.document} ({deletingReq.copies || 1}x)</span>
-              </div>
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-muted-foreground">Status:</span>
-                <span className="font-semibold text-foreground">{deletingReq.status}</span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground block mb-0.5">Requested Document</span>
+                  <p className="font-semibold text-foreground text-sm break-words">
+                    {deletingReq.document}
+                  </p>
+                  <span className="text-xs text-muted-foreground">
+                    Copies: {deletingReq.copies || 1} {Number(deletingReq.copies || 1) === 1 ? "copy" : "copies"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground block mb-0.5">Purpose</span>
+                  <p className="text-xs text-foreground font-medium break-words">
+                    {deletingReq.purpose || "Not specified"}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="mb-3">
-              <label className="text-xs font-bold text-foreground block mb-1">Reason for Deletion *</label>
+            {/* Reason Selection */}
+            <div className="space-y-1.5">
+              <label htmlFor="delete-reason-select" className="text-xs sm:text-sm font-bold text-foreground flex items-center justify-between">
+                <span>Reason for Deletion <span className="text-destructive">*</span></span>
+                <span className="text-xs font-normal text-muted-foreground">Required for audit log</span>
+              </label>
               <select
+                id="delete-reason-select"
                 value={deleteReason}
                 onChange={(e) => setDeleteReason(e.target.value)}
-                className="field text-xs cursor-pointer"
+                className="field h-10 text-sm font-medium cursor-pointer w-full rounded-xl border border-input bg-background px-3 py-2 shadow-xs focus:ring-2 focus:ring-destructive/30"
                 required
               >
-                <option value="">Select a reason</option>
+                <option value="">Select a reason for deletion...</option>
                 <option value="Duplicate document request">Duplicate document request</option>
                 <option value="Cancelled by student request">Cancelled by student request</option>
                 <option value="Unclaimed beyond holding period (expired)">Unclaimed beyond holding period (expired)</option>
@@ -17581,30 +17658,34 @@ function ManageRequests({
               </select>
             </div>
 
-            <div className="flex items-center justify-end gap-2">
+            {/* Action Buttons */}
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 pt-2">
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => setDeletingReq(null)}
+                size="default"
+                onClick={() => {
+                  setDeletingReq(null);
+                  setDeleteReason("");
+                }}
                 disabled={deleteLoading}
-                className="h-8 cursor-pointer text-xs"
+                className="w-full sm:w-auto h-10 px-5 cursor-pointer text-sm font-semibold rounded-xl"
               >
                 Cancel
               </Button>
               <Button
-                size="sm"
+                size="default"
                 variant="destructive"
                 disabled={deleteLoading || !deleteReason}
                 onClick={() => handleDeleteRequest(deletingReq)}
-                className="h-8 cursor-pointer text-xs font-bold gap-1.5"
+                className="w-full sm:w-auto h-10 px-5 cursor-pointer text-sm font-bold gap-2 rounded-xl shadow-md"
               >
                 {deleteLoading ? (
                   <>
-                    <Loader2 className="size-3.5 animate-spin" /> Deleting...
+                    <Loader2 className="size-4 animate-spin" /> Permanently Deleting...
                   </>
                 ) : (
                   <>
-                    <Trash2 className="size-3.5" /> Delete
+                    <Trash2 className="size-4" /> Permanently Delete Request
                   </>
                 )}
               </Button>
