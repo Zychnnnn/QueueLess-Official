@@ -16101,6 +16101,9 @@ function ConfirmStatusModal({
   const [counterWindow, setCounterWindow] = useState<string>(
     request.counterWindow || getReleasingCounter(request).full
   );
+  const [claimOtp, setClaimOtp] = useState<string>(
+    request.claimOtp || Math.floor(100000 + Math.random() * 900000).toString()
+  );
 
   const paymentPresets = [
     "Prepare payment within the day",
