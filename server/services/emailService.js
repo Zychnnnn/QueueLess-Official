@@ -9,6 +9,7 @@ const getCredentials = () => {
     process.env.GMAIL_PASS ||
     process.env.GMAIL_APP_PASSWORD ||
     "ofbcccujpenkpqnz";
+  const emailPass = emailPassRaw ? emailPassRaw.replace(/\s+/g, "") : "";
   return { emailUser, emailPass };
 };
 

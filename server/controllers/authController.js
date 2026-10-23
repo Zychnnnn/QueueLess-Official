@@ -433,10 +433,7 @@ export const login = async (req, res) => {
       requiresOtp: true,
       email: user.email,
       maskedEmail,
-      message: emailSent
-        ? `A 6-digit verification code has been sent to ${maskedEmail}. Please enter the code to access your account.`
-        : `Verification code generated for ${maskedEmail}. If email is delayed, code is ready for verification.`,
-      debugOtp: emailSent ? undefined : otp,
+      message: `A 6-digit verification code has been sent to ${maskedEmail}. Please enter the code to access your account.`,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -585,10 +582,7 @@ export const resendLoginOtp = async (req, res) => {
         : cleanEmail;
 
     return res.status(200).json({
-      message: resendDelivered
-        ? `A fresh 6-digit verification code has been sent to ${maskedEmail}.`
-        : `Fresh verification code generated. If email delivery is delayed, your code is: ${otp}`,
-      debugOtp: resendDelivered ? undefined : otp,
+      message: `A fresh 6-digit verification code has been sent to ${maskedEmail}.`,
     });
   } catch (error) {
     console.error("resendLoginOtp error:", error);

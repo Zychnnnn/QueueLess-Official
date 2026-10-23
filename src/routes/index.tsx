@@ -3187,7 +3187,6 @@ function AuthScreen({
 
   const [loginOtpEmail, setLoginOtpEmail] = useState("");
   const [loginOtpMaskedEmail, setLoginOtpMaskedEmail] = useState("");
-  const [loginOtpInitialCode, setLoginOtpInitialCode] = useState("");
 
   const [registrationNotice, setRegistrationNotice] =
     useState<string | null>(null);
@@ -3488,7 +3487,6 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
       if (result.requiresOtp) {
         setLoginOtpEmail(result.email || identity);
         setLoginOtpMaskedEmail(result.maskedEmail || identity);
-        setLoginOtpInitialCode(result.debugOtp || "");
         setMode("login-otp");
         setError("");
         return;
@@ -4064,7 +4062,6 @@ const DEFAULT_GOOGLE_CLIENT_ID = "1085223545333-85puvi15u5mumi3eq038tspee023fbta
             <LoginOtpVerificationForm
               email={loginOtpEmail}
               maskedEmail={loginOtpMaskedEmail}
-              initialOtp={loginOtpInitialCode}
               onSuccess={(user) => onSignIn(user)}
               onBack={() => {
                 setMode("login");
@@ -4687,17 +4684,15 @@ function PasswordStrengthMeter({ password, confirmPassword }: { password: string
 function LoginOtpVerificationForm({
   email,
   maskedEmail,
-  initialOtp,
   onSuccess,
   onBack,
 }: {
   email: string;
   maskedEmail: string;
-  initialOtp?: string;
   onSuccess: (user: AuthUser) => void;
   onBack: () => void;
 }) {
-  const [otpCode, setOtpCode] = useState(initialOtp || "");
+  const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -4769,12 +4764,9 @@ function LoginOtpVerificationForm({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to resend code.");
-      if (data.debugOtp) {
-        setOtpCode(data.debugOtp);
-      }
       setSuccessMsg(data.message || "A fresh verification code has been dispatched to your email.");
       setResendCooldown(30);
-      setTimeout(() => setSuccessMsg(""), 8000);
+      setTimeout(() => setSuccessMsg(""), 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to resend verification code.");
     } finally {
