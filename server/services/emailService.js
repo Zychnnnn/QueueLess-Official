@@ -2,15 +2,21 @@ import nodemailer from "nodemailer";
 
 let transporter = null;
 
-export const getTransporter = () => {
-  if (transporter) return transporter;
-
-  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
+const getCredentials = () => {
+  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER || "reirei.edu.ph@gmail.com";
   const emailPassRaw =
     process.env.EMAIL_PASS ||
     process.env.GMAIL_PASS ||
-    process.env.GMAIL_APP_PASSWORD;
-  const emailPass = emailPassRaw ? emailPassRaw.replace(/\s+/g, "") : "";
+    process.env.GMAIL_APP_PASSWORD ||
+    "ofbcccujpenkpqnz";
+  return { emailUser, emailPass };
+};
+
+
+export const getTransporter = () => {
+  if (transporter) return transporter;
+
+  const { emailUser, emailPass } = getCredentials();
 
   if (emailUser && emailPass) {
     transporter = nodemailer.createTransport({
@@ -19,6 +25,9 @@ export const getTransporter = () => {
         user: emailUser,
         pass: emailPass,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
   } else {
     transporter = nodemailer.createTransport({
@@ -36,11 +45,7 @@ export const getTransporter = () => {
 };
 
 export const sendOtpEmail = async (toEmail, otp, customSubject) => {
-  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const emailPass =
-    process.env.EMAIL_PASS ||
-    process.env.GMAIL_PASS ||
-    process.env.GMAIL_APP_PASSWORD;
+  const { emailUser, emailPass } = getCredentials();
 
   if (!emailUser || !emailPass) {
     console.warn(
@@ -95,13 +100,7 @@ export const sendAdminRegistrationNotification = async ({
   studentId,
   userType,
 }) => {
-  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const emailPassRaw =
-    process.env.EMAIL_PASS ||
-    process.env.GMAIL_PASS ||
-    process.env.GMAIL_APP_PASSWORD;
-  const emailPass = emailPassRaw ? emailPassRaw.replace(/\s+/g, "") : "";
-
+  const { emailUser, emailPass } = getCredentials();
   if (!emailUser || !emailPass) {
     console.warn(
       `[Email Service] Registration notification skipped (credentials not configured) for ${name} (${email}).`
@@ -153,13 +152,7 @@ export const sendAccountStatusNotification = async ({
   name,
   status,
 }) => {
-  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const emailPassRaw =
-    process.env.EMAIL_PASS ||
-    process.env.GMAIL_PASS ||
-    process.env.GMAIL_APP_PASSWORD;
-  const emailPass = emailPassRaw ? emailPassRaw.replace(/\s+/g, "") : "";
-
+  const { emailUser, emailPass } = getCredentials();
   if (!emailUser || !emailPass) return { sent: false };
 
   const isApproved = status === "approved";
@@ -213,13 +206,7 @@ export const sendRequestUpdateNotification = async ({
   lineNumber,
   copies,
 }) => {
-  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const emailPassRaw =
-    process.env.EMAIL_PASS ||
-    process.env.GMAIL_PASS ||
-    process.env.GMAIL_APP_PASSWORD;
-  const emailPass = emailPassRaw ? emailPassRaw.replace(/\s+/g, "") : "";
-
+  const { emailUser, emailPass } = getCredentials();
   if (!emailUser || !emailPass) {
     console.warn(
       `[Email Service] Status update notification skipped (credentials not configured) for ${toEmail} (${requestNumber} -> ${status}).`
@@ -375,11 +362,7 @@ export const sendSecurityConfirmationEmail = async ({
   const effectiveLogoutUrl = logoutUrl || securityActionUrl || "#";
   const effectiveResetUrl = resetPasswordUrl || securityActionUrl || "#";
 
-  const emailUser = process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const emailPass =
-    process.env.EMAIL_PASS ||
-    process.env.GMAIL_PASS ||
-    process.env.GMAIL_APP_PASSWORD;
+  const { emailUser, emailPass } = getCredentials();
 
   if (!emailUser || !emailPass) {
     console.log(

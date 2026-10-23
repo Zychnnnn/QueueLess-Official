@@ -414,9 +414,11 @@ export const login = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    sendOtpEmail(user.email, otp, "QueueLess Login Authentication Code").catch((err) =>
-      console.error("Login OTP email error:", err)
-    );
+    try {
+      await sendOtpEmail(user.email, otp, "QueueLess Login Authentication Code");
+    } catch (err) {
+      console.error("Login OTP email error:", err);
+    }
     console.log(`[QueueLess 2FA Login OTP] Generated code for ${user.email} (${user.name}): ${otp}`);
 
     const atIndex = user.email.indexOf("@");
@@ -562,9 +564,11 @@ export const resendLoginOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    sendOtpEmail(cleanEmail, otp, "QueueLess Login Authentication Code").catch((err) =>
-      console.error("Resend login OTP email error:", err)
-    );
+    try {
+      await sendOtpEmail(cleanEmail, otp, "QueueLess Login Authentication Code");
+    } catch (err) {
+      console.error("Resend login OTP email error:", err);
+    }
     console.log(`[QueueLess Resend 2FA Login] OTP for ${cleanEmail}: ${otp}`);
 
     const atIndex = cleanEmail.indexOf("@");
@@ -651,9 +655,11 @@ export const createStaffAccount = async (req, res) => {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
-    sendOtpEmail(cleanEmail, otp).catch((err) =>
-      console.error("Staff creation OTP email error:", err)
-    );
+    try {
+      await sendOtpEmail(cleanEmail, otp);
+    } catch (err) {
+      console.error("Staff creation OTP email error:", err);
+    }
 
     recordAuditLog({
       actorName: req.user?.name || "System Admin",
@@ -748,9 +754,11 @@ export const createStudentByAdmin = async (req, res) => {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
-    sendOtpEmail(cleanEmail, otp).catch((err) =>
-      console.error("Student creation OTP email error:", err)
-    );
+    try {
+      await sendOtpEmail(cleanEmail, otp);
+    } catch (err) {
+      console.error("Student creation OTP email error:", err);
+    }
 
     recordAuditLog({
       actorName: req.user?.name || "System Admin",
@@ -853,9 +861,11 @@ export const createAdminByAdmin = async (req, res) => {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
-    sendOtpEmail(cleanEmail, otp).catch((err) =>
-      console.error("Admin creation OTP email error:", err)
-    );
+    try {
+      await sendOtpEmail(cleanEmail, otp);
+    } catch (err) {
+      console.error("Admin creation OTP email error:", err);
+    }
 
     recordAuditLog({
       actorName: req.user?.name || "System Admin",
